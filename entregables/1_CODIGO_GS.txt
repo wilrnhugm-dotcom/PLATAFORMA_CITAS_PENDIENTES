@@ -78,6 +78,12 @@ const UGM3 = {
     '2027-01-01', '2027-01-02', '2027-01-03'
   ],
 
+  // Citas que NO se toman en cuenta (no son especialidad):
+  // no se cargan de la agenda ni de la base, ni aparecen en
+  // Consultas del día, asistencia o reportes. Se compara
+  // sin tildes ni mayúsculas y por el inicio del nombre.
+  EXCLUIR_ESPECIALIDADES: ['MEDICINA GENERAL'],
+
   // Cupos extra por especialidad y día, por encima del
   // límite regular, solo para casos urgentes validados
   // por supervisión (p. ej. 10 regulares + 1 = 11).
@@ -1088,7 +1094,8 @@ function importarAgenda(token, registros, archivo) {
     sinFecha:0,
     sinEspecialidad:0,
     fueraDeCatalogo:0,
-    estadoNoReconocido:0
+    estadoNoReconocido:0,
+    excluidas:0
   };
 
   registros.forEach((r,i) => {
@@ -1101,9 +1108,14 @@ function importarAgenda(token, registros, archivo) {
       return;
     }
 
-    // Las especialidades fuera del catálogo de sobrecupos
-    // (p. ej. Medicina General - F2) también se guardan:
-    // los técnicos marcan su asistencia igual.
+    // Medicina General (F2) no se toma en cuenta.
+    if (excluida3_(r.especialidad)) {
+      errores.excluidas++;
+      return;
+    }
+
+    // Otras especialidades fuera del catálogo de sobrecupos
+    // sí se guardan: los técnicos marcan su asistencia igual.
     const catalogo = especialidad3_(r.especialidad);
     const esp = catalogo ||
       texto3_(r.especialidad).replace(/\s+/g,' ').slice(0,100);
@@ -1151,7 +1163,8 @@ function importarAgenda(token, registros, archivo) {
 
   // Evita sustituir la base por un archivo
   // masivamente incompatible.
-  if (validos.length < registros.length * 0.5) {
+  if (validos.length <
+      (registros.length - errores.excluidas) * 0.5) {
     throw Error(
       'Se rechazó la carga: menos del 50% de las '+
       'filas fueron reconocidas. Verifica el Excel.'
@@ -1253,7 +1266,8 @@ function importarAgenda(token, registros, archivo) {
     total:validos.length,
     fechas:[...fechas].sort(),
     porFecha,
-    omitidas:registros.length-validos.length,
+    omitidas:registros.length-validos.length-errores.excluidas,
+    excluidas:errores.excluidas,
     errores,
     mensaje:'Agenda Excel actualizada correctamente.'
   };
@@ -1395,6 +1409,12 @@ function contarAgenda3_(agenda,fecha,especialidad) {
   });
 
   return {activas,pendientes};
+}
+
+function excluida3_(especialidad) {
+  const e=norm3_(especialidad);
+  return Boolean(e) &&
+    UGM3.EXCLUIR_ESPECIALIDADES.some(x=>e.startsWith(x));
 }
 
 function numeroLimite3_(v) {
@@ -2591,7 +2611,7 @@ function mapaAgendaPacientes(token) {
 
   leer3_('AGENDA_EXCEL').forEach(r => {
     const esp=texto3_(r.Especialidad);
-    if (!esp) return;
+    if (!esp || excluida3_(esp)) return;
 
     const doc=texto3_(r.Documento);
     const dui=dui3_(doc);
@@ -2767,6 +2787,7 @@ function consultasDelDia3_(fecha,agenda,solicitudes,asistencia,reporteria) {
 
   agenda.forEach(r => {
     if (texto3_(r.Fecha)!==fecha) return;
+    if (excluida3_(r.Especialidad)) return;
 
     const estado=estadoCita3_(r.Estado);
     if (estado==='CANCELADA') {
@@ -2817,6 +2838,7 @@ function consultasDelDia3_(fecha,agenda,solicitudes,asistencia,reporteria) {
   });
 
   (reporteria || []).forEach(p => {
+    if (excluida3_(p.especialidad)) return;
     const esp=norm3_(p.especialidad);
     const dui=p.documento || dui3_(p.original);
     const cod=texto3_(p.correlativo);
@@ -2906,6 +2928,7 @@ function consultasDelDia3_(fecha,agenda,solicitudes,asistencia,reporteria) {
   const marcas={};
 
   asistencia.forEach(a => {
+    if (excluida3_(a.Especialidad)) return;
     if (texto3_(a.Fecha)===fecha) {
       marcas[texto3_(a.Clave)]=a;
     }
