@@ -1042,6 +1042,23 @@ body.light .orb{opacity:.16}
  background:var(--ring);font-size:13px;line-height:1.8
 }
 .aviso-dia .buttons{justify-content:center}
+/* Guía "¿Qué archivo va aquí?" */
+.guia{
+ display:grid;grid-template-columns:52px minmax(0,1fr);gap:16px;
+ padding:16px 18px;margin-bottom:18px;border-radius:14px;
+ border:1px solid var(--cyan);background:var(--ring)
+}
+.guia-ico{
+ width:52px;height:52px;border-radius:14px;display:grid;place-items:center;
+ color:var(--cyan);background:rgba(19,201,245,.12)
+}
+.guia-ico svg{width:28px;height:28px}
+.guia b{color:var(--text)}
+.guia>div>b:first-child{display:block;font-size:15px;margin-bottom:6px;color:var(--cyan)}
+.guia p{margin:0 0 8px;font-size:13px;line-height:1.55}
+.guia ul{margin:0;padding-left:18px;font-size:12px;line-height:1.7;color:var(--muted)}
+.guia code{font-size:11px;padding:2px 6px;border-radius:6px;background:var(--panel2);color:var(--cyan)}
+
 /* Íconos SVG */
 svg.ico-svg{
  width:1.1em;height:1.1em;flex:none;fill:none;stroke:currentColor;

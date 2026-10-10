@@ -114,7 +114,7 @@
   <i data-ico="base"></i>Base de pacientes
  </button>
  <button class="nav" data-page="actualizacion">
-  <i data-ico="subir"></i>Agenda
+  <i data-ico="subir"></i>Agenda del día
  </button>
  <button class="nav" data-page="auditoria">
   <i data-ico="historial"></i>Auditoría
@@ -462,11 +462,28 @@
  <!-- BASE DE PACIENTES -->
  <section class="page hidden" id="basepacientes">
   <div class="panel glass">
-   <h2><span data-ico="base"></span> Base de pacientes</h2>
+   <h2><span data-ico="base"></span> Base de pacientes (Reportería)</h2>
    <p class="desc">Al terminar la carga, la base queda disponible
-    en el buscador de todos los técnicos en menos de 10 segundos.
-    Columnas obligatorias: nombre y DUI. Opcionales: expediente
-    y especialidad. Cada carga reemplaza la anterior.</p>
+    en el buscador de todos los técnicos en menos de 10 segundos.</p>
+
+   <div class="guia">
+    <div class="guia-ico" data-ico="base"></div>
+    <div>
+     <b>¿Qué archivo va aquí?</b>
+     <p>La <b>base de pacientes que envía Reportería</b>: la lista de
+      pacientes con su <b>nombre y DUI</b>. Es la que usa el buscador
+      de los técnicos (escriben el DUI y sale el nombre).</p>
+     <ul>
+      <li>Si llegó como <b>Google Sheets</b>: Archivo &gt; Descargar &gt;
+       Microsoft Excel (.xlsx) y arrastra el archivo aquí. También
+       puedes seleccionar las celdas y pegarlas con Ctrl+V.</li>
+      <li>Se carga <b>solo cuando Reportería envía una base nueva</b>.
+       Cada carga reemplaza la anterior.</li>
+      <li><b>No</b> es el Reporte de Citas del día: ese va en
+       <b>"Agenda del día"</b>. Si lo subes aquí, el sistema te avisa.</li>
+     </ul>
+    </div>
+   </div>
 
    <div class="status-grid">
     <div class="status-item"><small>Pacientes</small>
@@ -500,9 +517,27 @@
  <!-- AGENDA -->
  <section class="page hidden" id="actualizacion">
   <div class="panel glass">
-   <h2>Agenda hospitalaria</h2>
-   <p class="desc">La última carga válida se comparte con todos
-    los técnicos conectados.</p>
+   <h2><span data-ico="calendario"></span> Agenda del día (Reporte de Citas)</h2>
+   <p class="desc">La última carga se comparte con todos los
+    técnicos conectados.</p>
+
+   <div class="guia">
+    <div class="guia-ico" data-ico="calendario"></div>
+    <div>
+     <b>¿Qué archivo va aquí?</b>
+     <p>El <b>Reporte de Citas</b> que se descarga <b>cada día</b> del
+      sistema hospitalario. Ejemplo de nombre:
+      <code>Reporte_Citas_2026-10-10_02-28-19.xlsx</code></p>
+     <ul>
+      <li>Trae columnas como <b>Fecha/Hora, Paciente, Documento,
+       Especialidad y Estado Cita</b>.</li>
+      <li>Alimenta <b>Consultas del día</b> y la <b>asistencia</b>.
+       Cada carga reemplaza la anterior.</li>
+      <li><b>No</b> es la base de pacientes de Reportería: esa va en
+       <b>"Base de pacientes"</b> (solo supervisión).</li>
+     </ul>
+    </div>
+   </div>
 
    <div class="notice">
     <strong>Estado de la agenda</strong>
@@ -604,8 +639,8 @@ const TITULOS={
  asistencia:['Asistencia','Reporte de asistieron y no asistieron'],
  personal:['Personal en línea','Sesiones y actividad del equipo'],
  cupos:['Cupos y límites','Disponibilidad médica por especialidad'],
- basepacientes:['Base de pacientes','Carga para el buscador de técnicos'],
- actualizacion:['Agenda','Agenda hospitalaria compartida'],
+ basepacientes:['Base de pacientes','Base enviada por Reportería'],
+ actualizacion:['Agenda del día','Reporte de Citas del sistema hospitalario'],
  auditoria:['Auditoría','Historial de operaciones']
 };
 
@@ -1965,8 +2000,17 @@ async function procesarPacientes(origen) {
 
  if(!mejor) {
   throw Error(
-   'No encontré las columnas de Nombre y DUI '+
-   'en la base de pacientes.'
+   'ARCHIVO_EQUIVOCADO|No encontré las columnas de Nombre y DUI. '+
+   'Carga aquí la base de pacientes que envía Reportería.'
+  );
+ }
+
+ if(esReporteCitas(mejor.matriz[mejor.inicio-1])) {
+  throw Error(
+   'ARCHIVO_EQUIVOCADO|Este archivo es el Reporte de Citas del '+
+   'sistema (la agenda del día), no la base de pacientes. '+
+   'Cárgalo en "Agenda". Aquí va la base de pacientes que '+
+   'envía Reportería.'
   );
  }
 
@@ -1976,9 +2020,9 @@ async function procesarPacientes(origen) {
  for(let i=inicio;i<matriz.length;i++) {
   const fila=matriz[i]||[];
 
-  const nombre=campos.partes
+  const nombre=limpiarNombrePaciente(campos.partes
    .map(c=>String(fila[c]??'').trim())
-   .filter(Boolean).join(' ');
+   .filter(Boolean).join(' '));
 
   if(!nombre)continue;
 

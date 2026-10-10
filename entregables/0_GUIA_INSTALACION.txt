@@ -51,6 +51,24 @@ CLAVES (sin espacios)
  el sistema indica qué enlace usar.
 
 ==========================================================
+ ¿QUÉ ARCHIVO SE CARGA EN CADA LUGAR?
+==========================================================
+ AGENDA DEL DÍA  (técnicos y supervisión)
+   -> El "Reporte de Citas" que se descarga CADA DÍA del
+      sistema hospitalario (Reporte_Citas_AAAA-MM-DD....xlsx).
+   -> Alimenta Consultas del día y la asistencia.
+
+ BASE DE PACIENTES  (solo supervisión)
+   -> La base de pacientes que envía REPORTERÍA (nombre y
+      DUI). Si llega en Google Sheets: Archivo > Descargar >
+      Microsoft Excel (.xlsx), o copiar las celdas y pegar.
+   -> Alimenta el buscador / autocompletado por DUI.
+   -> Solo cuando Reportería envía una base nueva.
+
+ Si se sube el archivo en el lugar equivocado, el sistema
+ lo detecta y muestra "ARCHIVO EQUIVOCADO".
+
+==========================================================
  QUÉ HACE CADA PLATAFORMA
 ==========================================================
 TÉCNICOS

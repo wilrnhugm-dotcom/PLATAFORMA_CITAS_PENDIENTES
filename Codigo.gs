@@ -1051,6 +1051,7 @@ function importarAgenda(token, registros, archivo) {
   const errores = {
     sinFecha:0,
     sinEspecialidad:0,
+    fueraDeCatalogo:0,
     estadoNoReconocido:0
   };
 
@@ -1064,12 +1065,19 @@ function importarAgenda(token, registros, archivo) {
       return;
     }
 
-    const esp = especialidad3_(r.especialidad);
+    // Las especialidades fuera del catálogo de sobrecupos
+    // (p. ej. Medicina General - F2) también se guardan:
+    // los técnicos marcan su asistencia igual.
+    const catalogo = especialidad3_(r.especialidad);
+    const esp = catalogo ||
+      texto3_(r.especialidad).replace(/\s+/g,' ').slice(0,100);
 
     if (!esp) {
       errores.sinEspecialidad++;
       return;
     }
+
+    if (!catalogo) errores.fueraDeCatalogo++;
 
     const estado = estadoCita3_(r.estado);
 
@@ -1079,7 +1087,10 @@ function importarAgenda(token, registros, archivo) {
     }
 
     const doc = documento3_(r.documento);
-    const paciente = texto3_(r.paciente).slice(0,150);
+    // El reporte trae "EXPEDIENTE - NOMBRE": se deja el nombre.
+    const paciente = texto3_(r.paciente)
+      .replace(/^\s*\d[\d\-\/]*\s*-\s*/,'')
+      .slice(0,150);
     const id = texto3_(r.id).slice(0,100);
 
     if (!doc && !paciente && !id) {

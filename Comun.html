@@ -60,6 +60,7 @@ const ERRORES_GRANDES = {
   'ESPECIALIDAD NO AUTORIZADA',
  DUPLICADO:'SOLICITUD DUPLICADA',
  TICKET_REQUERIDO:'TICKET REQUERIDO',
+ ARCHIVO_EQUIVOCADO:'ARCHIVO EQUIVOCADO',
  DUI_INVALIDO:'DUI INVÁLIDO',
  FECHA_NO_DISPONIBLE:'FECHA NO DISPONIBLE',
  AGENDA_DESACTUALIZADA:
@@ -526,6 +527,20 @@ function formatoFechaExcel(valor) {
  return '';
 }
 
+// "10553-25 - MARIA ORTIZ" -> "MARIA ORTIZ"
+function limpiarNombrePaciente(v) {
+ return String(v==null?'':v)
+  .replace(/^\s*\d[\d\-\/]*\s*-\s*/,'').trim();
+}
+
+// El Reporte de Citas del sistema tiene Fecha/Hora,
+// Especialidad y Estado Cita.
+function esReporteCitas(fila) {
+ const n=(fila||[]).map(nombreColumna);
+ return n.includes('ESTADOCITA')||
+  (n.includes('FECHAHORA')&&n.includes('ESPECIALIDAD'));
+}
+
 function detectarEncabezados(fila) {
  const campos={};
 
@@ -611,8 +626,10 @@ async function procesarExcel(archivo) {
 
  if(!mejor) {
   throw Error(
-   'No encontré las columnas de Fecha, '+
-   'Especialidad y Estado en el archivo.'
+   'ARCHIVO_EQUIVOCADO|Este archivo no es el Reporte de Citas '+
+   'del sistema hospitalario (no tiene las columnas Fecha/Hora, '+
+   'Especialidad y Estado Cita). Si es la base de pacientes que '+
+   'envía Reportería, cárgala en "Base de pacientes".'
   );
  }
 
@@ -645,7 +662,7 @@ async function procesarExcel(archivo) {
    documento:String(
     valor('documento')??''
    ),
-   paciente:String(valor('paciente')??'')
+   paciente:limpiarNombrePaciente(valor('paciente'))
   });
  }
 

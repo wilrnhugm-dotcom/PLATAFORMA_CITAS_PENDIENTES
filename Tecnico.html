@@ -414,10 +414,26 @@
  <!-- ACTUALIZAR AGENDA -->
  <section class="page hidden" id="actualizacion">
   <div class="panel glass">
-   <h2>Actualización de agenda hospitalaria</h2>
-   <p class="desc">Importa el Excel exportado del sistema
-    hospitalario. Se comparte con todos los técnicos y
-    supervisión.</p>
+   <h2><span data-ico="calendario"></span> Agenda del día (Reporte de Citas)</h2>
+   <p class="desc">Se comparte con todos los técnicos y supervisión.</p>
+
+   <div class="guia">
+    <div class="guia-ico" data-ico="calendario"></div>
+    <div>
+     <b>¿Qué archivo va aquí?</b>
+     <p>El <b>Reporte de Citas</b> que se descarga <b>cada día</b> del
+      sistema hospitalario. Ejemplo de nombre:
+      <code>Reporte_Citas_2026-10-10_02-28-19.xlsx</code></p>
+     <ul>
+      <li>Trae columnas como <b>Fecha/Hora, Paciente, Documento,
+       Especialidad y Estado Cita</b>.</li>
+      <li>Alimenta <b>Consultas del día</b> y la <b>asistencia</b>.
+       Cada carga reemplaza la anterior.</li>
+      <li><b>No</b> es la base de pacientes de Reportería: esa la carga
+       supervisión.</li>
+     </ul>
+    </div>
+   </div>
 
    <div class="notice">
     <strong>Estado de la agenda</strong>
