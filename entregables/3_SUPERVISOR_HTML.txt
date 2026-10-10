@@ -2486,6 +2486,9 @@ const ALIAS_PACIENTES={
   'FECHADECITA','FECHADELACITA'
  ],
  hora:['HORA','HORACITA','HORADECITA'],
+ // Número de la cita en el sistema hospitalario: es el
+ // mismo "Codigo" del Reporte de Citas (agenda).
+ correlativo:['CORRELATIVO','CODIGO','CODIGOCITA','CODIGODECITA','IDCITA'],
  observacion:[
   'OBSERVACIONESUCC','OBSERVACIONUCC','OBSERVACIONES',
   'OBSERVACION'
@@ -2525,7 +2528,8 @@ function encabezadosPacientes(fila) {
   especialidad:uno(ALIAS_PACIENTES.especialidad),
   fecha:uno(ALIAS_PACIENTES.fecha),
   hora:uno(ALIAS_PACIENTES.hora),
-  observacion:uno(ALIAS_PACIENTES.observacion)
+  observacion:uno(ALIAS_PACIENTES.observacion),
+  correlativo:uno(ALIAS_PACIENTES.correlativo)
  };
 }
 
@@ -2584,6 +2588,7 @@ async function procesarPacientes(origen) {
  // con su título y sus encabezados repetidos. Desde la
  // sección "AUMENTO DEL 10%" los pacientes se marcan aparte.
  let aumento=false;
+ let ultimaEspecialidad='';
 
  for(let i=inicio;i<matriz.length;i++) {
   const fila=matriz[i]||[];
@@ -2593,9 +2598,10 @@ async function procesarPacientes(origen) {
   // "FECHA Y HORA" en Fisiatría) se conserva la anterior.
   const otraCabecera=encabezadosPacientes(fila);
   if(otraCabecera) {
-   ['expediente','especialidad','fecha','hora','observacion']
+   ['expediente','especialidad','fecha','hora','observacion','correlativo']
     .forEach(k=>{if(otraCabecera[k]<0)otraCabecera[k]=campos[k];});
    campos=otraCabecera;
+   ultimaEspecialidad='';
    continue;
   }
 
@@ -2619,18 +2625,25 @@ async function procesarPacientes(origen) {
    cita.hora=horaReporteria(fila[campos.hora]);
   }
 
+  // Si una fila viene sin especialidad, se usa la de la
+  // fila anterior de la misma sección.
+  const especialidad=(campos.especialidad>=0
+   ?String(fila[campos.especialidad]??'').trim():'')||ultimaEspecialidad;
+  ultimaEspecialidad=especialidad;
+
   registros.push({
    nombre,
    documento:String(fila[campos.documento]??''),
    expediente:campos.expediente>=0
     ?String(fila[campos.expediente]??''):'',
-   especialidad:campos.especialidad>=0
-    ?String(fila[campos.especialidad]??''):'',
+   especialidad,
    fecha:cita.fecha,
    hora:cita.hora,
    aumento,
    observacion:campos.observacion>=0
-    ?String(fila[campos.observacion]??'').trim():''
+    ?String(fila[campos.observacion]??'').trim():'',
+   correlativo:campos.correlativo>=0
+    ?String(fila[campos.correlativo]??'').trim():''
   });
  }
 

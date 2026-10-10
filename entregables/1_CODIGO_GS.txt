@@ -211,7 +211,8 @@ const UGM3 = {
       'Fecha',
       'Hora',
       'Aumento',
-      'ObservacionUCC'
+      'ObservacionUCC',
+      'Correlativo'
     ]
   }
 };
@@ -2247,6 +2248,7 @@ function columnasPacientes3_(sh) {
     hora:i('Hora'),
     aumento:i('Aumento'),
     observacion:i('ObservacionUCC'),
+    correlativo:i('Correlativo'),
     ancho:cab.length
   };
 }
@@ -2359,7 +2361,8 @@ function cargarPacientes(
       fecha,
       texto3_(r.hora).slice(0,10),
       aumento ? 'SI' : '',
-      seguro3_(texto3_(r.observacion).replace(/\s+/g,' ').slice(0,200))
+      seguro3_(texto3_(r.observacion).replace(/\s+/g,' ').slice(0,200)),
+      seguro3_(texto3_(r.correlativo).slice(0,40))
     ];
   }).filter(Boolean);
 
@@ -2723,7 +2726,8 @@ function pacientesDelDia3_(fecha) {
       especialidad:v(r,c.especialidad).split(' | ')[0] || '',
       hora:v(r,c.hora),
       aumento:v(r,c.aumento)==='SI',
-      observacion:v(r,c.observacion)
+      observacion:v(r,c.observacion),
+      correlativo:v(r,c.correlativo)
     }));
 
   try {
@@ -2737,11 +2741,22 @@ function pacientesDelDia3_(fecha) {
 function consultasDelDia3_(fecha,agenda,solicitudes,asistencia,reporteria) {
   const mapa=new Map();
 
+  // Citas canceladas en la agenda del sistema: si el
+  // paciente viene en la base de Reportería, no se muestra.
+  const canceladas={codigos:{},pacientes:{}};
+
   agenda.forEach(r => {
     if (texto3_(r.Fecha)!==fecha) return;
 
     const estado=estadoCita3_(r.Estado);
-    if (estado==='CANCELADA') return;
+    if (estado==='CANCELADA') {
+      if (texto3_(r.IDExterno)) canceladas.codigos[texto3_(r.IDExterno)]=true;
+      const d=dui3_(r.Documento);
+      if (d) canceladas.pacientes[d+'|'+norm3_(r.Especialidad)]=true;
+      canceladas.pacientes['N:'+busqueda3_(r.Paciente)+'|'+
+        norm3_(r.Especialidad)]=true;
+      return;
+    }
 
     const clave=claveAsistencia3_(
       fecha,r.Especialidad,r.Documento,r.Paciente
@@ -2772,8 +2787,10 @@ function consultasDelDia3_(fecha,agenda,solicitudes,asistencia,reporteria) {
   // aumento del 10 %.
   const porDui={};
   const porNombre={};
+  const porCodigo={};
 
   mapa.forEach(c => {
+    if (c.referencia) porCodigo[c.referencia]=c;
     const d=dui3_(c.documento);
     if (d) porDui[d+'|'+norm3_(c.especialidad)]=c;
     porNombre[busqueda3_(c.paciente)+'|'+norm3_(c.especialidad)]=c;
@@ -2782,8 +2799,21 @@ function consultasDelDia3_(fecha,agenda,solicitudes,asistencia,reporteria) {
   (reporteria || []).forEach(p => {
     const esp=norm3_(p.especialidad);
     const dui=p.documento || dui3_(p.original);
-    const existente=(dui && porDui[dui+'|'+esp]) ||
+    const cod=texto3_(p.correlativo);
+
+    // 1) mismo número de cita (CORRELATIVO = Codigo de la
+    //    agenda); 2) mismo DUI; 3) mismo nombre. Siempre en
+    //    la misma especialidad, salvo el número de cita.
+    const existente=(cod && porCodigo[cod]) ||
+      (dui && porDui[dui+'|'+esp]) ||
       porNombre[busqueda3_(p.nombre)+'|'+esp];
+
+    if (!existente && (
+        (cod && canceladas.codigos[cod]) ||
+        (dui && canceladas.pacientes[dui+'|'+esp]) ||
+        canceladas.pacientes['N:'+busqueda3_(p.nombre)+'|'+esp])) {
+      return;
+    }
 
     if (existente) {
       existente.reporteria=true;
