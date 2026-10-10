@@ -15,6 +15,7 @@
  * PERSONAL
  * AGENDA_EXCEL (nueva, se crea automáticamente)
  * PACIENTES (base de pacientes, se crea al cargarla)
+ * UGM_CONFIG (oculta, datos de la base de pacientes)
  *
  * REGLAS:
  * - 1 sobrecupo por 10 pacientes activos únicos.
@@ -66,6 +67,7 @@ const UGM3 = {
   MAX_ARCHIVO_MB: 5,
   MAX_PACIENTES: 250000,
   LOTE_PACIENTES: 5000,
+  PAGINA_PACIENTES: 20000,
   MAX_RESULTADOS: 20,
 
   SABADO: {
@@ -154,6 +156,7 @@ const UGM3 = {
       'Documento',
       'DocumentoOriginal',
       'Expediente',
+      'Especialidad',
       'Busqueda'
     ]
   }
@@ -269,7 +272,12 @@ function fallo3_(codigo, mensaje) {
    BASE DE GOOGLE SHEETS EXISTENTE
    ========================================================== */
 
+// Se abre una sola vez por ejecución (más rápido).
+let libro3_ = null;
+
 function base3_() {
+  if (libro3_) return libro3_;
+
   const id = props3_().getProperty('UGM2_BASE_ID');
 
   if (!id) {
@@ -278,7 +286,62 @@ function base3_() {
     );
   }
 
-  return SpreadsheetApp.openById(id);
+  try {
+    libro3_ = SpreadsheetApp.openById(id);
+  } catch(e) {
+    throw Error(
+      'La clave es correcta, pero el sistema no puede '+
+      'abrir la base de Google Sheets. En Apps Script: '+
+      'Implementar > Gestionar implementaciones > '+
+      'Ejecutar como "Yo", con una cuenta que tenga '+
+      'acceso de edición a la hoja. Ejecuta '+
+      'diagnosticoUGM() para revisar. Detalle: '+
+      e.message
+    );
+  }
+
+  return libro3_;
+}
+
+/**
+ * Ejecutar desde el editor de Apps Script (botón
+ * Ejecutar) para revisar la conexión con la base.
+ * También solicita los permisos si faltan.
+ */
+function diagnosticoUGM() {
+  const r = [];
+  const id = props3_().getProperty('UGM2_BASE_ID');
+
+  try {
+    r.push('Cuenta que ejecuta: ' +
+      Session.getEffectiveUser().getEmail());
+  } catch(e) {
+    r.push('Cuenta que ejecuta: no disponible');
+  }
+
+  r.push('UGM2_BASE_ID: ' + (id || 'NO CONFIGURADO'));
+
+  try {
+    const libro = SpreadsheetApp.openById(id);
+    r.push('Base: OK -> ' + libro.getName());
+
+    ['SOBRECUPOS','DISPONIBILIDAD',
+     'AUDITORIA','PERSONAL'].forEach(n => {
+      r.push('Hoja ' + n + ': ' +
+        (libro.getSheetByName(n) ? 'OK' : 'FALTA'));
+    });
+  } catch(e) {
+    r.push('Base: ERROR -> ' + e.message);
+  }
+
+  r.push('Clave supervisor: "' +
+    UGM3.ROLES.SUPERVISOR + '"');
+  r.push('Clave técnico: "' +
+    UGM3.ROLES.TECNICO + '"');
+
+  const texto = r.join('\n');
+  console.log(texto);
+  return texto;
 }
 
 function hoja3_(nombre) {
@@ -1601,7 +1664,58 @@ function cambiarEstado(
 
 /* ==========================================================
    BASE DE PACIENTES
+   La información de la base se guarda en la hoja
+   oculta UGM_CONFIG, así la ven el supervisor y los
+   técnicos aunque usen implementaciones distintas
+   del mismo libro.
    ========================================================== */
+
+const HOJA_CONFIG3='UGM_CONFIG';
+
+function config3_() {
+  const sh=base3_().getSheetByName(HOJA_CONFIG3);
+  const datos={};
+
+  if (!sh || sh.getLastRow()<2) return datos;
+
+  sh.getRange(2,1,sh.getLastRow()-1,2)
+    .getValues()
+    .forEach(r => {
+      if (r[0]!=='') datos[String(r[0])]=String(r[1]);
+    });
+
+  return datos;
+}
+
+function guardarConfig3_(valores) {
+  const libro=base3_();
+  let sh=libro.getSheetByName(HOJA_CONFIG3);
+
+  if (!sh) {
+    sh=libro.insertSheet(HOJA_CONFIG3);
+    sh.getRange(1,1,1,2).setValues([['Clave','Valor']]);
+    sh.getRange('B:B').setNumberFormat('@');
+    sh.hideSheet();
+  }
+
+  const ultima=sh.getLastRow();
+  const claves=ultima>1
+    ? sh.getRange(2,1,ultima-1,1).getValues()
+        .map(r=>String(r[0]))
+    : [];
+
+  Object.keys(valores).forEach(k => {
+    let i=claves.indexOf(k);
+
+    if (i<0) {
+      claves.push(k);
+      i=claves.length-1;
+    }
+
+    sh.getRange(i+2,1,1,2)
+      .setValues([[k,String(valores[k])]]);
+  });
+}
 
 function hojaPacientes3_(libro,nombre) {
   const sh=libro.insertSheet(nombre);
@@ -1617,39 +1731,68 @@ function hojaPacientes3_(libro,nombre) {
     .setFontWeight('bold');
 
   sh.setFrozenRows(1);
-  sh.getRange('B:D').setNumberFormat('@');
+  sh.getRange('B:E').setNumberFormat('@');
 
   return sh;
 }
 
-function estadoPacientes3_() {
-  const p=props3_();
+// Ubica las columnas por encabezado.
+function columnasPacientes3_(sh) {
+  const cab=sh.getRange(1,1,1,sh.getLastColumn())
+    .getValues()[0].map(String);
+
+  const i=n=>cab.indexOf(n);
 
   return {
-    fecha:p.getProperty('UGM3_PAC_AT') || '',
-    archivo:p.getProperty('UGM3_PAC_ARCHIVO') || '',
-    usuario:p.getProperty('UGM3_PAC_USUARIO') || '',
-    total:Number(p.getProperty('UGM3_PAC_TOTAL')) || 0,
-    invalidos:
-      Number(p.getProperty('UGM3_PAC_INVALIDOS')) || 0
+    nombre:i('Nombre'),
+    documento:i('Documento'),
+    original:i('DocumentoOriginal'),
+    expediente:i('Expediente'),
+    especialidad:i('Especialidad'),
+    busqueda:i('Busqueda'),
+    ancho:cab.length
   };
 }
 
+function estadoPacientes3_() {
+  const c=config3_();
+
+  return {
+    version:c.PAC_VERSION || '',
+    fecha:c.PAC_FECHA || '',
+    archivo:c.PAC_ARCHIVO || '',
+    usuario:c.PAC_USUARIO || '',
+    total:Number(c.PAC_TOTAL) || 0,
+    invalidos:Number(c.PAC_INVALIDOS) || 0,
+    conEspecialidad:c.PAC_ESPECIALIDAD==='1'
+  };
+}
+
+function especialidadesTexto3_(valor) {
+  return texto3_(valor)
+    .split(/[;,|]/)
+    .map(e=>texto3_(e))
+    .filter(Boolean)
+    .map(e=>especialidad3_(e) || e.slice(0,80))
+    .filter((e,i,a)=>a.indexOf(e)===i)
+    .join(' | ')
+    .slice(0,300);
+}
+
 /**
- * Carga la base de pacientes por lotes. El primer lote
- * crea una hoja temporal; el último la publica como
- * PACIENTES, de modo que una carga interrumpida nunca
- * deja la base a medias.
+ * Carga la base de pacientes por lotes (solo
+ * supervisor). El primer lote crea una hoja temporal;
+ * el último la publica como PACIENTES, de modo que una
+ * carga interrumpida nunca deja la base a medias.
  */
 function cargarPacientes(
   token,carga,lote,parte,partes,archivo
 ) {
   const s=validar3_(token);
 
-  if (!['SUPERVISOR','AUTORIZADO']
-    .includes(s.perfil)) {
+  if (s.perfil!=='SUPERVISOR') {
     throw Error(
-      'No tienes permiso para cargar la base de pacientes.'
+      'Solo el supervisor puede cargar la base de pacientes.'
     );
   }
 
@@ -1670,6 +1813,7 @@ function cargarPacientes(
   }
 
   let invalidos=0;
+  let conEspecialidad=false;
 
   const filas=lote.map(r => {
     r=r || {};
@@ -1682,14 +1826,19 @@ function cargarPacientes(
 
     const original=texto3_(r.documento).slice(0,30);
     const documento=dui3_(original);
+    const especialidad=especialidadesTexto3_(
+      r.especialidad
+    );
 
     if (!documento) invalidos++;
+    if (especialidad) conEspecialidad=true;
 
     return [
       seguro3_(nombre),
       documento,
       seguro3_(original),
       seguro3_(texto3_(r.expediente).slice(0,50)),
+      seguro3_(especialidad),
       busqueda3_(nombre)
     ];
   }).filter(Boolean);
@@ -1714,7 +1863,8 @@ function cargarPacientes(
 
       p.setProperties({
         UGM3_PAC_CARGA:carga,
-        UGM3_PAC_CARGA_INV:'0'
+        UGM3_PAC_CARGA_INV:'0',
+        UGM3_PAC_CARGA_ESP:''
       });
 
     } else if (
@@ -1744,9 +1894,13 @@ function cargarPacientes(
       Number(p.getProperty('UGM3_PAC_CARGA_INV')||0)+
       invalidos;
 
-    p.setProperty(
-      'UGM3_PAC_CARGA_INV',String(acumulados)
-    );
+    const tieneEspecialidad=conEspecialidad ||
+      p.getProperty('UGM3_PAC_CARGA_ESP')==='1';
+
+    p.setProperties({
+      UGM3_PAC_CARGA_INV:String(acumulados),
+      UGM3_PAC_CARGA_ESP:tieneEspecialidad ? '1' : ''
+    });
 
     if (parte===partes-1) {
       SpreadsheetApp.flush();
@@ -1765,14 +1919,17 @@ function cargarPacientes(
 
       sh.setName('PACIENTES');
 
-      p.setProperties({
-        UGM3_PAC_AT:ahora3_(),
-        UGM3_PAC_ARCHIVO:texto3_(archivo).slice(0,150),
-        UGM3_PAC_USUARIO:s.nombre,
-        UGM3_PAC_TOTAL:String(total),
-        UGM3_PAC_INVALIDOS:String(acumulados),
-        UGM3_PAC_CARGA:''
+      guardarConfig3_({
+        PAC_VERSION:carga,
+        PAC_FECHA:ahora3_(),
+        PAC_ARCHIVO:texto3_(archivo).slice(0,150),
+        PAC_USUARIO:s.nombre,
+        PAC_TOTAL:total,
+        PAC_INVALIDOS:acumulados,
+        PAC_ESPECIALIDAD:tieneEspecialidad ? '1' : '0'
       });
+
+      p.setProperty('UGM3_PAC_CARGA','');
 
       final={total,invalidos:acumulados};
     }
@@ -1804,9 +1961,102 @@ function cargarPacientes(
 }
 
 /**
- * Busca pacientes por nombre (todas las palabras) o por
- * DUI (inicio de los dígitos). Devuelve el DUI ya
- * normalizado a nueve dígitos.
+ * Entrega la base por páginas para que el navegador
+ * busque al instante, sin consultar al servidor en
+ * cada letra.
+ */
+function descargarPacientes(token,version,desde) {
+  validar3_(token);
+
+  const estado=estadoPacientes3_();
+
+  if (!estado.version) {
+    return {version:'',total:0,filas:[],fin:true};
+  }
+
+  if (version && version!==estado.version) {
+    return {cambio:true,version:estado.version};
+  }
+
+  const sh=base3_().getSheetByName('PACIENTES');
+
+  if (!sh || sh.getLastRow()<2) {
+    return {
+      version:estado.version,total:0,filas:[],fin:true
+    };
+  }
+
+  const total=sh.getLastRow()-1;
+  desde=Math.max(0,Math.floor(Number(desde)||0));
+
+  const n=Math.min(UGM3.PAGINA_PACIENTES,total-desde);
+
+  if (n<=0) {
+    return {
+      version:estado.version,total,filas:[],fin:true
+    };
+  }
+
+  const c=columnasPacientes3_(sh);
+  const v=(r,i)=>i>=0 ? texto3_(r[i]) : '';
+
+  const filas=sh.getRange(2+desde,1,n,c.ancho)
+    .getValues()
+    .map(r=>[
+      v(r,c.nombre),
+      v(r,c.documento),
+      v(r,c.original),
+      v(r,c.expediente),
+      v(r,c.especialidad)
+    ]);
+
+  return {
+    version:estado.version,
+    total,
+    desde,
+    filas,
+    fin:desde+n>=total
+  };
+}
+
+/**
+ * Especialidades de la agenda por paciente, para
+ * buscar pacientes por especialidad aunque la base
+ * no traiga esa columna.
+ */
+function mapaAgendaPacientes(token) {
+  validar3_(token);
+
+  const vistos={};
+  const filas=[];
+
+  leer3_('AGENDA_EXCEL').forEach(r => {
+    const esp=texto3_(r.Especialidad);
+    if (!esp) return;
+
+    const doc=texto3_(r.Documento);
+    const dui=dui3_(doc);
+    const alfa=norm3_(doc).replace(/[^A-Z0-9]/g,'');
+    const nombre=busqueda3_(r.Paciente);
+
+    if (!dui && !alfa && !nombre) return;
+
+    const clave=[dui,alfa,nombre,esp].join('|');
+    if (vistos[clave]) return;
+    vistos[clave]=true;
+
+    filas.push([dui,alfa,nombre,esp]);
+  });
+
+  return {
+    version:estadoAgenda3_().cargaID,
+    filas
+  };
+}
+
+/**
+ * Búsqueda en el servidor: solo se usa mientras el
+ * navegador termina de descargar la base.
  */
 function buscarPacientes(token,consulta) {
   validar3_(token);
@@ -1828,9 +2078,11 @@ function buscarPacientes(token,consulta) {
     return {resultados:[],sinBase:true};
   }
 
+  const c=columnasPacientes3_(sh);
+  const v=(r,i)=>i>=0 ? String(r[i]) : '';
+
   const matriz=sh.getRange(
-    2,1,sh.getLastRow()-1,
-    UGM3.HEADERS.PACIENTES.length
+    2,1,sh.getLastRow()-1,c.ancho
   ).getValues();
 
   const palabras=q.split(' ').filter(Boolean);
@@ -1839,34 +2091,38 @@ function buscarPacientes(token,consulta) {
 
   for (let i=0;i<matriz.length;i++) {
     const r=matriz[i];
+    const b=c.busqueda>=0
+      ? v(r,c.busqueda) : busqueda3_(v(r,c.nombre));
     let coincide;
 
     if (porDui) {
       coincide=
-        String(r[1]).replace(/\D/g,'')
+        v(r,c.documento).replace(/\D/g,'')
           .startsWith(digitos) ||
-        String(r[2]).replace(/\D/g,'')
+        v(r,c.original).replace(/\D/g,'')
           .startsWith(digitos);
     } else {
-      const b=String(r[4]);
       coincide=palabras.every(t=>b.includes(t));
     }
 
     if (!coincide) continue;
 
-    const original=String(r[2]);
+    const original=v(r,c.original);
+    const documento=v(r,c.documento);
     const largo=original
       .replace(/\.0+$/,'')
       .replace(/\D/g,'').length;
 
     encontrados.push({
-      nombre:String(r[0]),
-      documento:String(r[1]),
-      valido:Boolean(r[1]),
-      ajustado:Boolean(r[1]) && largo===8,
+      nombre:v(r,c.nombre),
+      documento,
+      valido:Boolean(documento),
+      ajustado:Boolean(documento) && largo===8,
       original,
-      expediente:String(r[3]),
-      prioridad:String(r[4]).startsWith(inicio) ? 0 : 1
+      expediente:v(r,c.expediente),
+      especialidades:v(r,c.especialidad)
+        .split(' | ').filter(Boolean),
+      prioridad:b.startsWith(inicio) ? 0 : 1
     });
 
     if (encontrados.length>=200) break;
