@@ -420,7 +420,12 @@
       actividad actual de cada usuario. Puedes cerrar una
       sesión de forma remota.</p>
     </div>
-    <span class="live">EN VIVO</span>
+    <div class="toolbar-acciones">
+     <button class="btn mini danger" id="btnInactivas" type="button">
+      Cerrar sesiones inactivas (+30 min)
+     </button>
+     <span class="live">EN VIVO</span>
+    </div>
    </div>
    <div class="online" id="onlineFull" style="max-height:none"></div>
   </div>
@@ -1189,10 +1194,67 @@ function pintarFeed(cont,limite) {
  ids.forEach(id=>V.feedVistos.add(id));
 }
 
+// Diálogo propio si Comun está al día; si no, el del navegador.
+function confirmarSeguro(o) {
+ if(typeof confirmar==='function')return confirmar(o);
+ const d=document.createElement('div');
+ d.innerHTML=o.html||'';
+ return Promise.resolve(window.confirm(
+  o.titulo+'\n\n'+d.textContent.replace(/\s+/g,' ').trim()));
+}
+
+// Cierra de una vez las sesiones pegadas (sin actividad
+// por más de 30 minutos), menos la tuya.
+async function cerrarInactivas() {
+ const inactivas=(V.datos.personal||[]).filter(p=>
+  p.Sesion!==UGM.sesion&&(p.segundos==null||p.segundos>1800));
+
+ if(!inactivas.length) {
+  aviso('No hay sesiones con más de 30 minutos sin actividad.');
+  return;
+ }
+
+ const ok=await confirmarSeguro({
+  titulo:'CERRAR SESIONES INACTIVAS',
+  icono:'apagar',
+  html:`<p>Se cerrarán <b>${inactivas.length}</b> sesión(es) sin
+   actividad por más de 30 minutos:</p>
+   <ul class="aviso-lista">${inactivas.slice(0,8).map(p=>
+    `<li><b>${esc(p.Nombre)}</b> · ${esc(ROLES[p.Perfil]||p.Perfil)}
+     · ${esc(hace(p.segundos))}</li>`).join('')}
+    ${inactivas.length>8?`<li>y ${inactivas.length-8} más…</li>`:''}</ul>
+   <p class="muted">Tu sesión actual no se cierra.</p>`,
+  ok:'Cerrar inactivas',
+  cancelar:'Cancelar'
+ });
+
+ if(!ok)return;
+
+ const b=$('btnInactivas');
+ b.disabled=true;
+
+ try {
+  const r=await api('cerrarSesionesInactivas',UGM.token,30);
+  MOV.exito();
+  aviso(r.cerradas+' sesión(es) inactiva(s) cerrada(s).');
+  V.firmas={};
+  await refrescar(true);
+ }catch(e) {
+  if(sesionTerminada(e,limpiarTodo))return;
+  aviso(e.message);
+ }finally {
+  b.disabled=false;
+ }
+}
+
 async function cerrarSesion(sesion,nombre) {
  const p=(V.datos.personal||[]).find(x=>x.Sesion===sesion)||{};
 
- const ok=await confirmar({
+ // Si Comun no está actualizado, usa la confirmación
+ // del navegador para que el botón siempre funcione.
+ const ok=typeof confirmar!=='function'
+  ?window.confirm('¿Cerrar la sesión de '+nombre+'?')
+  :await confirmar({
   titulo:'CERRAR SESIÓN',
   icono:'apagar',
   html:`<p>Vas a cerrar la sesión de</p>
@@ -1441,7 +1503,7 @@ async function gestionar(id,forzado) {
    aviso('Indica el motivo para liberar el cupo.');
    return;
   }
-  const ok=await confirmar({
+  const ok=await confirmarSeguro({
    titulo:estado==='RECHAZADO'?'RECHAZAR SOLICITUD':'ANULAR Y LIBERAR CUPO',
    html:`<p>Esto liberará <b>1 cupo</b> de
     <b>${esc(r.Especialidad)}</b> para el</p>
@@ -2189,7 +2251,7 @@ async function guardarLimites(fila,alcance,restablecer) {
  const nuevo=cambios[0].limite;
 
  if(alcance==='FECHA'&&r&&nuevo!==''&&Number(nuevo)<r.ocupados&&
-    !await confirmar({
+    !await confirmarSeguro({
      titulo:'LÍMITE MENOR A LO AGENDADO',
      tipo:'urgente',
      html:`<p><b>${esc(esp)}</b> ya tiene <b>${r.ocupados}</b>
@@ -2341,7 +2403,53 @@ async function alEntrar() {
  aviso('Bienvenido al centro de control, '+UGM.nombre+'.');
 }
 
+const VERSION_PANTALLA='2026.10.10-6';
+
+/* =====================================================
+   VERIFICACIÓN DE ARCHIVOS
+   Los 5 archivos se pegan a mano en Apps Script. Si uno
+   quedó en una versión anterior, la plataforma falla sin
+   avisar. Aquí se comparan las versiones y se muestra
+   cuál falta actualizar.
+   ===================================================== */
+
+async function verificarArchivos() {
+ const leer=()=>{
+  try {
+   return getComputedStyle(document.documentElement)
+    .getPropertyValue('--ugm-version').replace(/["'\s]/g,'');
+  }catch(e) {return '';}
+ };
+
+ let servidor='';
+ try {
+  servidor=await new Promise((ok,mal)=>{
+   google.script.run.withSuccessHandler(ok)
+    .withFailureHandler(mal).versionUGM();
+  });
+ }catch(e) {servidor='';}
+
+ const faltan=[
+  ['Código.gs',servidor],
+  ['Comun',typeof VERSION_COMUN==='undefined'?'':VERSION_COMUN],
+  ['Estilos',leer()]
+ ].filter(([,v])=>v!==VERSION_PANTALLA).map(([n])=>n);
+
+ if(!faltan.length)return;
+
+ const aviso_=document.createElement('div');
+ aviso_.className='aviso-version';
+ aviso_.setAttribute('role','alert');
+ aviso_.innerHTML='<b>Faltan archivos por actualizar:</b> '+
+  faltan.join(', ')+'. Pega los .txt más recientes en Apps Script '+
+  'e implementa una nueva versión. Hasta entonces algunas '+
+  'funciones pueden no responder.';
+ document.body.appendChild(aviso_);
+ console.warn('UGM: archivos desactualizados',faltan,VERSION_PANTALLA);
+}
+
 function iniciar() {
+ verificarArchivos();
  montarComun();
  montarAcceso('supervisor',alEntrar,limpiarTodo);
 
@@ -2398,6 +2506,8 @@ function iniciar() {
   const b=ev.target.closest('[data-cerrar]');
   if(b)cerrarSesion(b.dataset.cerrar,b.dataset.n);
  });
+
+ $('btnInactivas').addEventListener('click',cerrarInactivas);
 
  $('modal').addEventListener('click',ev=>{
   if(ev.target===$('modal'))cerrarModal();

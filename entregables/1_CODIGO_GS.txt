@@ -57,6 +57,11 @@
  */
 
 const UGM3 = {
+  // Debe coincidir con la versión de Tecnico, Supervisor,
+  // Estilos y Comun: así la pantalla avisa si falta
+  // actualizar algún archivo.
+  VERSION: '2026.10.10-6',
+
   TZ: 'America/El_Salvador',
 
   // Claves exactas (mayúsculas, sin espacios).
@@ -997,7 +1002,7 @@ function entrar(nombre, clave, vista) {
     console.error(e.message);
   }
 
-  return {token,nombre,perfil,sesion:sesion.id};
+  return {token,nombre,perfil,sesion:sesion.id,version:UGM3.VERSION};
 }
 
 function modificarSesion3_(s,actividad,cerrar) {
@@ -3253,6 +3258,62 @@ function tableroSupervisor(token,fecha,opciones) {
       MotivoUrgencia:texto3_(r.MotivoUrgencia)
     }))
   };
+}
+
+function versionUGM() {
+  return UGM3.VERSION;
+}
+
+/**
+ * Cierra de una vez las sesiones sin actividad por más de
+ * "minutos" (sesiones pegadas), menos la del supervisor
+ * que lo pide.
+ */
+function cerrarSesionesInactivas(token,minutos) {
+  const s=supervisor3_(token);
+  const limite=Math.max(5,Number(minutos)||30)*60000;
+  const ahora=Date.now();
+  let cerradas=0;
+
+  const lock=LockService.getScriptLock();
+  lock.waitLock(15000);
+
+  try {
+    const sh=hoja3_('PERSONAL');
+    const m=sh.getDataRange().getValues();
+    const cab=m[0].map(String);
+    const iS=cab.indexOf('Sesion');
+    const iU=cab.indexOf('UltimaActividad');
+    const iA=cab.indexOf('Actividad');
+    const iE=cab.indexOf('Estado');
+
+    for (let i=1;i<m.length;i++) {
+      if (String(m[i][iE])!=='CONECTADO') continue;
+      if (String(m[i][iS])===s.id) continue;
+
+      const ultima=m[i][iU] instanceof Date
+        ? m[i][iU].getTime() : Date.parse(m[i][iU]);
+
+      if (!isNaN(ultima) && ahora-ultima<limite) continue;
+
+      sh.getRange(i+1,iA+1).setValue('Cerrada por inactividad');
+      sh.getRange(i+1,iE+1).setValue('DESCONECTADO');
+      cerradas++;
+    }
+
+    SpreadsheetApp.flush();
+  } finally {
+    lock.releaseLock();
+  }
+
+  try {
+    auditar3_(s.nombre,s.perfil,'SESION_CERRADA_SUPERVISOR',
+      'INACTIVAS',cerradas+' sesiones inactivas');
+  } catch(e) {
+    console.error(e.message);
+  }
+
+  return {ok:true,cerradas};
 }
 
 function cerrarSesionRemota(token,sesion) {

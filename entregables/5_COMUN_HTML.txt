@@ -761,6 +761,9 @@ function pintarIconos(raiz) {
    SESIÓN COMPARTIDA
    ===================================================== */
 
+// Versión de este archivo (ver UGM3.VERSION en Código.gs).
+const VERSION_COMUN='2026.10.10-6';
+
 const UGM={
  token:'',nombre:'',perfil:'',
  generacion:0,cerrando:false,importando:false

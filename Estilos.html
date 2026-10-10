@@ -1,5 +1,6 @@
 <style>
 :root{
+ --ugm-version:"2026.10.10-6";
  --bg:#031423;
  --bg2:#092d49;
  --panel:#0a3250;
@@ -1311,4 +1312,13 @@ input:focus,select:focus,textarea:focus{
 .pac-dia small{font-size:11px;color:var(--muted)}
 .pac-dia:hover{transform:translateY(-2px);border-color:var(--cyan)}
 .pac-dia.on{border-color:var(--cyan);box-shadow:0 0 0 2px rgba(19,201,245,.25)}
+
+/* Aviso de archivos desactualizados */
+.aviso-version{
+ position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:80;
+ width:min(720px,calc(100% - 32px));padding:14px 18px;border-radius:14px;
+ background:#5a1420;color:#fff;border:1px solid #ff7988;
+ box-shadow:0 14px 40px rgba(0,0,0,.45);font-size:13px;line-height:1.45
+}
+.toolbar-acciones{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 </style>

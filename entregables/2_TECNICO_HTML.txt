@@ -1638,7 +1638,53 @@ async function alEntrar() {
  aviso('Bienvenido, '+UGM.nombre+'.');
 }
 
+const VERSION_PANTALLA='2026.10.10-6';
+
+/* =====================================================
+   VERIFICACIÓN DE ARCHIVOS
+   Los 5 archivos se pegan a mano en Apps Script. Si uno
+   quedó en una versión anterior, la plataforma falla sin
+   avisar. Aquí se comparan las versiones y se muestra
+   cuál falta actualizar.
+   ===================================================== */
+
+async function verificarArchivos() {
+ const leer=()=>{
+  try {
+   return getComputedStyle(document.documentElement)
+    .getPropertyValue('--ugm-version').replace(/["'\s]/g,'');
+  }catch(e) {return '';}
+ };
+
+ let servidor='';
+ try {
+  servidor=await new Promise((ok,mal)=>{
+   google.script.run.withSuccessHandler(ok)
+    .withFailureHandler(mal).versionUGM();
+  });
+ }catch(e) {servidor='';}
+
+ const faltan=[
+  ['Código.gs',servidor],
+  ['Comun',typeof VERSION_COMUN==='undefined'?'':VERSION_COMUN],
+  ['Estilos',leer()]
+ ].filter(([,v])=>v!==VERSION_PANTALLA).map(([n])=>n);
+
+ if(!faltan.length)return;
+
+ const aviso_=document.createElement('div');
+ aviso_.className='aviso-version';
+ aviso_.setAttribute('role','alert');
+ aviso_.innerHTML='<b>Faltan archivos por actualizar:</b> '+
+  faltan.join(', ')+'. Pega los .txt más recientes en Apps Script '+
+  'e implementa una nueva versión. Hasta entonces algunas '+
+  'funciones pueden no responder.';
+ document.body.appendChild(aviso_);
+ console.warn('UGM: archivos desactualizados',faltan,VERSION_PANTALLA);
+}
+
 function iniciar() {
+ verificarArchivos();
  montarComun();
  montarAcceso('tecnico',alEntrar,limpiarTodo);
 
