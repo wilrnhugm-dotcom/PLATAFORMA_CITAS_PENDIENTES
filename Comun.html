@@ -58,6 +58,8 @@ const ERRORES_GRANDES = {
  DIA_NO_HABILITADO:'DÍA NO AUTORIZADO',
  ESPECIALIDAD_NO_HABILITADA:
   'ESPECIALIDAD NO AUTORIZADA',
+ SOLO_URGENCIA:'SOLO QUEDA EL CUPO DE URGENCIA',
+ MOTIVO_URGENCIA:'FALTA EL MOTIVO DE LA URGENCIA',
  DUPLICADO:'SOLICITUD DUPLICADA',
  TICKET_REQUERIDO:'TICKET REQUERIDO',
  ARCHIVO_EQUIVOCADO:'ARCHIVO EQUIVOCADO',
@@ -759,6 +761,9 @@ function pintarIconos(raiz) {
    SESIÓN COMPARTIDA
    ===================================================== */
 
+// Versión de este archivo (ver UGM3.VERSION en Código.gs).
+const VERSION_COMUN='2026.10.10-6';
+
 const UGM={
  token:'',nombre:'',perfil:'',
  generacion:0,cerrando:false,importando:false
@@ -1057,6 +1062,213 @@ Object.assign(MOV,{
 });
 
 /* =====================================================
+   ANIMACIONES V2: constelación de fondo, tarjetas 3D
+   con luz que sigue al cursor, botones magnéticos,
+   confeti de éxito, títulos letra por letra y destellos
+   en los números. Todo se apaga con "reducir movimiento".
+   ===================================================== */
+
+Object.assign(MOV,{
+ // Red de partículas que se conectan y reaccionan al cursor.
+ constelacion() {
+  if(!MOV.ok||document.getElementById('fxCanvas'))return;
+  const capa=document.querySelector('.bg-orbs');
+  if(!capa)return;
+
+  const cv=document.createElement('canvas');
+  cv.id='fxCanvas';
+  capa.appendChild(cv);
+  const ctx=cv.getContext('2d');
+  const dpr=Math.min(2,window.devicePixelRatio||1);
+  const raton={x:-9999,y:-9999};
+  let W=0,H=0,puntos=[];
+
+  const medir=()=>{
+   W=innerWidth;H=innerHeight;
+   cv.width=W*dpr;cv.height=H*dpr;
+   cv.style.width=W+'px';cv.style.height=H+'px';
+   ctx.setTransform(dpr,0,0,dpr,0,0);
+   const n=Math.round(Math.min(70,Math.max(24,W*H/26000)));
+   puntos=Array.from({length:n},()=>({
+    x:Math.random()*W,y:Math.random()*H,
+    vx:(Math.random()-.5)*.35,vy:(Math.random()-.5)*.35,
+    r:Math.random()*1.6+.6
+   }));
+  };
+
+  medir();
+  window.addEventListener('resize',medir);
+  window.addEventListener('pointermove',e=>{raton.x=e.clientX;raton.y=e.clientY;},{passive:true});
+  document.addEventListener('pointerleave',()=>{raton.x=raton.y=-9999;});
+
+  const color=()=>document.body.classList.contains('light')
+   ?'8,127,172':'19,201,245';
+
+  gsap.ticker.add(()=>{
+   if(document.hidden)return;
+   const c=color();
+   ctx.clearRect(0,0,W,H);
+   for(const p of puntos) {
+    const dx=p.x-raton.x,dy=p.y-raton.y,d2=dx*dx+dy*dy;
+    if(d2<14000) {
+     const f=(14000-d2)/14000*.6;
+     p.vx+=dx/Math.sqrt(d2||1)*f*.08;
+     p.vy+=dy/Math.sqrt(d2||1)*f*.08;
+    }
+    p.vx*=.985;p.vy*=.985;
+    if(Math.abs(p.vx)<.05)p.vx+=(Math.random()-.5)*.04;
+    if(Math.abs(p.vy)<.05)p.vy+=(Math.random()-.5)*.04;
+    p.x+=p.vx;p.y+=p.vy;
+    if(p.x<0||p.x>W)p.vx*=-1;
+    if(p.y<0||p.y>H)p.vy*=-1;
+   }
+   for(let i=0;i<puntos.length;i++) {
+    const a=puntos[i];
+    for(let j=i+1;j<puntos.length;j++) {
+     const b=puntos[j];
+     const dx=a.x-b.x,dy=a.y-b.y,d=dx*dx+dy*dy;
+     if(d<15000) {
+      ctx.strokeStyle='rgba('+c+','+(.16*(1-d/15000))+')';
+      ctx.lineWidth=.8;
+      ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+     }
+    }
+    ctx.fillStyle='rgba('+c+',.55)';
+    ctx.beginPath();ctx.arc(a.x,a.y,a.r,0,Math.PI*2);ctx.fill();
+   }
+  });
+ },
+
+ // Tarjetas que se inclinan en 3D y una luz que sigue al cursor.
+ tarjetas3D() {
+  if(!MOV.ok||!matchMedia('(pointer:fine)').matches)return;
+  const sel='.kpi, .card, .panel:not(.no-tilt), .login-card';
+  let actual=null;
+
+  const soltar=el=>{
+   if(!el)return;
+   el.classList.remove('luz');
+   gsap.to(el,{rotateX:0,rotateY:0,duration:.6,ease:'elastic.out(1,.5)',
+    clearProps:'transform'});
+  };
+
+  document.addEventListener('pointermove',e=>{
+   const el=e.target.closest&&e.target.closest(sel);
+   if(el!==actual){soltar(actual);actual=el;}
+   if(!el)return;
+   const r=el.getBoundingClientRect();
+   const x=(e.clientX-r.left)/r.width,y=(e.clientY-r.top)/r.height;
+   el.style.setProperty('--mx',(x*100)+'%');
+   el.style.setProperty('--my',(y*100)+'%');
+   el.classList.add('luz');
+   // Los paneles grandes solo reciben luz, sin inclinarse.
+   if(r.width>720||r.height>520)return;
+   gsap.to(el,{rotateY:(x-.5)*7,rotateX:(.5-y)*7,
+    transformPerspective:900,duration:.4,ease:'power2.out'});
+  },{passive:true});
+
+  document.addEventListener('pointerleave',()=>{soltar(actual);actual=null;});
+ },
+
+ // Botones principales que "atraen" el cursor.
+ magneticos() {
+  if(!MOV.ok||!matchMedia('(pointer:fine)').matches)return;
+  let actual=null;
+  document.addEventListener('pointermove',e=>{
+   const b=e.target.closest&&e.target.closest('.btn.primary');
+   if(actual&&b!==actual) {
+    gsap.to(actual,{x:0,y:0,duration:.5,ease:'elastic.out(1,.4)',clearProps:'transform'});
+   }
+   actual=b;
+   if(!b||b.disabled)return;
+   const r=b.getBoundingClientRect();
+   gsap.to(b,{x:(e.clientX-r.left-r.width/2)*.18,
+    y:(e.clientY-r.top-r.height/2)*.3,duration:.3,ease:'power2.out'});
+  },{passive:true});
+ },
+
+ // Íconos de los indicadores que flotan suavemente.
+ iconosVivos() {
+  if(!MOV.ok)return;
+  document.querySelectorAll('.kpi-icon').forEach((el,i)=>{
+   if(el.dataset.vivo)return;
+   el.dataset.vivo='1';
+   gsap.to(el,{y:-4,duration:1.6+i*.15,repeat:-1,yoyo:true,
+    ease:'sine.inOut',delay:i*.2});
+  });
+ },
+
+ // Título de la sección que aparece letra por letra.
+ titulo(el) {
+  if(!MOV.ok||!el)return;
+  const texto=el.textContent;
+  el.setAttribute('aria-label',texto);
+  el.innerHTML=Array.from(texto).map(c=>
+   '<span class="letra" aria-hidden="true">'+(c===' '?'&nbsp;':esc(c))+'</span>'
+  ).join('');
+  gsap.fromTo(el.querySelectorAll('.letra'),
+   {yPercent:110,opacity:0,rotateX:-80},
+   {yPercent:0,opacity:1,rotateX:0,stagger:.022,duration:.55,
+    ease:'back.out(2)',onComplete:()=>{el.textContent=texto;}});
+ },
+
+ // Lluvia de confeti para celebrar un registro.
+ confeti(x,y) {
+  if(!MOV.ok)return;
+  const colores=['#13c9f5','#6be29b','#ffd06a','#c792ff','#ff7988','#ffffff'];
+  const cx=x==null?innerWidth/2:x,cy=y==null?innerHeight/2:y;
+  for(let i=0;i<46;i++) {
+   const p=document.createElement('i');
+   p.className='confeti';
+   p.style.background=colores[i%colores.length];
+   p.style.left=cx+'px';p.style.top=cy+'px';
+   if(i%3===0)p.style.borderRadius='50%';
+   document.body.appendChild(p);
+   const ang=Math.random()*Math.PI*2;
+   const fuerza=gsap.utils.random(120,320);
+   gsap.timeline({onComplete:()=>p.remove()})
+    .to(p,{x:Math.cos(ang)*fuerza,y:Math.sin(ang)*fuerza-120,
+     rotate:gsap.utils.random(-540,540),duration:.7,ease:'power3.out'})
+    .to(p,{y:'+='+gsap.utils.random(260,480),opacity:0,
+     rotate:'+='+gsap.utils.random(-360,360),
+     duration:gsap.utils.random(1,1.6),ease:'power1.in'});
+  }
+ },
+
+ // Destello del indicador cuando su número cambia.
+ destello(el) {
+  const kpi=el&&el.closest('.kpi');
+  if(!MOV.ok||!kpi)return;
+  kpi.classList.remove('destello');
+  void kpi.offsetWidth;
+  kpi.classList.add('destello');
+ },
+
+ // Activa todo lo anterior una sola vez.
+ vida() {
+  MOV.constelacion();
+  MOV.tarjetas3D();
+  MOV.magneticos();
+  MOV.iconosVivos();
+ }
+});
+
+// El éxito ahora también lanza confeti, y los números
+// destellan al cambiar.
+(()=>{
+ const exito=MOV.exito,numero=MOV.numero;
+ MOV.exito=function(texto){
+  exito.call(MOV,texto);
+  setTimeout(()=>MOV.confeti(),260);
+ };
+ MOV.numero=function(el,valor){
+  const antes=Number(el.dataset.v||0);
+  numero.call(MOV,el,valor);
+  if(antes!==valor)MOV.destello(el);
+ };
+})();
+
+/* =====================================================
    UTILIDADES
    ===================================================== */
 
@@ -1188,13 +1400,21 @@ async function prepararArchivo(archivo) {
    ALERTAS CON CONFIRMACIÓN
    ===================================================== */
 
-function dialogo({titulo,html,ok,cancelar,tipo,icono:icono_}) {
+// Con "campo" el diálogo pide un texto y resuelve con él
+// (o false si se cancela): {etiqueta, placeholder, minimo}.
+function dialogo({titulo,html,ok,cancelar,tipo,icono:icono_,campo}) {
  return new Promise(resolver=>{
   $('modalContent').innerHTML=`
    <div class="aviso-dia ${tipo||''}">
     <div class="aviso-ico">${icono(icono_||'estetoscopio')}</div>
     <h2>${titulo}</h2>
     ${html}
+    ${campo?`<div class="field dlg-campo">
+     <label for="dlgTexto">${campo.etiqueta||'Motivo'}</label>
+     <textarea id="dlgTexto" rows="3" maxlength="300"
+      placeholder="${campo.placeholder||''}"></textarea>
+     <small class="dlg-cuenta" id="dlgCuenta">0 / ${campo.minimo||1} caracteres mínimos</small>
+    </div>`:''}
     <div class="buttons">
      ${cancelar?`<button class="btn" id="dlgNo" type="button">${cancelar}</button>`:''}
      <button class="btn primary" id="dlgSi" type="button">${ok}</button>
@@ -1213,9 +1433,91 @@ function dialogo({titulo,html,ok,cancelar,tipo,icono:icono_}) {
    resolver(v);
   };
 
+  if(campo) {
+   const minimo=campo.minimo||1;
+   const caja=$('dlgTexto');
+   const revisar=()=>{
+    const n=caja.value.trim().length;
+    $('dlgCuenta').textContent=n+' / '+minimo+' caracteres mínimos';
+    $('dlgCuenta').classList.toggle('ok',n>=minimo);
+    $('dlgSi').disabled=n<minimo;
+   };
+   caja.addEventListener('input',revisar);
+   revisar();
+   $('dlgSi').onclick=()=>{
+    const v=caja.value.trim();
+    if(v.length<minimo) {MOV.pulso(caja);return;}
+    fin(v);
+   };
+   if($('dlgNo'))$('dlgNo').onclick=()=>fin(false);
+   caja.focus();
+   return;
+  }
+
   $('dlgSi').onclick=()=>fin(true);
   if($('dlgNo'))$('dlgNo').onclick=()=>fin(false);
   $('dlgSi').focus();
+ });
+}
+
+/* =====================================================
+   CONFIRMACIÓN PROPIA (reemplaza al confirm() del
+   navegador, que en Apps Script muestra "Una página
+   incorporada en ...googleusercontent.com dice").
+   Va en su propia capa, así no cierra la ventana que
+   esté abierta debajo (por ejemplo, el detalle de una
+   solicitud).
+   ===================================================== */
+
+function confirmar({titulo,html,ok,cancelar,tipo,icono:icono_}) {
+ return new Promise(resolver=>{
+  const capa=document.createElement('div');
+  capa.className='overlay confirma';
+  capa.setAttribute('role','dialog');
+  capa.setAttribute('aria-modal','true');
+  capa.innerHTML=`
+   <div class="modal glass confirma-caja">
+    <div class="aviso-dia ${tipo||'bloqueo'}">
+     <div class="aviso-ico">${icono(icono_||'alerta')}</div>
+     <h2>${titulo}</h2>
+     ${html||''}
+     <div class="buttons">
+      <button class="btn" type="button" data-r="no">${cancelar||'Cancelar'}</button>
+      <button class="btn ${tipo==='info'?'primary':'danger'}" type="button" data-r="si">${ok||'Aceptar'}</button>
+     </div>
+    </div>
+   </div>`;
+
+  document.body.appendChild(capa);
+
+  const fin=v=>{
+   document.removeEventListener('keydown',tecla,true);
+   const quitar=()=>{capa.remove();resolver(v);};
+   if(!MOV.ok){quitar();return;}
+   gsap.to(capa,{opacity:0,duration:.18,onComplete:quitar});
+  };
+
+  const tecla=ev=>{
+   if(ev.key==='Escape'){ev.stopPropagation();fin(false);}
+  };
+  document.addEventListener('keydown',tecla,true);
+
+  capa.addEventListener('click',ev=>{
+   if(ev.target===capa){fin(false);return;}
+   const b=ev.target.closest('[data-r]');
+   if(b)fin(b.dataset.r==='si');
+  });
+
+  if(MOV.ok) {
+   gsap.fromTo(capa,{opacity:0},{opacity:1,duration:.2});
+   gsap.fromTo(capa.querySelector('.confirma-caja'),
+    {y:20,scale:.94,opacity:0},
+    {y:0,scale:1,opacity:1,duration:.38,ease:'back.out(1.7)'});
+   gsap.fromTo(capa.querySelector('.aviso-ico'),{scale:.4,rotate:-30},
+    {scale:1,rotate:0,duration:.7,ease:'elastic.out(1,.45)'});
+  }
+
+  capa.querySelector('[data-r="no"]').focus();
  });
 }
 
@@ -1338,7 +1640,8 @@ async function importarAgendaArchivo(archivo,alTerminar) {
 
   MOV.exito();
   aviso('Agenda actualizada: '+r.total+
-   ' citas válidas. Omitidas: '+r.omitidas+'.');
+   ' citas válidas. Omitidas: '+r.omitidas+'.'+
+   (r.excluidas?' Medicina General no tomada en cuenta: '+r.excluidas+'.':''));
 
   if(alTerminar)await alTerminar(r);
 
@@ -1358,6 +1661,7 @@ function salirLocal(mensaje,alSalir) {
  UGM.token='';
  UGM.nombre='';
  UGM.perfil='';
+ UGM.sesion='';
  UGM.generacion++;
 
  if(alSalir)alSalir();
@@ -1407,6 +1711,7 @@ function montarAcceso(vista,alEntrar,alSalir) {
    UGM.token=r.token;
    UGM.nombre=r.nombre;
    UGM.perfil=r.perfil;
+   UGM.sesion=r.sesion||'';
    UGM.cerrando=false;
    UGM.generacion++;
 
@@ -1482,8 +1787,7 @@ function mostrarPagina(n,titulo,sinAnimar) {
 
  if(!sinAnimar) {
   MOV.pagina($(n));
-  if(MOV.ok)gsap.fromTo('#title',{y:14,opacity:0},
-   {y:0,opacity:1,duration:.45,clearProps:'transform,opacity'});
+  MOV.titulo($('title'));
   MOV.revelar($(n).querySelectorAll(
    '.kpi, .panel, .card, .cola, .notice'
   ));
@@ -1514,6 +1818,7 @@ function montarComun() {
  MOV.brillo();
  MOV.desplazamiento();
  MOV.vigilarAlto();
+ MOV.vida();
 
  window.addEventListener('resize',()=>{
   MOV.tinta(document.querySelector('.nav.active'));

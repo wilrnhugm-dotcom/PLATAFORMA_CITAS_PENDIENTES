@@ -190,8 +190,8 @@
     <div class="kpi-icon" data-ico="grafica"></div>
     <div>
      <strong id="kDisp">0</strong>
-     <b>Sobrecupos disponibles</b>
-     <small id="kDispSub">de 0 autorizados</small>
+     <b>Especialidades con cupo</b>
+     <small id="kDispSub">Máx. 10 por especialidad + 1 de urgencia</small>
     </div>
    </div>
    <div class="kpi glass">
@@ -332,9 +332,10 @@
    <div class="toolbar">
     <div>
      <h2>Reporte de asistencia</h2>
-     <p class="desc" style="margin:0">Separado por origen y por
-      especialidad. El Excel incluye un resumen y una gráfica en
-      cada hoja.</p>
+     <p class="desc" style="margin:0">Hojas del Excel: <b>Agendados</b>
+      (agenda del sistema), <b>Adicionales Reportería</b> (no estaban en
+      la agenda + Aumento 10%) y <b>Sobrecupos técnicos</b>, con resumen
+      y gráficas.</p>
     </div>
     <button class="btn primary" id="btnReporte" type="button">
      <i data-ico="descargar"></i> Descargar reporte Excel
@@ -420,7 +421,12 @@
       actividad actual de cada usuario. Puedes cerrar una
       sesión de forma remota.</p>
     </div>
-    <span class="live">EN VIVO</span>
+    <div class="toolbar-acciones">
+     <button class="btn mini danger" id="btnInactivas" type="button">
+      Cerrar sesiones inactivas (+30 min)
+     </button>
+     <span class="live">EN VIVO</span>
+    </div>
    </div>
    <div class="online" id="onlineFull" style="max-height:none"></div>
   </div>
@@ -510,6 +516,8 @@
      <strong id="pacFecha">Sin datos</strong></div>
    </div>
 
+   <div class="pac-dias" id="pacDias"></div>
+
    <div class="notice">
     <strong>Estado de la base</strong>
     <p id="patientsStatus">Sin información.</p>
@@ -557,7 +565,7 @@
 
    <div class="notice">
     <strong>Estado de la agenda</strong>
-    <p id="uploadStatus">Sin información.</p>
+    <div id="uploadStatus">Sin información.</div>
    </div>
 
    <div class="dropzone" id="excelZone" role="button" tabindex="0">
@@ -734,12 +742,19 @@ function dibujar(animar) {
  const a=d.agenda||{};
 
  $('blockedNotice').classList.toggle('hidden',!d.bloqueada);
- $('agendaAlert').classList.toggle('hidden',!a.alerta);
- $('agendaAlertText').textContent=a.fecha
-  ?'Última carga hace '+a.minutos+' minutos ('+a.archivo+
-   '). Actualízala para que Consultas del día y la '+
-   'asistencia muestren a todos los pacientes.'
-  :'Todavía no se ha importado la agenda hospitalaria.';
+ // Aviso arriba solo si falta la agenda o si la cargada
+ // no trae la fecha de operación elegida.
+ const fechasAgenda=Object.keys(a.porFecha||{});
+ const faltaFecha=Boolean(a.fecha)&&fechasAgenda.length>0&&
+  !fechasAgenda.includes(V.fecha)&&V.datos.dia!=='SEMANA';
+
+ $('agendaAlert').classList.toggle('hidden',!(a.alerta||faltaFecha));
+ $('agendaAlertText').textContent=!a.fecha
+  ?'Todavía no se ha importado la agenda hospitalaria.'
+  :faltaFecha
+   ?'La agenda cargada ('+a.archivo+') no trae citas para el '+
+    fechaLarga(V.fecha)+'. Si hay atención ese día, carga el Reporte de Citas de esa fecha.'
+   :'Supervisión solicitó una actualización extraordinaria de la agenda.';
 
  pintarKpis();
  pintarBadges();
@@ -767,13 +782,21 @@ function dibujar(animar) {
    INDICADORES
    ===================================================== */
 
+// Resumen por especialidad: el total sumado de todas las
+// especialidades (p. ej. 202) no sirve al supervisor,
+// porque cada especialidad tiene su propio tope.
 function totalesCupos() {
  return (V.datos.cupos||[]).reduce((t,r)=>{
-  t.generados+=Number(r.generados)||0;
+  if(!r.habilitada)return t;
+  t.habilitadas++;
   t.ocupados+=Number(r.ocupados)||0;
-  t.disponibles+=Number(r.disponibles)||0;
+  if(r.disponibles>0)t.conCupo++;
+  else if(r.urgenciaLibre>0)t.soloUrgencia++;
+  else t.completas++;
+  t.urgencias+=Number(r.urgenciaUsada)||0;
   return t;
- },{generados:0,ocupados:0,disponibles:0});
+ },{habilitadas:0,conCupo:0,soloUrgencia:0,completas:0,
+   ocupados:0,urgencias:0});
 }
 
 function pintarKpis() {
@@ -791,9 +814,14 @@ function pintarKpis() {
  $('kPendSub').textContent=d.bandeja.urgentes+' urgente(s) · '+
   (d.pendientes-d.bandeja.total)+' en proceso';
 
- contarNumero('kDisp',t.disponibles);
- $('kDispSub').textContent='de '+t.generados+' autorizados · '+
-  t.ocupados+' ocupados';
+ contarNumero('kDisp',t.conCupo);
+ $('kDispSub').textContent=!t.habilitadas
+  ?'Sin sobrecupos para esta fecha'
+  :'de '+t.habilitadas+' · máx. 10 c/u + 1 urgencia · '+
+   t.ocupados+' agendados'+
+   (t.soloUrgencia?' · '+t.soloUrgencia+' solo urgencia':'')+
+   (t.completas?' · '+t.completas+' completas':'')+
+   (t.urgencias?' · '+t.urgencias+' urgencia(s) usada(s)':'');
 
  const pct=marcados?Math.round(a.asistio/marcados*100):0;
  contarNumero('kAsis',pct);
@@ -933,7 +961,9 @@ function pintarCupos(animar) {
     <span class="${r.ocupados>=r.generados&&r.generados?'full':'occ'}"
      data-v="${Math.min(r.ocupados,Math.max(r.generados,r.ocupados))/max}"></span>
    </div>
-   <span class="val">${r.ocupados}/${r.generados}</span>
+   <span class="val">${r.ocupados}/${r.generados}${r.urgencia
+    ?`<small class="${r.urgenciaUsada?'urg-usada':'urg-libre'}"
+      title="Cupo de urgencia ${r.urgenciaUsada?'usado':'libre'}">+${r.urgencia}</small>`:''}</span>
   </div>`).join('');
 
  MOV.alVer(cont,()=>{
@@ -1084,7 +1114,12 @@ function pintarPersonal(cont,limite) {
   return;
  }
 
- const propia=p=>p.Nombre===UGM.nombre&&p.Perfil===UGM.perfil;
+ // La propia se reconoce por el ID de sesión: así una
+ // sesión vieja "pegada" con el mismo nombre sí se puede
+ // cerrar desde aquí.
+ const propia=p=>UGM.sesion
+  ?p.Sesion===UGM.sesion
+  :p.Nombre===UGM.nombre&&p.Perfil===UGM.perfil;
 
  cont.innerHTML=lista.map(p=>`
   <div class="user" data-s="${esc(p.Sesion)}">
@@ -1167,8 +1202,80 @@ function pintarFeed(cont,limite) {
  ids.forEach(id=>V.feedVistos.add(id));
 }
 
+// Diálogo propio si Comun está al día; si no, el del navegador.
+function confirmarSeguro(o) {
+ if(typeof confirmar==='function')return confirmar(o);
+ const d=document.createElement('div');
+ d.innerHTML=o.html||'';
+ return Promise.resolve(window.confirm(
+  o.titulo+'\n\n'+d.textContent.replace(/\s+/g,' ').trim()));
+}
+
+// Cierra de una vez las sesiones pegadas (sin actividad
+// por más de 30 minutos), menos la tuya.
+async function cerrarInactivas() {
+ const inactivas=(V.datos.personal||[]).filter(p=>
+  p.Sesion!==UGM.sesion&&(p.segundos==null||p.segundos>1800));
+
+ if(!inactivas.length) {
+  aviso('No hay sesiones con más de 30 minutos sin actividad.');
+  return;
+ }
+
+ const ok=await confirmarSeguro({
+  titulo:'CERRAR SESIONES INACTIVAS',
+  icono:'apagar',
+  html:`<p>Se cerrarán <b>${inactivas.length}</b> sesión(es) sin
+   actividad por más de 30 minutos:</p>
+   <ul class="aviso-lista">${inactivas.slice(0,8).map(p=>
+    `<li><b>${esc(p.Nombre)}</b> · ${esc(ROLES[p.Perfil]||p.Perfil)}
+     · ${esc(hace(p.segundos))}</li>`).join('')}
+    ${inactivas.length>8?`<li>y ${inactivas.length-8} más…</li>`:''}</ul>
+   <p class="muted">Tu sesión actual no se cierra.</p>`,
+  ok:'Cerrar inactivas',
+  cancelar:'Cancelar'
+ });
+
+ if(!ok)return;
+
+ const b=$('btnInactivas');
+ b.disabled=true;
+
+ try {
+  const r=await api('cerrarSesionesInactivas',UGM.token,30);
+  MOV.exito();
+  aviso(r.cerradas+' sesión(es) inactiva(s) cerrada(s).');
+  V.firmas={};
+  await refrescar(true);
+ }catch(e) {
+  if(sesionTerminada(e,limpiarTodo))return;
+  aviso(e.message);
+ }finally {
+  b.disabled=false;
+ }
+}
+
 async function cerrarSesion(sesion,nombre) {
- if(!confirm('¿Cerrar la sesión de '+nombre+'?'))return;
+ const p=(V.datos.personal||[]).find(x=>x.Sesion===sesion)||{};
+
+ // Si Comun no está actualizado, usa la confirmación
+ // del navegador para que el botón siempre funcione.
+ const ok=typeof confirmar!=='function'
+  ?window.confirm('¿Cerrar la sesión de '+nombre+'?')
+  :await confirmar({
+  titulo:'CERRAR SESIÓN',
+  icono:'apagar',
+  html:`<p>Vas a cerrar la sesión de</p>
+   <div class="dia-grande">${esc(nombre)}</div>
+   <p>${esc(ROLES[p.Perfil]||p.Perfil||'')}${p.Ingreso
+    ?' · ingresó '+esc(fechaHora(p.Ingreso)):''}</p>
+   <p class="muted">Úsalo cuando una sesión quedó abierta o pegada.
+    La persona tendrá que volver a ingresar con su clave.</p>`,
+  ok:'Cerrar sesión',
+  cancelar:'Cancelar'
+ });
+
+ if(!ok)return;
 
  try {
   await api('cerrarSesionRemota',UGM.token,sesion);
@@ -1227,6 +1334,8 @@ function pintarSolicitudes(animar) {
    <td>${esc(r.RegistradoPor)}</td>
    <td>${esc(fechaHora(r.FechaRegistro))}</td>
    <td>${etiquetaEstado(r.Estado)}${
+    r.Urgencia==='SI'
+     ?' <span class="tag urgente">Cupo de urgencia</span>':
     V.datos.bandeja.urgentesIds.includes(r.ID)
      ?' <span class="tag urgente">Urgente</span>':''}</td>
   </tr>`).join('')||
@@ -1304,6 +1413,8 @@ function abrirSolicitud(id) {
    <p><b>Fecha:</b> ${esc(r.FechaSobrecupo)}</p>
    <p><b>Tipo:</b> ${r.Tipo==='MEDICO'?'Solicitud médica':'Fin de semana'}</p>
    <p><b>A solicitud de:</b> ${esc(r.SolicitadoPor)}</p>
+   ${r.Urgencia==='SI'?`<p class="motivo-urgencia"><b>Cupo de urgencia
+    (validar el caso):</b> ${esc(r.MotivoUrgencia||'Sin motivo')}</p>`:''}
    <p><b>Registró:</b> ${esc(r.RegistradoPor)}</p>
    <p><b>Registro:</b> ${esc(fechaHora(r.FechaRegistro))}</p>
    ${r.GestionadoPor?`<p><b>Gestionó:</b> ${esc(r.GestionadoPor)}</p>`:''}
@@ -1400,8 +1511,16 @@ async function gestionar(id,forzado) {
    aviso('Indica el motivo para liberar el cupo.');
    return;
   }
-  if(!confirm('Esto liberará 1 cupo de '+r.Especialidad+' para el '+
-    r.FechaSobrecupo+'. ¿Continuar?'))return;
+  const ok=await confirmarSeguro({
+   titulo:estado==='RECHAZADO'?'RECHAZAR SOLICITUD':'ANULAR Y LIBERAR CUPO',
+   html:`<p>Esto liberará <b>1 cupo</b> de
+    <b>${esc(r.Especialidad)}</b> para el</p>
+    <div class="dia-grande">${esc(fechaLarga(r.FechaSobrecupo))}</div>
+    <p>Paciente: <b>${esc(r.Nombres)}</b></p>`,
+   ok:estado==='RECHAZADO'?'Rechazar':'Anular y liberar',
+   cancelar:'Volver'
+  });
+  if(!ok)return;
  }
 
  boton.disabled=true;
@@ -1495,25 +1614,60 @@ function pintarAsistencia(animar) {
 
 /* ---------- Origen: agenda del sistema vs. sobrecupos ---------- */
 
+// Orden de las hojas del reporte del día.
+const ORDEN_GRUPOS=['AGENDA','ADICIONAL','SOBRECUPO'];
+
 const GRUPOS={
  AGENDA:{
-  nombre:'Agenda del sistema',
-  corto:'Agenda del sistema',
-  hoja:'Agenda del sistema',
-  detalle:'Pacientes que ya venían agendados en el Reporte de Citas del sistema hospitalario.'
+  nombre:'Pacientes agendados',
+  corto:'Agendado',
+  hoja:'Agendados',
+  color:'FF0A9FD0',
+  detalle:'Pacientes que ya tenían su cita en la agenda del sistema hospitalario (Reporte de Citas).'
+ },
+ ADICIONAL:{
+  nombre:'Pacientes adicionales (Reportería)',
+  corto:'Adicional Reportería',
+  hoja:'Adicionales Reportería',
+  color:'FFE0A526',
+  detalle:'Pacientes enviados por Reportería que no estaban en la agenda del sistema, más los del "Aumento 10%".'
  },
  SOBRECUPO:{
-  nombre:'Sobrecupos (Reportería)',
-  corto:'Sobrecupo (Reportería)',
-  hoja:'Sobrecupos Reportería',
-  detalle:'Pacientes agendados como sobrecupo por los técnicos a partir de la base de Reportería.'
+  nombre:'Sobrecupos de técnicos',
+  corto:'Sobrecupo técnico',
+  hoja:'Sobrecupos técnicos',
+  color:'FF8E5BD8',
+  detalle:'Pacientes registrados como sobrecupo por los técnicos en la plataforma (con ticket).'
  }
 };
 
-// Un sobrecupo que luego aparece en el reporte del
-// sistema sigue contando como sobrecupo.
+// Tipo de cita para pantallas y reportes.
+function tipoCita(c) {
+ if(grupoReporte(c)==='SOBRECUPO')return 'Sobrecupo técnico';
+ if(c.aumento)return 'Aumento 10%';
+ if(c.origen==='REPORTERIA')return 'Reportería (no estaba en agenda)';
+ return 'Agenda del sistema';
+}
+
+// 1) Sobrecupo registrado por un técnico -> SOBRECUPO
+//    (aunque el paciente también esté en la agenda).
+// 2) Enviado por Reportería sin estar en la agenda, o del
+//    "Aumento 10%" -> ADICIONAL.
+// 3) El resto (agenda del sistema) -> AGENDA.
 function grupoReporte(c) {
- return c.origen==='SOBRECUPO'||c.sobrecupo?'SOBRECUPO':'AGENDA';
+ if(c.origen==='SOBRECUPO'||c.sobrecupo)return 'SOBRECUPO';
+ if(c.origen==='REPORTERIA'||c.aumento)return 'ADICIONAL';
+ return 'AGENDA';
+}
+
+function filasGrupos(lista) {
+ return [
+  ...ORDEN_GRUPOS.map(g=>[GRUPOS[g].hoja,
+   conteo(lista.filter(c=>grupoReporte(c)===g))]),
+  ['   · adicionales del aumento 10%',
+   conteo(lista.filter(c=>grupoReporte(c)==='ADICIONAL'&&c.aumento))],
+  ['TOTAL',conteo(lista)]
+ ];
 }
 
 function conteo(lista) {
@@ -1539,11 +1693,7 @@ function porEspecialidad(lista) {
 
 function pintarOrigen() {
  const lista=V.datos.consultas||[];
- const filas=[
-  ['Agenda del sistema',conteo(lista.filter(c=>grupoReporte(c)==='AGENDA'))],
-  ['Sobrecupos (Reportería)',conteo(lista.filter(c=>grupoReporte(c)==='SOBRECUPO'))],
-  ['TOTAL',conteo(lista)]
- ];
+ const filas=filasGrupos(lista);
 
  if(!cambio('origen',filas))return;
 
@@ -1584,7 +1734,8 @@ function pintarDetalle(animar) {
    <td><b>${esc(c.paciente)}</b></td>
    <td>${esc(c.documento)}</td>
    <td>${esc(c.especialidad)}</td>
-   <td>${esc(GRUPOS[grupoReporte(c)].corto)}</td>
+   <td>${esc(GRUPOS[grupoReporte(c)].corto)}${c.aumento&&grupoReporte(c)==='ADICIONAL'
+    ?' <span class="tag aumento">Aumento 10%</span>':''}</td>
    <td style="color:${c.asistencia==='ASISTIO'?'var(--green)':
     c.asistencia==='NO_ASISTIO'?'var(--red)':'var(--yellow)'}">
     <b>${textoAsistencia(c.asistencia)}</b></td>
@@ -1778,11 +1929,10 @@ function bloqueResumen(ws,filaInicio,t) {
 function hojaGrupo(wb,grupo,lista,d) {
  const G=GRUPOS[grupo];
  const t=conteo(lista);
- const ws=wb.addWorksheet(G.hoja,{properties:{tabColor:{argb:
-  grupo==='AGENDA'?'FF0A9FD0':'FF8E5BD8'}}});
+ const ws=wb.addWorksheet(G.hoja,{properties:{tabColor:{argb:G.color}}});
 
  ws.columns=[{width:30},{width:46},{width:16},{width:16},
-  {width:16},{width:24},{width:10}];
+  {width:16},{width:24},{width:10},{width:18},{width:10}];
  paraImprimir(ws);
 
  ws.mergeCells('A1:G1');
@@ -1813,18 +1963,23 @@ function hojaGrupo(wb,grupo,lista,d) {
 
  const cab=ws.getRow(inicio+1);
  cab.values=['Especialidad','Paciente','Documento','Asistencia',
-  'Marcado por','Hora','Estado'];
+  'Marcado por','Hora marca','Estado','Tipo','Hora cita'];
  encabezados(cab);
 
  lista.slice().sort((a,b)=>
   a.especialidad.localeCompare(b.especialidad)||
+  String(a.horaCita||'').localeCompare(String(b.horaCita||''))||
   a.paciente.localeCompare(b.paciente)
  ).forEach((c,i)=>{
   const r=ws.getRow(inicio+2+i);
   r.values=[c.especialidad,c.paciente,c.documento,
    textoAsistencia(c.asistencia),c.marcadoPor||'',
    c.hora?horaCorta(c.hora):'',
-   c.sobrecupo?textoEstado(c.sobrecupo):(c.estadoCita||'')];
+   c.sobrecupo?textoEstado(c.sobrecupo):(c.estadoCita||''),
+   tipoCita(c),c.horaCita||''];
+  if(c.aumento&&grupoReporte(c)==='ADICIONAL') {
+   r.getCell(8).font={bold:true,color:{argb:'FFB7791F'}};
+  }
   const a=r.getCell(4);
   a.font={bold:true,color:{argb:c.asistencia==='ASISTIO'?ARGB.si:
    c.asistencia==='NO_ASISTIO'?ARGB.no:ARGB.sin}};
@@ -1833,7 +1988,7 @@ function hojaGrupo(wb,grupo,lista,d) {
  });
 
  ws.autoFilter={from:{row:inicio+1,column:1},
-  to:{row:inicio+1,column:7}};
+  to:{row:inicio+1,column:9}};
 }
 
 function hojaResumen(wb,d,lista) {
@@ -1853,11 +2008,7 @@ function hojaResumen(wb,d,lista) {
  ws.getCell('A2').font={bold:true};
  ws.getCell('A3').font={color:{argb:'FF58768A'}};
 
- const grupos=[
-  ['Agenda del sistema',conteo(lista.filter(c=>grupoReporte(c)==='AGENDA'))],
-  ['Sobrecupos (Reportería)',conteo(lista.filter(c=>grupoReporte(c)==='SOBRECUPO'))],
-  ['TOTAL',conteo(lista)]
- ];
+ const grupos=filasGrupos(lista);
 
  const cab=ws.getRow(5);
  cab.values=['Origen','Citas','Asistieron','No asistieron','Sin marcar','% asistencia'];
@@ -1876,17 +2027,18 @@ function hojaResumen(wb,d,lista) {
   }
  });
 
- const total=grupos[2][1];
+ const total=grupos.find(([n])=>n==='TOTAL')[1];
+ const base=6+grupos.length+1;
  const dona=wb.addImage({base64:graficaDona(total,'Asistencia total del día'),
   extension:'png'});
- ws.addImage(dona,{tl:{col:0,row:9.4},ext:{width:560,height:300}});
+ ws.addImage(dona,{tl:{col:0,row:base+.4},ext:{width:560,height:300}});
 
- const comp=graficaBarras(grupos.slice(0,2).map(([n,t])=>
-  Object.assign({especialidad:n},t)),'Agenda del sistema vs. sobrecupos');
+ const comp=graficaBarras(grupos.slice(0,ORDEN_GRUPOS.length).map(([n,t])=>
+  Object.assign({especialidad:n},t)),'Agendados, adicionales y sobrecupos');
  const compId=wb.addImage({base64:comp.url,extension:'png'});
- ws.addImage(compId,{tl:{col:0,row:25.4},ext:{width:760,height:comp.alto}});
+ ws.addImage(compId,{tl:{col:0,row:base+16.4},ext:{width:760,height:comp.alto}});
 
- const inicio=26+Math.ceil(comp.alto/20)+2;
+ const inicio=base+17+Math.ceil(comp.alto/20)+2;
  ws.getRow(inicio).values=['POR ESPECIALIDAD (TODOS LOS ORIGENES)'];
  ws.getRow(inicio).font={bold:true,size:13,color:{argb:'FF10456B'}};
 
@@ -1922,8 +2074,8 @@ async function descargarReporte() {
   wb.created=new Date();
 
   hojaResumen(wb,d,lista);
-  hojaGrupo(wb,'AGENDA',lista.filter(c=>grupoReporte(c)==='AGENDA'),d);
-  hojaGrupo(wb,'SOBRECUPO',lista.filter(c=>grupoReporte(c)==='SOBRECUPO'),d);
+  ORDEN_GRUPOS.forEach(g=>
+   hojaGrupo(wb,g,lista.filter(c=>grupoReporte(c)===g),d));
 
   const buffer=await wb.xlsx.writeBuffer();
   const blob=new Blob([buffer],{type:
@@ -1980,12 +2132,12 @@ function descargarReporteSimple() {
  ];
 
  const fila=c=>[c.especialidad,c.paciente,c.documento,
-  GRUPOS[grupoReporte(c)].corto,
+  tipoCita(c),c.horaCita||'',
   textoAsistencia(c.asistencia),c.marcadoPor,
   c.hora?horaCorta(c.hora):''];
 
- const cab=['Especialidad','Paciente','Documento','Origen',
-  'Asistencia','Marcado por','Hora'];
+ const cab=['Especialidad','Paciente','Documento','Tipo','Hora cita',
+  'Asistencia','Marcado por','Hora marca'];
 
  const hoja=(filas,anchos)=>{
   const h=XLSX.utils.aoa_to_sheet(filas);
@@ -1993,11 +2145,16 @@ function descargarReporteSimple() {
   return h;
  };
 
- const anchos=[30,38,16,12,14,26,8];
+ const anchos=[30,38,16,20,10,14,26,10];
  const wb=XLSX.utils.book_new();
 
  XLSX.utils.book_append_sheet(wb,
   hoja(resumen,[34,10,12,14,12,14]),'Resumen');
+ // Igual que el reporte completo: agendados, adicionales
+ // de Reportería y sobrecupos de técnicos en hojas aparte.
+ ORDEN_GRUPOS.forEach(g=>XLSX.utils.book_append_sheet(wb,
+  hoja([cab,...d.consultas.filter(c=>grupoReporte(c)===g).map(fila)],anchos),
+  GRUPOS[g].hoja));
  XLSX.utils.book_append_sheet(wb,
   hoja([cab,...d.consultas.filter(c=>c.asistencia==='ASISTIO').map(fila)],anchos),
   'Asistieron');
@@ -2060,8 +2217,9 @@ function pintarTablaCupos() {
     <td>${r.bloqueada?'<span style="color:var(--red)">Fecha bloqueada</span>':
      !r.habilitada?'No habilitada':
      r.incidencia?'<span style="color:var(--red)">Excede el límite</span>':
-     r.completo?'<span style="color:var(--red)">Completo</span>':
-     r.ultimo?'<span style="color:var(--yellow)">Último cupo</span>':'Disponible'}</td>
+     r.completo?'<span style="color:var(--red)">Completo (incl. urgencia)</span>':
+     r.soloUrgencia?'<span style="color:var(--yellow)">Solo cupo de urgencia</span>':
+     r.ultimo?'<span style="color:var(--yellow)">Último cupo regular</span>':'Disponible'}</td>
     <td style="white-space:nowrap">
      <button class="btn mini primary" type="button" data-guardar="FECHA">Guardar</button>
      ${r.porFecha?`<button class="btn mini" type="button"
@@ -2115,8 +2273,16 @@ async function guardarLimites(fila,alcance,restablecer) {
  const nuevo=cambios[0].limite;
 
  if(alcance==='FECHA'&&r&&nuevo!==''&&Number(nuevo)<r.ocupados&&
-    !confirm('Ya hay '+r.ocupados+' agendados. El nuevo límite ('+nuevo+
-     ') es menor: no se cancelan, pero no habrá cupos. ¿Continuar?')) {
+    !await confirmarSeguro({
+     titulo:'LÍMITE MENOR A LO AGENDADO',
+     tipo:'urgente',
+     html:`<p><b>${esc(esp)}</b> ya tiene <b>${r.ocupados}</b>
+      agendados y el nuevo límite es <b>${esc(nuevo)}</b>.</p>
+      <p>No se cancela a nadie, pero ya no habrá cupos
+      disponibles para esa fecha.</p>`,
+     ok:'Guardar de todos modos',
+     cancelar:'Volver'
+    })) {
   return;
  }
 
@@ -2184,18 +2350,85 @@ function pintarBase() {
 
  $('pacTotal').textContent=pac.total||0;
  $('pacInv').textContent=pac.invalidos||0;
+
+ // Pacientes por día de cita (base de Reportería).
+ const dias=Object.keys(pac.fechas||{}).sort();
+ const htmlDias=dias.length
+  ?'<b>Pacientes por día</b><small>Toca un día para verlo en Consultas del día.</small>'+
+   '<div class="pac-dias-lista">'+dias.map(f=>{
+    const x=pac.fechas[f];
+    return `<button type="button" class="pac-dia${f===V.fecha?' on':''}" data-f="${esc(f)}">
+     <span>${esc(fechaLarga(f))}</span>
+     <strong>${x.total}</strong>
+     <small>${x.total-x.aumento} agendados${x.aumento?' · '+x.aumento+' aumento 10%':''}</small>
+    </button>`;
+   }).join('')+'</div>'
+  :'';
+ if(cambio('pacDias',[htmlDias])) {
+  $('pacDias').innerHTML=htmlDias;
+  MOV.escalonar($('pacDias').querySelectorAll('.pac-dia'));
+ }
  $('pacFecha').textContent=pac.fecha
   ?new Date(pac.fecha).toLocaleDateString('es-SV'):'Sin datos';
 }
 
 function pintarAgenda() {
  const a=V.datos.agenda||{};
+ const dias=Object.keys(a.porFecha||{}).sort();
 
- $('uploadStatus').textContent=a.fecha
-  ?'Última carga: '+a.archivo+' · Responsable: '+a.usuario+
-   ' · Antigüedad: '+a.minutos+' minutos.'+
-   (a.extraordinaria?' · Actualización extraordinaria solicitada.':'')
-  :'Todavía no se ha importado una agenda.';
+ const html=a.fecha
+  ?`<div class="carga-ok">
+     <div class="carga-ico">${icono('check')}</div>
+     <div>
+      <b>Agenda cargada · no es necesario volver a subirla</b>
+      <small>${esc(a.archivo)}</small>
+      <small>Subida por <b>${esc(a.usuario)}</b> · ${esc(fechaHora(a.fecha))}
+       · hace ${esc(hace(Math.max(0,(a.minutos||0)*60)))}</small>
+     </div>
+     <div class="carga-num"><strong>${a.total||'—'}</strong><small>citas</small></div>
+    </div>
+    ${dias.length?`<div class="pac-dias-lista" style="margin-top:10px">${dias.map(f=>`
+     <button type="button" class="pac-dia${f===V.fecha?' on':''}" data-f="${esc(f)}">
+      <span>${esc(fechaLarga(f))}</span>
+      <strong>${a.porFecha[f]}</strong>
+      <small>citas activas o pendientes</small>
+     </button>`).join('')}</div>`:''}
+    <p class="muted small" style="margin:10px 0 0">Solo súbela otra vez si el
+     sistema hospitalario tiene cambios nuevos: la nueva <b>reemplaza</b> a esta.</p>`
+  :`<div class="carga-falta">
+     <b>Todavía no se ha cargado la agenda del día.</b>
+     <small>Descarga el Reporte de Citas del sistema hospitalario y súbelo aquí.</small>
+    </div>`;
+
+ if(cambio('agendaEstado',[html])) {
+  $('uploadStatus').innerHTML=html;
+  MOV.pulso($('uploadStatus').firstElementChild);
+ }
+}
+
+// Antes de reemplazar algo ya cargado, se pide confirmación
+// mostrando quién lo subió y cuándo.
+async function confirmarReemplazo(que,estado,detalle) {
+ if(!estado||!estado.fecha)return true;
+ return confirmarSeguro({
+  titulo:'YA HAY '+que.toUpperCase()+' CARGADA',
+  tipo:'urgente',
+  icono:'alerta',
+  html:`<p>La subió <b>${esc(estado.usuario||'—')}</b> el
+   <b>${esc(fechaHora(estado.fecha))}</b>.</p>
+   <p class="muted">${esc(estado.archivo||'')}${detalle?' · '+esc(detalle):''}</p>
+   <p>Si subes otra, <b>reemplaza</b> a la actual para todos.
+   ¿Seguro que necesitas subirla de nuevo?</p>`,
+  ok:'Sí, reemplazar',
+  cancelar:'No, dejar la actual'
+ });
+}
+
+async function subirAgenda(archivo,alTerminar) {
+ const a=(V.datos||{}).agenda||{};
+ if(!await confirmarReemplazo('una agenda',a,
+   a.total?a.total+' citas':''))return;
+ return importarAgendaArchivo(archivo,alTerminar);
 }
 
 async function alertaExtraordinaria() {
@@ -2241,7 +2474,53 @@ async function alEntrar() {
  aviso('Bienvenido al centro de control, '+UGM.nombre+'.');
 }
 
+const VERSION_PANTALLA='2026.10.10-6';
+
+/* =====================================================
+   VERIFICACIÓN DE ARCHIVOS
+   Los 5 archivos se pegan a mano en Apps Script. Si uno
+   quedó en una versión anterior, la plataforma falla sin
+   avisar. Aquí se comparan las versiones y se muestra
+   cuál falta actualizar.
+   ===================================================== */
+
+async function verificarArchivos() {
+ const leer=()=>{
+  try {
+   return getComputedStyle(document.documentElement)
+    .getPropertyValue('--ugm-version').replace(/["'\s]/g,'');
+  }catch(e) {return '';}
+ };
+
+ let servidor='';
+ try {
+  servidor=await new Promise((ok,mal)=>{
+   google.script.run.withSuccessHandler(ok)
+    .withFailureHandler(mal).versionUGM();
+  });
+ }catch(e) {servidor='';}
+
+ const faltan=[
+  ['Código.gs',servidor],
+  ['Comun',typeof VERSION_COMUN==='undefined'?'':VERSION_COMUN],
+  ['Estilos',leer()]
+ ].filter(([,v])=>v!==VERSION_PANTALLA).map(([n])=>n);
+
+ if(!faltan.length)return;
+
+ const aviso_=document.createElement('div');
+ aviso_.className='aviso-version';
+ aviso_.setAttribute('role','alert');
+ aviso_.innerHTML='<b>Faltan archivos por actualizar:</b> '+
+  faltan.join(', ')+'. Pega los .txt más recientes en Apps Script '+
+  'e implementa una nueva versión. Hasta entonces algunas '+
+  'funciones pueden no responder.';
+ document.body.appendChild(aviso_);
+ console.warn('UGM: archivos desactualizados',faltan,VERSION_PANTALLA);
+}
+
 function iniciar() {
+ verificarArchivos();
  montarComun();
  montarAcceso('supervisor',alEntrar,limpiarTodo);
 
@@ -2254,6 +2533,16 @@ function iniciar() {
   V.fecha=$('fecha').value;
   V.firmas={};
   refrescar(true);
+ });
+
+ // Día de la base de Reportería -> fecha de operación.
+ // Días de la base o de la agenda -> fecha de operación.
+ document.addEventListener('click',ev=>{
+  const b=ev.target.closest('#pacDias .pac-dia, #uploadStatus .pac-dia');
+  if(!b)return;
+  $('fecha').value=b.dataset.f;
+  $('fecha').dispatchEvent(new Event('change'));
+  aviso('Fecha de operación: '+fechaLarga(b.dataset.f)+'.');
  });
 
  $('solChips').addEventListener('click',ev=>{
@@ -2290,6 +2579,8 @@ function iniciar() {
   if(b)cerrarSesion(b.dataset.cerrar,b.dataset.n);
  });
 
+ $('btnInactivas').addEventListener('click',cerrarInactivas);
+
  $('modal').addEventListener('click',ev=>{
   if(ev.target===$('modal'))cerrarModal();
  });
@@ -2300,7 +2591,7 @@ function iniciar() {
  };
 
  montarZona($('excelZone'),$('excelFile'),
-  f=>importarAgendaArchivo(f,recargar));
+  f=>subirAgenda(f,recargar));
 
  montarZona($('patientsZone'),$('patientsFile'),importarPacientes);
 
@@ -2319,7 +2610,7 @@ function iniciar() {
   }
 
   if(V.pagina==='actualizacion') {
-   pegarComoTabla(ev,f=>importarAgendaArchivo(f,recargar));
+   pegarComoTabla(ev,f=>subirAgenda(f,recargar));
   } else if(V.pagina==='basepacientes') {
    pegarComoTabla(ev,importarPacientes);
   }
@@ -2344,7 +2635,8 @@ if(document.readyState==='loading') {
 const ALIAS_PACIENTES={
  completo:[
   'NOMBRECOMPLETO','NOMBREDELPACIENTE',
-  'NOMBREPACIENTE','PACIENTE',
+  'NOMBREPACIENTE','PACIENTE','PACIENTENOMBRE',
+  'NOMBREDEPACIENTE',
   'NOMBREYAPELLIDO','NOMBREYAPELLIDOS',
   'NOMBRESYAPELLIDOS'
  ],
@@ -2366,7 +2658,22 @@ const ALIAS_PACIENTES={
  ],
  expediente:[
   'EXPEDIENTE','NUMEROEXPEDIENTE',
-  'NOEXPEDIENTE','NUMERODEEXPEDIENTE'
+  'NOEXPEDIENTE','NUMERODEEXPEDIENTE',
+  'PACIENTECODIGO','CODIGOPACIENTE','CODIGODEPACIENTE'
+ ],
+ // Base de Reportería (call center): fecha y hora de la
+ // cita y observaciones.
+ fecha:[
+  'FECHAYHORA','FECHAHORA','FECHA','FECHACITA',
+  'FECHADECITA','FECHADELACITA'
+ ],
+ hora:['HORA','HORACITA','HORADECITA'],
+ // Número de la cita en el sistema hospitalario: es el
+ // mismo "Codigo" del Reporte de Citas (agenda).
+ correlativo:['CORRELATIVO','CODIGO','CODIGOCITA','CODIGODECITA','IDCITA'],
+ observacion:[
+  'OBSERVACIONESUCC','OBSERVACIONUCC','OBSERVACIONES',
+  'OBSERVACION'
  ],
  especialidad:[
   'ESPECIALIDAD','ESPECIALIDADES',
@@ -2400,7 +2707,11 @@ function encabezadosPacientes(fila) {
   partes,
   documento,
   expediente:uno(ALIAS_PACIENTES.expediente),
-  especialidad:uno(ALIAS_PACIENTES.especialidad)
+  especialidad:uno(ALIAS_PACIENTES.especialidad),
+  fecha:uno(ALIAS_PACIENTES.fecha),
+  hora:uno(ALIAS_PACIENTES.hora),
+  observacion:uno(ALIAS_PACIENTES.observacion),
+  correlativo:uno(ALIAS_PACIENTES.correlativo)
  };
 }
 
@@ -2415,16 +2726,16 @@ async function procesarPacientes(origen) {
     header:1,
     defval:'',
     raw:false,
-    blankrows:false
+    blankrows:true
    }
   );
 
-  for(let i=0;i<Math.min(25,matriz.length);i++) {
+  for(let i=0;i<Math.min(40,matriz.length);i++) {
    const campos=encabezadosPacientes(matriz[i]);
 
    if(campos&&(!mejor||
       matriz.length-i>mejor.matriz.length-mejor.inicio)) {
-    mejor={matriz,inicio:i+1,campos};
+    mejor={matriz,inicio:i+1,campos,hoja:nombre};
     break;
    }
   }
@@ -2446,29 +2757,134 @@ async function procesarPacientes(origen) {
   );
  }
 
- const {matriz,inicio,campos}=mejor;
+ const {matriz,inicio}=mejor;
+ let campos=mejor.campos;
  const registros=[];
+
+ // Valores crudos (fechas como Date) de la misma hoja.
+ const crudo=XLSX.utils.sheet_to_json(
+  libro.Sheets[mejor.hoja],{header:1,defval:'',raw:true,blankrows:true}
+ );
+
+ // La base de Reportería trae varias secciones, cada una
+ // con su título y sus encabezados repetidos. Desde la
+ // sección "AUMENTO DEL 10%" los pacientes se marcan aparte.
+ let aumento=false;
+ let ultimaEspecialidad='';
 
  for(let i=inicio;i<matriz.length;i++) {
   const fila=matriz[i]||[];
+  const llenas=fila.filter(v=>String(v??'').trim()!=='');
+
+  // Encabezado repetido: si le falta alguna columna (p. ej.
+  // "FECHA Y HORA" en Fisiatría) se conserva la anterior.
+  const otraCabecera=encabezadosPacientes(fila);
+  if(otraCabecera) {
+   ['expediente','especialidad','fecha','hora','observacion','correlativo']
+    .forEach(k=>{if(otraCabecera[k]<0)otraCabecera[k]=campos[k];});
+   campos=otraCabecera;
+   ultimaEspecialidad='';
+   continue;
+  }
+
+  if(llenas.length===1&&
+     /AUMENTO/.test(nombreColumna(llenas[0]))) {
+   aumento=true;
+   continue;
+  }
 
   const nombre=limpiarNombrePaciente(campos.partes
    .map(c=>String(fila[c]??'').trim())
    .filter(Boolean).join(' '));
 
-  if(!nombre)continue;
+  if(!nombre||llenas.length<2)continue;
+
+  const cita=campos.fecha>=0
+   ?fechaReporteria((crudo[i]||[])[campos.fecha],fila[campos.fecha])
+   :{fecha:'',hora:''};
+
+  if(campos.hora>=0&&!cita.hora) {
+   cita.hora=horaReporteria(fila[campos.hora]);
+  }
+
+  // Si una fila viene sin especialidad, se usa la de la
+  // fila anterior de la misma sección.
+  const especialidad=(campos.especialidad>=0
+   ?String(fila[campos.especialidad]??'').trim():'')||ultimaEspecialidad;
+  ultimaEspecialidad=especialidad;
 
   registros.push({
    nombre,
    documento:String(fila[campos.documento]??''),
    expediente:campos.expediente>=0
     ?String(fila[campos.expediente]??''):'',
-   especialidad:campos.especialidad>=0
-    ?String(fila[campos.especialidad]??''):''
+   especialidad,
+   fecha:cita.fecha,
+   hora:cita.hora,
+   aumento,
+   observacion:campos.observacion>=0
+    ?String(fila[campos.observacion]??'').trim():'',
+   correlativo:campos.correlativo>=0
+    ?String(fila[campos.correlativo]??'').trim():''
   });
  }
 
  return registros;
+}
+
+// Hora "7:00 am", "1:00 pm", "13:30" -> "07:00", "13:00".
+function horaReporteria(v) {
+ const m=String(v??'').toLowerCase()
+  .match(/(\d{1,2})\s*[:.h]\s*(\d{2})\s*([ap])?\.?\s*m?/);
+ if(!m)return '';
+ let h=Number(m[1]);
+ const min=Number(m[2]);
+ if(m[3]==='p'&&h<12)h+=12;
+ if(m[3]==='a'&&h===12)h=0;
+ if(h>23||min>59)return '';
+ return String(h).padStart(2,'0')+':'+String(min).padStart(2,'0');
+}
+
+// La columna "FECHA Y HORA" viene escrita de muchas formas:
+// celda de fecha, "10-10-2026", "10/10/2026",
+// "2026-10-10", "11-10-2026 a las 7:00 am", "11/10/026".
+// Se interpreta como día/mes/año (El Salvador).
+function fechaReporteria(crudo,texto) {
+ const dos=n=>String(n).padStart(2,'0');
+
+ if(crudo instanceof Date&&!isNaN(crudo)) {
+  const d=new Date(crudo.getTime()+30000);
+  const h=d.getHours()||d.getMinutes()
+   ?dos(d.getHours())+':'+dos(d.getMinutes()):'';
+  return {fecha:d.getFullYear()+'-'+dos(d.getMonth()+1)+'-'+dos(d.getDate()),hora:h};
+ }
+
+ if(typeof crudo==='number'&&crudo>30000&&crudo<80000) {
+  const ms=Math.round((crudo-25569)*86400000);
+  const d=new Date(ms);
+  const h=d.getUTCHours()||d.getUTCMinutes()
+   ?dos(d.getUTCHours())+':'+dos(d.getUTCMinutes()):'';
+  return {fecha:d.getUTCFullYear()+'-'+dos(d.getUTCMonth()+1)+'-'+dos(d.getUTCDate()),hora:h};
+ }
+
+ const t=String(texto??crudo??'').trim();
+ const hora=horaReporteria(t.replace(/^\S+/,''));
+ let a,m,d,x;
+
+ if((x=t.match(/(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/))) {
+  [a,m,d]=[x[1],x[2],x[3]];
+ } else if((x=t.match(/(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})/))) {
+  [d,m,a]=[x[1],x[2],x[3]];
+  a=Number(a);
+  if(a<100)a+=2000;
+  else if(a<1000)a=2000+(a%100);
+ } else {
+  return {fecha:'',hora};
+ }
+
+ a=Number(a);m=Number(m);d=Number(d);
+ if(m<1||m>12||d<1||d>31)return {fecha:'',hora};
+ return {fecha:a+'-'+dos(m)+'-'+dos(d),hora};
 }
 
 async function importarPacientes(origen) {
@@ -2476,6 +2892,13 @@ async function importarPacientes(origen) {
 
  if(!puedeGestionar()) {
   aviso('Solo el supervisor puede cargar la base.');
+  return;
+ }
+
+ const pac=(V.datos||{}).pacientes||{};
+ if(!await confirmarReemplazo('una base de pacientes',pac,
+   pac.total?pac.total+' pacientes':'')) {
+  $('patientsFile').value='';
   return;
  }
 
@@ -2532,9 +2955,14 @@ async function importarPacientes(origen) {
    carga=r.carga;
   }
 
+  const porDia=Object.keys(r.fechas||{}).sort().map(f=>
+   fechaLarga(f)+': '+r.fechas[f].total+
+   (r.fechas[f].aumento?' ('+r.fechas[f].aumento+' aumento 10%)':''));
+
   progreso.textContent='Base de pacientes cargada: '+
    r.total+' pacientes · DUI inválidos: '+
-   r.invalidos+'. Ya está disponible para los técnicos.';
+   r.invalidos+'.'+(porDia.length?' Por día → '+porDia.join(' · ')+'.':'')+
+   ' Ya está disponible para los técnicos.';
   MOV.barra(barra.firstElementChild,1);
 
   aviso(

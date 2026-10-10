@@ -1,5 +1,6 @@
 <style>
 :root{
+ --ugm-version:"2026.10.10-6";
  --bg:#031423;
  --bg2:#092d49;
  --panel:#0a3250;
@@ -1162,4 +1163,182 @@ svg.ico-svg{
  .heading .controls{margin-left:0;width:100%}
  .heading .controls input{width:100%}
 }
+/* =========================================================
+   ANIMACIONES V2
+   ========================================================= */
+
+/* Constelación de fondo */
+#fxCanvas{position:absolute;inset:0;opacity:.9}
+body.light #fxCanvas{opacity:.6}
+
+/* Luz que sigue al cursor en tarjetas */
+.kpi,.card,.panel,.login-card{position:relative}
+.kpi::after,.card::after,.panel::after,.login-card::after{
+ content:"";position:absolute;inset:0;border-radius:inherit;
+ pointer-events:none;opacity:0;transition:opacity .35s;
+ background:radial-gradient(420px circle at var(--mx,50%) var(--my,50%),
+  rgba(19,201,245,.13),transparent 45%)
+}
+.luz::after{opacity:1}
+.kpi.luz,.card.luz,.panel.luz{
+ transition:background .3s,border-color .3s,box-shadow .25s;
+ border-color:rgba(19,201,245,.45);
+ box-shadow:0 18px 44px var(--shadow),0 0 0 1px rgba(19,201,245,.12),
+  0 0 34px rgba(19,201,245,.12)
+}
+
+/* Borde de luz que gira en los indicadores */
+@property --ang{syntax:'<angle>';inherits:false;initial-value:0deg}
+.kpi::before{
+ content:"";position:absolute;inset:-1px;border-radius:inherit;padding:1px;
+ background:conic-gradient(from var(--ang),transparent 0 70%,
+  rgba(19,201,245,.85) 82%,transparent 92%);
+ -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+ -webkit-mask-composite:xor;mask-composite:exclude;
+ animation:girarBorde 6s linear infinite;pointer-events:none;opacity:.7
+}
+.kpi.verde::before{background:conic-gradient(from var(--ang),transparent 0 70%,rgba(56,223,173,.85) 82%,transparent 92%)}
+.kpi.amarillo::before{background:conic-gradient(from var(--ang),transparent 0 70%,rgba(255,208,106,.85) 82%,transparent 92%)}
+.kpi:nth-child(2)::before{animation-delay:-1.5s}
+.kpi:nth-child(3)::before{animation-delay:-3s}
+.kpi:nth-child(4)::before{animation-delay:-4.5s}
+@keyframes girarBorde{to{--ang:360deg}}
+
+/* Destello cuando cambia un número */
+.kpi.destello{animation:destello .9s ease-out}
+@keyframes destello{
+ 0%{box-shadow:0 0 0 0 rgba(19,201,245,.55),0 13px 38px var(--shadow)}
+ 100%{box-shadow:0 0 0 18px rgba(19,201,245,0),0 13px 38px var(--shadow)}
+}
+
+/* Halo pulsante del ícono de cada indicador */
+.kpi-icon{position:relative}
+.kpi-icon::after{
+ content:"";position:absolute;inset:-4px;border-radius:50%;
+ border:1px solid currentColor;opacity:0;
+ animation:halo 2.8s ease-out infinite
+}
+@keyframes halo{0%{transform:scale(.85);opacity:.55}100%{transform:scale(1.45);opacity:0}}
+
+/* Títulos letra por letra */
+.letra{display:inline-block;transform-origin:50% 100%;will-change:transform}
+
+/* Confeti */
+.confeti{
+ position:fixed;width:9px;height:14px;z-index:9999;
+ pointer-events:none;border-radius:2px;margin:-7px 0 0 -4px
+}
+
+/* Botones: brillo que cruza al pasar el cursor */
+.btn.primary::after{
+ content:"";position:absolute;top:0;bottom:0;left:-60%;width:40%;
+ background:linear-gradient(100deg,transparent,rgba(255,255,255,.35),transparent);
+ transform:skewX(-18deg);transition:left .7s ease;pointer-events:none
+}
+.btn.primary:hover:not(:disabled)::after{left:130%}
+.btn.primary:not(:disabled){box-shadow:0 8px 22px rgba(19,201,245,.25)}
+
+/* Menú: ícono que salta al pasar */
+.nav i,.nav svg{transition:transform .35s cubic-bezier(.34,1.56,.64,1)}
+.nav:hover i,.nav:hover svg{transform:translateX(3px) scale(1.15) rotate(-6deg)}
+
+/* Filas de tablas con barra de luz */
+tbody tr{transition:background .25s,transform .25s}
+tbody tr:hover{background:rgba(19,201,245,.07);transform:translateX(3px);
+ box-shadow:inset 3px 0 0 var(--cyan)}
+
+/* Campos con foco luminoso */
+input:focus,select:focus,textarea:focus{
+ box-shadow:0 0 0 3px rgba(19,201,245,.18),0 0 18px rgba(19,201,245,.15);
+ transition:box-shadow .3s,border-color .3s
+}
+
+/* Cupo de urgencia en técnicos */
+.cupo-box.urgencia{
+ border-color:var(--yellow)!important;
+ animation:latidoUrgencia 1.8s ease-in-out infinite
+}
+.cupo-box.urgencia .num{color:var(--yellow)}
+@keyframes latidoUrgencia{
+ 0%,100%{box-shadow:0 0 0 0 rgba(255,208,106,.35)}
+ 50%{box-shadow:0 0 0 10px rgba(255,208,106,0),0 0 28px rgba(255,208,106,.2)}
+}
+
+/* Campo de texto dentro de un diálogo */
+.dlg-campo{text-align:left;margin:14px 0 4px}
+.dlg-campo textarea{width:100%;resize:vertical;min-height:76px}
+.dlg-cuenta{display:block;margin-top:6px;color:var(--muted);font-size:11px;transition:color .3s}
+.dlg-cuenta.ok{color:var(--green)}
+
+/* Supervisor: cupo de urgencia en gráficas y detalle */
+.bar-row .val small{margin-left:3px;font-size:10px;font-weight:800;padding:1px 5px;border-radius:999px}
+.bar-row .val small.urg-libre{color:var(--yellow);border:1px solid rgba(255,208,106,.5)}
+.bar-row .val small.urg-usada{color:#031423;background:var(--yellow)}
+.motivo-urgencia{
+ grid-column:1/-1;padding:10px 12px!important;border-radius:12px;
+ border:1px solid var(--yellow);background:rgba(255,208,106,.1)
+}
+.tag.urgente{animation:parpadeo 1.6s ease-in-out infinite}
+@keyframes parpadeo{50%{box-shadow:0 0 14px rgba(255,121,136,.6)}}
+
+@media(prefers-reduced-motion:reduce){
+ .kpi::before,.kpi-icon::after,.cupo-box.urgencia,.tag.urgente,.kpi.destello{animation:none}
+ #fxCanvas{display:none}
+ tbody tr:hover{transform:none}
+}
+
+/* Confirmación propia: por encima de cualquier ventana */
+.overlay.confirma{z-index:70}
+.confirma-caja{width:min(460px,100%)}
+.confirma-caja .buttons{justify-content:center;margin-top:16px}
+
+/* Base de Reportería: días, hora de cita y aumento 10% */
+.tag.aumento{color:#3a2a00;background:var(--yellow);border-color:var(--yellow);font-weight:800}
+.tag.hora{display:inline-flex;align-items:center;gap:4px;font-variant-numeric:tabular-nums}
+.tag.hora svg{width:12px;height:12px}
+.obs-ucc{margin-top:4px;font-size:11px;color:var(--muted);
+ white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.pac-dias{margin:14px 0}
+.pac-dias>b{display:block}
+.pac-dias>small{display:block;color:var(--muted);font-size:11px;margin:2px 0 8px}
+.pac-dias-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.pac-dia{
+ text-align:left;padding:12px 14px;border-radius:14px;cursor:pointer;
+ border:1px solid var(--border);background:var(--panel2);color:var(--text);
+ display:grid;gap:2px;transition:transform .2s,border-color .2s,box-shadow .2s
+}
+.pac-dia span{font-size:12px;text-transform:capitalize;color:var(--muted)}
+.pac-dia strong{font-size:26px;color:var(--cyan);line-height:1.1}
+.pac-dia small{font-size:11px;color:var(--muted)}
+.pac-dia:hover{transform:translateY(-2px);border-color:var(--cyan)}
+.pac-dia.on{border-color:var(--cyan);box-shadow:0 0 0 2px rgba(19,201,245,.25)}
+
+/* Aviso de archivos desactualizados */
+.aviso-version{
+ position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:80;
+ width:min(720px,calc(100% - 32px));padding:14px 18px;border-radius:14px;
+ background:#5a1420;color:#fff;border:1px solid #ff7988;
+ box-shadow:0 14px 40px rgba(0,0,0,.45);font-size:13px;line-height:1.45
+}
+.toolbar-acciones{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+
+/* Estado de carga (agenda) */
+.carga-ok{
+ display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:12px;align-items:center;
+ margin-top:8px;padding:12px 14px;border-radius:14px;
+ border:1px solid var(--green);background:rgba(56,223,173,.09)
+}
+.carga-ok b{color:var(--green)}
+.carga-ok small{display:block;color:var(--muted);font-size:12px;margin-top:2px;overflow-wrap:anywhere}
+.carga-ok small b{color:var(--text)}
+.carga-ico{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;
+ color:var(--green);border:1px solid var(--green);background:rgba(56,223,173,.12)}
+.carga-ico svg{width:22px;height:22px}
+.carga-num{text-align:center}
+.carga-num strong{display:block;font-size:28px;color:var(--green);line-height:1}
+.carga-num small{color:var(--muted);font-size:11px}
+.carga-falta{margin-top:8px;padding:12px 14px;border-radius:14px;
+ border:1px dashed var(--yellow);background:rgba(255,208,106,.08)}
+.carga-falta b{color:var(--yellow);display:block}
+.carga-falta small{color:var(--muted)}
 </style>
