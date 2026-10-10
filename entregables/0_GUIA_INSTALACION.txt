@@ -57,21 +57,32 @@ TÉCNICOS
  - Consultas del día: pestañas por especialidad, buscador
    por nombre/DUI y botones Asistió / No asistió.
  - Solicitud de sobrecupo (formulario obligatorio):
-   * Sábado y domingo. Máximo 1 sobrecupo por especialidad
-     y día: límite de citas + 1 (10 + 1 = 11). El
-     sobrecupo se habilita con 10 pacientes activos.
+   * Sábado y domingo. Cupos por especialidad y día =
+     límite de la especialidad (10; Cuidados Paliativos 5;
+     Nutrición-PE 7). Se muestra "X de 10 disponibles".
+   * Al agendar el último (10.º) sale un aviso de ÚLTIMO
+     CUPO. Desde el 11.º el sistema BLOQUEA por restricción
+     médica, para cualquier técnico.
    * Ticket SIEMPRE obligatorio: frente y reverso sellado
      y firmado por el médico.
-   * Entre semana: sale una ALERTA con el día que se está
-     agendando; solo continúa si el médico lo indicó y
-     queda pendiente de aprobación de supervisión.
+   * Entre semana: ALERTA con el día que se agenda; solo si
+     el médico lo indicó.
    * Fechas bloqueadas de diciembre y enero: nunca.
  - Mis solicitudes, Buscar paciente, Actualizar agenda.
 
 SUPERVISIÓN
  - Centro de control en vivo: técnicos en línea, gráficas
    de cupos, asistencia, estados y actividad por hora.
- - Solicitudes: ver tickets, aprobar, observar, rechazar.
+ - Bandeja de solicitudes: todo llega "Sin verificar".
+   Alerta al entrar y aviso permanente con la cantidad
+   pendiente (en rojo si son urgentes: cita en 2 días o
+   más de 2 horas esperando). Procesar = Agendar, Enviar a
+   validación de otra área, Observar, Rechazar o Anular.
+   Procesar NO libera cupos; solo Rechazar, Anular o
+   "Liberar cupo" (de un agendado) lo hacen.
+ - Cupos y límites: cambiar el límite de una especialidad
+   solo para una fecha (disponibilidad médica del día) o
+   el límite general de sábados/domingos.
  - Asistencia: resumen por especialidad y botón
    "Descargar reporte Excel" para el reporte del día.
  - Personal en línea: qué hace cada técnico y cerrar

@@ -211,8 +211,7 @@
   <div class="notice warning hidden" id="agendaAlert">
    <strong>Actualización de agenda requerida</strong>
    <p id="agendaAlertText">
-    Para sobrecupos de sábado y domingo la agenda debe
-    haberse cargado en los últimos 30 minutos.
+    Supervisión solicitó actualizar la agenda hospitalaria.
    </p>
    <div class="buttons">
     <button class="btn primary" id="btnGoUpload" type="button">
@@ -224,11 +223,12 @@
   <div class="panel glass">
    <h2><span>✚</span> Solicitud de sobrecupo</h2>
    <p class="desc">
-    Sobrecupos <b>sábado y domingo</b>: máximo <b>1 sobrecupo
-    por especialidad y día</b> (límite de citas + 1; por
-    ejemplo 10 + 1 = 11). Entre semana solo si el
+    Sobrecupos <b>sábado y domingo</b> según los cupos de
+    cada especialidad (por restricción médica, al llenarse
+    no se pueden agendar más). Entre semana solo si el
     <b>médico lo indica</b>. Siempre adjunta el ticket de la
-    consulta: frente y reverso sellado y firmado.
+    consulta: frente y reverso sellado y firmado. Todas las
+    solicitudes las verifica supervisión.
    </p>
 
    <div class="cupo-box" id="cupoBox">
@@ -584,7 +584,7 @@ function dibujar() {
    ' · Antigüedad: '+a.minutos+' minutos.'
   :'Todavía no se ha importado una agenda.';
 
- $('agendaAlert').classList.toggle('hidden',Boolean(a.vigente));
+ $('agendaAlert').classList.toggle('hidden',!a.extraordinaria);
 
  $('agendaAlertText').textContent=a.extraordinaria
   ?'Supervisión solicitó una actualización extraordinaria '+
@@ -902,7 +902,7 @@ function pintarMias() {
  const lista=(T.datos&&T.datos.solicitudes)||[];
 
  const abiertas=lista.filter(r=>
-  ['PENDIENTE','EN GESTION','OBSERVADO']
+  ['PENDIENTE','EN GESTION','OBSERVADO','VALIDACION']
    .includes(normTexto(r.Estado))
  ).length;
 
@@ -970,12 +970,44 @@ function revisarFecha() {
  }
 
 
- if(!S.guardando) {
-  $('btnRequest').disabled=Boolean(bloqueada||pasada||
-   (mostrarMedico&&!$('medico').checked));
- }
+ T.bloqueoFecha=Boolean(bloqueada||pasada||
+  (mostrarMedico&&!$('medico').checked));
 
+ if(!esFinDeSemana(f))T.cupo=null;
+
+ revisarBoton();
  actualizarCupos();
+}
+
+function revisarBoton() {
+ if(S.guardando)return;
+ const completo=esFinDeSemana($('date').value)&&
+  T.cupo&&T.cupo.disponibles===0;
+ $('btnRequest').disabled=Boolean(T.bloqueoFecha||completo);
+}
+
+function avisoCompleto(fila,f) {
+ return dialogo({
+  tipo:'bloqueo',
+  icono:'⛔',
+  titulo:'YA NO SE PUEDE AGENDAR MÁS',
+  html:`<p>Por <b>restricción médica</b>, el cupo de
+   <b>${esc(fila.especialidad)}</b> para el</p>
+   <div class="dia-grande">${esc(fechaLarga(f))}</div>
+   <p>está completo: <b>${fila.ocupados} de ${fila.limite}</b>
+   sobrecupos agendados.</p>
+   <p class="muted">Elige otra fecha o especialidad. Solo
+   supervisión puede liberar cupos o ampliar el límite.</p>`,
+  ok:'Entendido'
+ });
+}
+
+async function cuposAlDia(f,esp) {
+ const r=await api('consultarCupos',UGM.token,f);
+ T.cupos[f]={t:Date.now(),r};
+ return (r.lista||[]).find(x=>
+  normTexto(x.especialidad)===normTexto(esp)
+ )||null;
 }
 
 function actualizarCupos() {
@@ -1037,58 +1069,42 @@ async function pintarCupos() {
   normTexto(x.especialidad)===normTexto(esp)
  );
 
+ T.cupo=fila||null;
+
  if(!fila||!fila.habilitada) {
   poner('0','<b>'+esc(esp)+'</b> no tiene sobrecupos '+
    'habilitados ese día.','sin');
+  revisarBoton();
+  return;
+ }
+
+ const clave=f+'|'+esp;
+
+ if(fila.disponibles===0) {
+  poner('0','<b>Cupo completo · restricción médica.</b> '+
+   esc(esp)+' ya tiene '+fila.ocupados+' de '+fila.limite+
+   ' sobrecupos para el '+esc(fechaLarga(f))+
+   '. No se pueden agendar más.','sin');
+  revisarBoton();
+  if(T.avisoCompleto!==clave) {
+   T.avisoCompleto=clave;
+   avisoCompleto(fila,f);
+  }
   return;
  }
 
  poner(fila.disponibles,
-  (fila.disponibles>0?'<b>Sobrecupo disponible</b>':
-   '<b>Sin sobrecupo disponible</b>')+' · Límite <b>'+fila.limite+
-  ' citas + '+(fila.capacidad-fila.limite)+' sobrecupo = '+
-  fila.capacidad+'</b> · '+fila.activas+' pacientes activos · '+
-  fila.ocupados+' ocupado(s) de '+fila.generados+' autorizado(s)'+
-  (fila.generados?'':'<br>Se habilita 1 sobrecupo al llegar a 10 '+
-   'pacientes activos.')+
-  (r.agenda&&!r.agenda.vigente
-   ?'<br><span style="color:var(--yellow)">Actualiza la agenda '+
-    'antes de enviar (vigencia 30 min).</span>':''),
-  fila.disponibles>0?'':'sin');
+  (fila.ultimo?'<b style="color:var(--yellow)">Último cupo disponible</b>':
+   '<b>Cupos disponibles</b>')+' de <b>'+fila.limite+'</b> para '+
+  esc(esp)+' · '+fila.ocupados+' agendado(s)'+
+  (fila.porFecha?' · límite ajustado por supervisión para esta fecha':''),
+  fila.ultimo?'ultimo':'');
+ revisarBoton();
+
 }
 
 /* ---------- Alerta de día entre semana ---------- */
 
-function dialogo({titulo,html,ok,cancelar}) {
- return new Promise(resolver=>{
-  $('modalContent').innerHTML=`
-   <div class="aviso-dia">
-    <div class="aviso-ico">⚕</div>
-    <h2>${titulo}</h2>
-    ${html}
-    <div class="buttons">
-     <button class="btn" id="dlgNo" type="button">${cancelar}</button>
-     <button class="btn primary" id="dlgSi" type="button">${ok}</button>
-    </div>
-   </div>`;
-
-  $('modal').classList.remove('hidden');
-  MOV.modal();
-
-  if(MOV.ok)gsap.fromTo('.aviso-ico',{scale:.4,rotate:-30},
-   {scale:1,rotate:0,duration:.7,ease:'elastic.out(1,.45)'});
-
-  const fin=v=>{
-   $('modal').classList.add('hidden');
-   $('modalContent').innerHTML='';
-   resolver(v);
-  };
-
-  $('dlgSi').onclick=()=>fin(true);
-  $('dlgNo').onclick=()=>fin(false);
-  $('dlgSi').focus();
- });
-}
 
 // Al elegir un día entre semana se informa qué día se
 // está agendando y que solo procede si el médico lo indicó.
@@ -1208,6 +1224,7 @@ function montarTickets() {
 
 function limpiarFormulario() {
  $('formRequest').reset();
+ T.avisoCompleto='';
 
  ['esp','patientName','doc','date','requestedBy']
   .forEach(id=>{$(id).value='';});
@@ -1265,6 +1282,45 @@ async function enviar(ev) {
   return;
  }
 
+ if(!entreSemana) {
+  let fila;
+
+  try {
+   fila=await cuposAlDia(datos.fecha,datos.especialidad);
+  }catch(e) {
+   mostrarError(e);
+   return;
+  }
+
+  T.cupo=fila;
+  T.avisoCompleto=datos.fecha+'|'+datos.especialidad;
+  pintarCupos();
+
+  if(!fila||!fila.habilitada||fila.disponibles===0) {
+   if(fila&&fila.habilitada)await avisoCompleto(fila,datos.fecha);
+   else mostrarError('ESPECIALIDAD_NO_HABILITADA|'+datos.especialidad+
+    ' no tiene sobrecupos habilitados ese día.');
+   return;
+  }
+
+  if(fila.disponibles===1) {
+   const ok=await dialogo({
+    tipo:'info',
+    icono:'ℹ',
+    titulo:'ÚLTIMO CUPO DISPONIBLE',
+    html:`<p>Vas a agendar el <b>último sobrecupo</b>
+     (${fila.limite} de ${fila.limite}) de
+     <b>${esc(datos.especialidad)}</b> para el</p>
+     <div class="dia-grande">${esc(fechaLarga(datos.fecha))}</div>
+     <p>Después de este registro <b>ya no se podrán agendar
+     más</b> pacientes ese día por restricción médica.</p>`,
+    ok:'Agendar último cupo',
+    cancelar:'Revisar'
+   });
+   if(!ok)return;
+  }
+ }
+
  if(entreSemana) {
   const ok=await dialogo({
    titulo:'CONFIRMAR SOBRECUPO ENTRE SEMANA',
@@ -1300,8 +1356,20 @@ async function enviar(ev) {
   }
 
   MOV.exito();
-  aviso('Solicitud enviada. Referencia: '+r.id+
-   (r.medico?' · Pendiente de aprobación de supervisión.':''));
+  aviso('Solicitud enviada a supervisión. Referencia: '+r.id);
+
+  if(!r.medico&&r.disponibles===0) {
+   setTimeout(()=>dialogo({
+    tipo:'info',
+    icono:'ℹ',
+    titulo:'CUPO COMPLETO',
+    html:`<p>Se agendó el último sobrecupo de
+     <b>${esc(datos.especialidad)}</b> para el</p>
+     <div class="dia-grande">${esc(fechaLarga(datos.fecha))}</div>
+     <p>Ya no se podrán agendar más pacientes ese día.</p>`,
+    ok:'Entendido'
+   }),1100);
+  }
 
   T.cupos={};
   limpiarFormulario();

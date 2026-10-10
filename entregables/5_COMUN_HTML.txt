@@ -54,7 +54,7 @@ function api(funcion,...args) {
 }
 
 const ERRORES_GRANDES = {
- SIN_CUPOS:'NO HAY CUPOS DISPONIBLES',
+ SIN_CUPOS:'CUPO COMPLETO · RESTRICCIÓN MÉDICA',
  DIA_NO_HABILITADO:'DÍA NO AUTORIZADO',
  ESPECIALIDAD_NO_HABILITADA:
   'ESPECIALIDAD NO AUTORIZADA',
@@ -898,16 +898,18 @@ function claseEstado(estado) {
   e==='REGISTRADO'?'registrado':
   e==='RECHAZADO'?'rechazado':
   e==='ANULADO'?'anulado':
-  e==='OBSERVADO'?'observado':'pendiente';
+  e==='OBSERVADO'?'observado':
+  e==='VALIDACION'?'validacion':'pendiente';
 }
 
 function textoEstado(estado) {
  const e=normTexto(estado);
  return {
-  'PENDIENTE':'Pendiente',
+  'PENDIENTE':'Sin verificar',
   'EN GESTION':'En gestión',
+  'VALIDACION':'En validación (otra área)',
   'OBSERVADO':'Observado',
-  'REGISTRADO':'Registrado',
+  'REGISTRADO':'Agendado',
   'RECHAZADO':'Rechazado',
   'ANULADO':'Anulado'
  }[e]||estado||'Pendiente';
@@ -967,6 +969,41 @@ async function prepararArchivo(archivo) {
   mime,
   base64:await archivoBase64(blob)
  };
+}
+
+/* =====================================================
+   ALERTAS CON CONFIRMACIÓN
+   ===================================================== */
+
+function dialogo({titulo,html,ok,cancelar,tipo,icono}) {
+ return new Promise(resolver=>{
+  $('modalContent').innerHTML=`
+   <div class="aviso-dia ${tipo||''}">
+    <div class="aviso-ico">${icono||'⚕'}</div>
+    <h2>${titulo}</h2>
+    ${html}
+    <div class="buttons">
+     ${cancelar?`<button class="btn" id="dlgNo" type="button">${cancelar}</button>`:''}
+     <button class="btn primary" id="dlgSi" type="button">${ok}</button>
+    </div>
+   </div>`;
+
+  $('modal').classList.remove('hidden');
+  MOV.modal();
+
+  if(MOV.ok)gsap.fromTo('.aviso-ico',{scale:.4,rotate:-30},
+   {scale:1,rotate:0,duration:.7,ease:'elastic.out(1,.45)'});
+
+  const fin=v=>{
+   $('modal').classList.add('hidden');
+   $('modalContent').innerHTML='';
+   resolver(v);
+  };
+
+  $('dlgSi').onclick=()=>fin(true);
+  if($('dlgNo'))$('dlgNo').onclick=()=>fin(false);
+  $('dlgSi').focus();
+ });
 }
 
 /* =====================================================

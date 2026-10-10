@@ -868,6 +868,44 @@ body.light .orb{opacity:.16}
 .estado.observado{color:#ffa45c}
 .estado.registrado{color:var(--green)}
 .estado.rechazado,.estado.anulado{color:var(--red)}
+.estado.validacion{color:#c792ff}
+
+/* Bandeja de solicitudes sin verificar */
+.cola{
+ display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+ padding:14px 18px;margin-bottom:16px;border-radius:14px;
+ border:1px solid var(--yellow);background:rgba(255,208,106,.1)
+}
+.cola.urgente{border-color:var(--red);background:rgba(255,121,136,.12);
+ animation:latido 2.2s ease-in-out infinite}
+@keyframes latido{
+ 0%,100%{box-shadow:0 0 0 0 rgba(255,121,136,0)}
+ 50%{box-shadow:0 0 0 6px rgba(255,121,136,.18)}
+}
+.cola .num{font-size:34px;font-weight:900;color:var(--yellow);line-height:1}
+.cola.urgente .num{color:var(--red)}
+.cola .txt{flex:1;min-width:220px;font-size:13px}
+.cola .txt b{display:block;font-size:15px;margin-bottom:3px}
+.tag.urgente{color:#fff;background:var(--red);border-color:var(--red)}
+
+/* Editor de límites */
+.lim{display:flex;align-items:center;gap:6px}
+.lim input{width:70px;min-height:38px;padding:6px 8px;text-align:center;font-weight:800}
+.lim button{
+ width:34px;height:38px;border-radius:8px;border:1px solid var(--border);
+ background:var(--panel2);color:var(--text);font-weight:900
+}
+.lim input.cambiado{border-color:var(--yellow);box-shadow:0 0 0 3px rgba(255,208,106,.18)}
+.tag.fecha{color:var(--yellow);border-color:var(--yellow)}
+.cupo-box.ultimo .num{color:var(--yellow)}
+
+/* Alertas de cupo */
+.aviso-dia.info .aviso-ico{color:var(--cyan);background:var(--ring);border-color:var(--cyan)}
+.aviso-dia.info h2{color:var(--cyan)}
+.aviso-dia.bloqueo .aviso-ico{color:var(--red);background:rgba(255,121,136,.12);border-color:var(--red)}
+.aviso-dia.bloqueo h2{color:var(--red)}
+.aviso-dia.urgente .aviso-ico{color:var(--yellow);background:rgba(255,208,106,.12);border-color:var(--yellow)}
+.aviso-dia.urgente h2{color:var(--yellow)}
 
 /* Panel de control (supervisor) */
 .dash{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:14px}

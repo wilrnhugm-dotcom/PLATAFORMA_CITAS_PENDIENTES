@@ -27,9 +27,11 @@ Instalación y actualización: `entregables/0_GUIA_INSTALACION.txt`.
 
 ## Reglas
 
-- Sobrecupos: sábado y domingo, 1 por cada 10 pacientes activos, máximo `UGM3.MAX_SOBRECUPOS_DIA` (1) por especialidad y día: límite de citas + 1 (10 + 1 = 11).
+- Sobrecupos sábado y domingo. Cupos por especialidad y día = límite de `DISPONIBILIDAD` (10; Cuidados Paliativos 5; Nutrición-PE 7) o el de la fecha en `LIMITES_FECHA`. Aviso en el último cupo; bloqueo por restricción médica al llenarse (validado bajo LockService).
+- Supervisión cambia límites por fecha o generales desde "Cupos y límites".
+- Toda solicitud entra como PENDIENTE ("sin verificar") a la bandeja de supervisión, con alerta y urgentes (cita en ≤ 2 días o > 2 h esperando). Estados: Agendado, En validación (otra área), En gestión, Observado, Rechazado, Anulado. Procesar no libera cupo; Rechazar/Anular/Liberar sí.
 - Ticket obligatorio en toda solicitud (frente y reverso sellado y firmado).
-- Otro día: solo si el médico lo indica; alerta con el día agendado, confirmación y aprobación de supervisión.
-- Fechas bloqueadas: 24–27 y 31 dic 2026; 1–3 ene 2027 (`UGM3.FECHAS_BLOQUEADAS` y `Comun.html`).
+- Entre semana: solo si el médico lo indica, con alerta del día y confirmación.
+- Fechas bloqueadas: 24–27 y 31 dic 2026; 1–3 ene 2027.
 - DUI: 9 dígitos; los de 8 dígitos de la base se completan con un cero inicial.
 - Asistencia: se marca el día de la cita o después; supervisión descarga el reporte en Excel.

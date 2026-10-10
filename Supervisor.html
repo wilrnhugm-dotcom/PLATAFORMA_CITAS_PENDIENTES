@@ -105,7 +105,7 @@
    style="background:var(--green);color:#03261a"></span>
  </button>
  <button class="nav" data-page="cupos">
-  <i>▦</i>Disponibilidad
+  <i>▦</i>Cupos y límites
  </button>
  <button class="nav" data-page="basepacientes">
   <i>⛁</i>Base de pacientes
@@ -153,6 +153,17 @@
   <p id="agendaAlertText"></p>
  </div>
 
+ <div class="cola hidden" id="cola">
+  <div class="num" id="colaNum">0</div>
+  <div class="txt">
+   <b id="colaTitulo">Solicitudes sin verificar</b>
+   <span id="colaTexto"></span>
+  </div>
+  <button class="btn primary" id="btnCola" type="button">
+   Procesar ahora
+  </button>
+ </div>
+
  <!-- CENTRO DE CONTROL -->
  <section class="page" id="control">
   <div class="kpis supervisor-kpis">
@@ -168,8 +179,8 @@
     <div class="kpi-icon">♧</div>
     <div>
      <strong id="kPend">0</strong>
-     <b>Solicitudes por gestionar</b>
-     <small id="kPendSub">0 solicitudes médicas</small>
+     <b>Sin verificar</b>
+     <small id="kPendSub">0 urgentes</small>
     </div>
    </div>
    <div class="kpi glass">
@@ -270,10 +281,12 @@
  <!-- SOLICITUDES -->
  <section class="page hidden" id="solicitudes">
   <div class="panel glass">
-   <h2>Gestión de solicitudes</h2>
-   <p class="desc">Revisa el ticket, aprueba, observa o rechaza.
-    Las solicitudes médicas (entre semana) requieren ticket
-    sellado y firmado.</p>
+   <h2>Bandeja de solicitudes</h2>
+   <p class="desc">Todo lo que registran los técnicos llega como
+    <b>sin verificar</b>. Procésalo para que salga de la bandeja:
+    agendar, enviar a validación de otra área, observar o
+    rechazar. <b>Procesar no libera cupos</b>; solo rechazar,
+    anular o liberar lo hace.</p>
    <div class="chips" id="solChips"></div>
    <div class="field" style="max-width:360px">
     <input id="solBuscar" autocomplete="off"
@@ -394,27 +407,50 @@
   </div>
  </section>
 
- <!-- DISPONIBILIDAD -->
+ <!-- DISPONIBILIDAD Y LÍMITES -->
  <section class="page hidden" id="cupos">
   <div class="panel glass">
-   <h2>Disponibilidad por especialidad</h2>
-   <p class="desc">Citas activas únicas, sobrecupos generados,
-    ocupados y disponibles para la fecha de operación.</p>
-   <div class="tablebox">
+   <div class="toolbar">
+    <div>
+     <h2>Cupos de la fecha de operación</h2>
+     <p class="desc" style="margin:0" id="cuposDesc">Ajusta el
+      límite de una especialidad solo para esta fecha según la
+      disponibilidad médica.</p>
+    </div>
+   </div>
+   <div class="tablebox" style="max-height:none">
     <table>
      <thead>
       <tr>
        <th>Especialidad</th>
-       <th>Activas</th>
-       <th>Pendientes</th>
-       <th>Capacidad (citas + sobrecupo)</th>
-       <th>Generados</th>
-       <th>Ocupados</th>
+       <th>Límite de esta fecha</th>
+       <th>Agendados</th>
        <th>Disponibles</th>
        <th>Estado</th>
+       <th></th>
       </tr>
      </thead>
      <tbody id="cuposRows"></tbody>
+    </table>
+   </div>
+  </div>
+
+  <div class="panel glass">
+   <h2>Límites generales por especialidad</h2>
+   <p class="desc">Aplican a todos los sábados y domingos, salvo
+    que cambies una fecha específica arriba. Deja vacío para
+    deshabilitar la especialidad ese día.</p>
+   <div class="tablebox" style="max-height:none">
+    <table>
+     <thead>
+      <tr>
+       <th>Especialidad</th>
+       <th>Sábado</th>
+       <th>Domingo</th>
+       <th></th>
+      </tr>
+     </thead>
+     <tbody id="generalesRows"></tbody>
     </table>
    </div>
   </div>
@@ -540,7 +576,8 @@ const V={
  datos:null,
  consultando:false,
  timer:null,
- filtroSol:'abiertas',
+ filtroSol:'sinverificar',
+ colaIds:null,
  detFiltro:'todos',
  feedVistos:new Set(),
  firmas:{}
@@ -563,7 +600,7 @@ const TITULOS={
  solicitudes:['Solicitudes','Revisión y aprobación de sobrecupos'],
  asistencia:['Asistencia','Reporte de asistieron y no asistieron'],
  personal:['Personal en línea','Sesiones y actividad del equipo'],
- cupos:['Disponibilidad','Cupos por especialidad'],
+ cupos:['Cupos y límites','Disponibilidad médica por especialidad'],
  basepacientes:['Base de pacientes','Carga para el buscador de técnicos'],
  actualizacion:['Agenda','Agenda hospitalaria compartida'],
  auditoria:['Auditoría','Historial de operaciones']
@@ -605,6 +642,7 @@ async function refrescar(forzar) {
  try {
   const d=await api('tableroSupervisor',UGM.token,fecha,{
    detalle:V.pagina==='asistencia',
+   limites:V.pagina==='cupos',
    actividad:'Supervisión · '+TITULOS[V.pagina][0]
   });
 
@@ -650,12 +688,13 @@ function dibujar(animar) {
  $('agendaAlert').classList.toggle('hidden',!a.alerta);
  $('agendaAlertText').textContent=a.fecha
   ?'Última carga hace '+a.minutos+' minutos ('+a.archivo+
-   '). Los técnicos necesitan una carga de los últimos '+
-   '30 minutos para registrar sobrecupos de fin de semana.'
+   '). Actualízala para que Consultas del día y la '+
+   'asistencia muestren a todos los pacientes.'
   :'Todavía no se ha importado la agenda hospitalaria.';
 
  pintarKpis();
  pintarBadges();
+ pintarCola();
 
  if(V.pagina==='control') {
   pintarCupos(animar);
@@ -699,9 +738,9 @@ function pintarKpis() {
  contarNumero('kOnline',tecnicos.length);
  $('kOnlineSub').textContent=enLinea.length+' sesiones activas';
 
- contarNumero('kPend',d.pendientes);
- $('kPendSub').textContent=d.medicasPendientes+
-  ' solicitud(es) médica(s)';
+ contarNumero('kPend',d.bandeja.total);
+ $('kPendSub').textContent=d.bandeja.urgentes+' urgente(s) · '+
+  (d.pendientes-d.bandeja.total)+' en proceso';
 
  contarNumero('kDisp',t.disponibles);
  $('kDispSub').textContent='de '+t.generados+' autorizados · '+
@@ -717,10 +756,78 @@ function pintarBadges() {
  const d=V.datos;
  const online=(d.personal||[]).filter(p=>p.enLinea).length;
 
- $('badgePend').textContent=d.pendientes;
- $('badgePend').classList.toggle('hidden',!d.pendientes);
+ $('badgePend').textContent=d.bandeja.total;
+ $('badgePend').classList.toggle('hidden',!d.bandeja.total);
  $('badgeOnline').textContent=online;
  $('badgeOnline').classList.toggle('hidden',!online);
+}
+
+/* =====================================================
+   BANDEJA: ALERTA DE SOLICITUDES SIN VERIFICAR
+   ===================================================== */
+
+function pintarCola() {
+ const b=V.datos.bandeja;
+ const cola=$('cola');
+
+ cola.classList.toggle('hidden',!b.total);
+ cola.classList.toggle('urgente',b.urgentes>0);
+
+ if(b.total) {
+  $('colaNum').textContent=b.total;
+  $('colaTitulo').textContent=b.urgentes
+   ?b.total+' solicitud(es) sin verificar · '+b.urgentes+
+    ' requieren atención urgente'
+   :b.total+' solicitud(es) sin verificar';
+  $('colaTexto').textContent=b.porFecha.slice(0,6)
+   .map(x=>x.cantidad+' para el '+x.fecha).join(' · ')+
+   (b.vencidas?' · '+b.vencidas+' con fecha ya pasada':'');
+ }
+
+ // Nuevas solicitudes desde la última sincronización.
+ const nuevas=V.colaIds
+  ?b.ids.filter(id=>!V.colaIds.has(id)):[];
+
+ if(nuevas.length) {
+  aviso('🔔 '+nuevas.length+' nueva(s) solicitud(es) sin verificar.');
+  MOV.pulso(cola);
+  V.firmas.sol='';
+ }
+
+ // Al entrar, alerta grande si hay pendientes.
+ if(!V.colaIds&&b.total) {
+  setTimeout(()=>alertaCola(b),900);
+ }
+
+ V.colaIds=new Set(b.ids);
+}
+
+async function alertaCola(b) {
+ if(!$('modal').classList.contains('hidden'))return;
+
+ const ok=await dialogo({
+  tipo:b.urgentes?'bloqueo':'urgente',
+  icono:'🔔',
+  titulo:b.urgentes?'ATENCIÓN URGENTE':'SOLICITUDES SIN VERIFICAR',
+  html:`<div class="dia-grande">${b.total} sin verificar</div>
+   <p>${b.urgentes
+    ?'<b>'+b.urgentes+'</b> requieren atención urgente (cita en '+
+     'los próximos días o esperando más de 2 horas).'
+    :'Los técnicos registraron solicitudes que necesitan tu revisión.'}</p>
+   <ul class="aviso-lista">${b.porFecha.slice(0,6).map(x=>
+    `<li><b>${x.cantidad}</b> para el ${esc(fechaLarga(x.fecha))}</li>`
+   ).join('')}</ul>`,
+  ok:'Procesar ahora',
+  cancelar:'Más tarde'
+ });
+
+ if(ok)irABandeja();
+}
+
+function irABandeja() {
+ V.filtroSol='sinverificar';
+ page('solicitudes');
+ pintarSolicitudes(true);
 }
 
 /* =====================================================
@@ -854,10 +961,11 @@ function pintarEstados() {
  const n=k=>Number(e[k])||0;
 
  const segmentos=[
-  {etiqueta:'Pendientes',valor:n('PENDIENTE'),color:color('--yellow')},
-  {etiqueta:'En gestión',valor:n('EN GESTION'),color:color('--cyan')},
-  {etiqueta:'Observadas',valor:n('OBSERVADO'),color:'#ffa45c'},
-  {etiqueta:'Registradas',valor:n('REGISTRADO'),color:color('--green')},
+  {etiqueta:'Sin verificar',valor:n('PENDIENTE'),color:color('--yellow')},
+  {etiqueta:'En gestión/observadas',
+   valor:n('EN GESTION')+n('OBSERVADO'),color:color('--cyan')},
+  {etiqueta:'En validación',valor:n('VALIDACION'),color:'#c792ff'},
+  {etiqueta:'Agendadas',valor:n('REGISTRADO'),color:color('--green')},
   {etiqueta:'Rechazadas/anuladas',
    valor:n('RECHAZADO')+n('ANULADO'),color:color('--red')}
  ];
@@ -1018,12 +1126,14 @@ async function cerrarSesion(sesion,nombre) {
    ===================================================== */
 
 const FILTROS_SOL=[
- ['abiertas','Por gestionar',r=>['PENDIENTE','EN GESTION','OBSERVADO']
+ ['sinverificar','Sin verificar',r=>normTexto(r.Estado)==='PENDIENTE'||!r.Estado],
+ ['proceso','En proceso',r=>['EN GESTION','OBSERVADO']
+  .includes(normTexto(r.Estado))],
+ ['validacion','En validación',r=>normTexto(r.Estado)==='VALIDACION'],
+ ['REGISTRADO','Agendadas',r=>normTexto(r.Estado)==='REGISTRADO'],
+ ['cerradas','Rechazadas/anuladas',r=>['RECHAZADO','ANULADO']
   .includes(normTexto(r.Estado))],
  ['medicas','Médicas',r=>r.Tipo==='MEDICO'],
- ['REGISTRADO','Registradas',r=>normTexto(r.Estado)==='REGISTRADO'],
- ['RECHAZADO','Rechazadas',r=>normTexto(r.Estado)==='RECHAZADO'],
- ['ANULADO','Anuladas',r=>normTexto(r.Estado)==='ANULADO'],
  ['todas','Todas',()=>true]
 ];
 
@@ -1056,7 +1166,9 @@ function pintarSolicitudes(animar) {
     :'<span class="tag sobrecupo">Fin de semana</span>'}</td>
    <td>${esc(r.RegistradoPor)}</td>
    <td>${esc(fechaHora(r.FechaRegistro))}</td>
-   <td>${etiquetaEstado(r.Estado)}</td>
+   <td>${etiquetaEstado(r.Estado)}${
+    V.datos.bandeja.urgentesIds.includes(r.ID)
+     ?' <span class="tag urgente">Urgente</span>':''}</td>
   </tr>`).join('')||
   '<tr><td colspan="8">No hay solicitudes en este filtro.</td></tr>';
 
@@ -1147,11 +1259,12 @@ function abrirSolicitud(id) {
     <div class="field">
      <label>Nuevo estado</label>
      <select id="newState">
+      <option value="REGISTRADO">Agendar (verificado)</option>
+      <option value="VALIDACION">Enviar a validación de otra área</option>
       <option value="EN GESTION">En gestión</option>
       <option value="OBSERVADO">Observado</option>
-      <option value="REGISTRADO">Registrado / Aprobado</option>
-      <option value="RECHAZADO">Rechazado</option>
-      <option value="ANULADO">Anulado</option>
+      <option value="RECHAZADO">Rechazar (libera el cupo)</option>
+      <option value="ANULADO">Anular (libera el cupo)</option>
      </select>
     </div>
     <div class="field">
@@ -1171,6 +1284,23 @@ function abrirSolicitud(id) {
    <div class="buttons" style="margin-top:14px">
     <button id="btnSaveState" class="btn primary" type="button">
      Guardar gestión</button>
+    <button id="btnClose" class="btn" type="button">Cerrar</button>
+   </div>`;
+ } else if(normTexto(r.Estado)==='REGISTRADO'&&r.Tipo!=='MEDICO') {
+  html+=`
+   <div class="notice" style="margin-top:12px">
+    <strong>Liberar cupo</strong>
+    <p>Si el paciente ya no asistirá, anula el sobrecupo para
+     liberar 1 cupo de ${esc(r.Especialidad)} el ${esc(r.FechaSobrecupo)}.</p>
+   </div>
+   <div class="field">
+    <label>Motivo</label>
+    <input id="obs" maxlength="500" autocomplete="off"
+     placeholder="Motivo de la liberación">
+   </div>
+   <div class="buttons">
+    <button id="btnLiberar" class="btn danger" type="button">
+     Liberar cupo</button>
     <button id="btnClose" class="btn" type="button">Cerrar</button>
    </div>`;
  } else {
@@ -1193,16 +1323,30 @@ function abrirSolicitud(id) {
   if(!tieneTicket)montarComprobante();
   $('btnSaveState').onclick=()=>gestionar(id);
  }
+
+ if($('btnLiberar')) {
+  $('btnLiberar').onclick=()=>gestionar(id,'ANULADO');
+ }
 }
 
-async function gestionar(id) {
- const boton=$('btnSaveState');
+async function gestionar(id,forzado) {
+ const boton=$('btnSaveState')||$('btnLiberar');
+ const estado=forzado||$('newState').value;
+ const r=(V.datos.solicitudes||[]).find(x=>x.ID===id);
+
+ if(['RECHAZADO','ANULADO'].includes(estado)) {
+  if(forzado&&!$('obs').value.trim()) {
+   aviso('Indica el motivo para liberar el cupo.');
+   return;
+  }
+  if(!confirm('Esto liberará 1 cupo de '+r.Especialidad+' para el '+
+    r.FechaSobrecupo+'. ¿Continuar?'))return;
+ }
+
  boton.disabled=true;
  boton.textContent='Guardando...';
 
  try {
-  const estado=$('newState').value;
-  const r=(V.datos.solicitudes||[]).find(x=>x.ID===id);
   const tiene=r&&(r.TicketFrente||r.ComprobanteID);
 
   if(estado==='REGISTRADO'&&!S.archivo&&!tiene) {
@@ -1223,7 +1367,8 @@ async function gestionar(id) {
 
   cerrarModal();
   MOV.exito();
-  aviso('Solicitud '+id+': '+textoEstado(estado)+'.');
+  aviso('Solicitud '+id+': '+textoEstado(estado)+
+   (['RECHAZADO','ANULADO'].includes(estado)?' · cupo liberado.':'.'));
   V.firmas={};
   await refrescar(true);
 
@@ -1231,7 +1376,7 @@ async function gestionar(id) {
   if(sesionTerminada(e,limpiarTodo))return;
   aviso(e.message);
   boton.disabled=false;
-  boton.textContent='Guardar gestión';
+  boton.textContent=forzado?'Liberar cupo':'Guardar gestión';
  }
 }
 
@@ -1394,30 +1539,153 @@ function descargarReporte() {
    DISPONIBILIDAD, BASE Y AGENDA
    ===================================================== */
 
+function campoLimite(valor,attrs) {
+ return `<div class="lim">
+  <button type="button" data-paso="-1" aria-label="Menos">−</button>
+  <input type="number" min="0" max="200" inputmode="numeric"
+   value="${valor==null?'':valor}" data-orig="${valor==null?'':valor}" ${attrs}>
+  <button type="button" data-paso="1" aria-label="Más">+</button>
+ </div>`;
+}
+
+function editando(cont) {
+ return Boolean(cont.querySelector('input.cambiado')||
+  cont.contains(document.activeElement));
+}
+
 function pintarTablaCupos() {
  const lista=V.datos.cupos||[];
- if(!cambio('tablaCupos',lista))return;
+ const semana=V.datos.dia==='SEMANA';
 
- $('cuposRows').innerHTML=lista.map(r=>`
-  <tr>
-   <td>${esc(r.especialidad)}</td>
-   <td>${r.activas}</td>
-   <td>${r.pendientes}</td>
-   <td>${r.limite==null?'N/A':r.limite+' + '+(r.capacidad-r.limite)+' = '+r.capacidad}</td>
-   <td>${r.generados}</td>
-   <td>${r.ocupados}</td>
-   <td style="color:${r.disponibles>0?'var(--green)':'var(--red)'}">
-    <b>${r.disponibles}</b></td>
-   <td>${r.bloqueada?'<span style="color:var(--red)">No disponible</span>':
-    !r.habilitada?'No habilitado':
-    r.incidencia?'Excede capacidad':
-    r.disponibles>0?'Disponible':'Agotado'}</td>
-  </tr>`).join('')||
-  `<tr><td colspan="8">${V.datos.bloqueada
-   ?'Fecha no disponible.'
-   :'Sin sobrecupos para esta fecha (solo sábado y domingo).'}</td></tr>`;
+ $('cuposDesc').textContent=semana
+  ?'La fecha de operación es entre semana: elige un sábado o '+
+   'domingo para ajustar sus cupos.'
+  :'Ajusta el límite de una especialidad solo para el '+
+   fechaLarga(V.fecha)+' según la disponibilidad médica.';
 
- MOV.escalonar($('cuposRows').children,14);
+ if(!editando($('cuposRows'))&&cambio('tablaCupos',lista)) {
+  $('cuposRows').innerHTML=lista.map(r=>`
+   <tr data-e="${esc(r.especialidad)}">
+    <td><b>${esc(r.especialidad)}</b>${r.porFecha
+     ?`<br><span class="tag fecha">Ajustado para esta fecha</span>`:''}</td>
+    <td>${campoLimite(r.limite,'data-alcance="FECHA"')}
+     <small class="muted">General: ${r.general==null?'N/A':r.general}</small></td>
+    <td>${r.ocupados}</td>
+    <td style="color:${r.disponibles>0?'var(--green)':'var(--red)'}">
+     <b>${r.disponibles}</b></td>
+    <td>${r.bloqueada?'<span style="color:var(--red)">Fecha bloqueada</span>':
+     !r.habilitada?'No habilitada':
+     r.incidencia?'<span style="color:var(--red)">Excede el límite</span>':
+     r.completo?'<span style="color:var(--red)">Completo</span>':
+     r.ultimo?'<span style="color:var(--yellow)">Último cupo</span>':'Disponible'}</td>
+    <td style="white-space:nowrap">
+     <button class="btn mini primary" type="button" data-guardar="FECHA">Guardar</button>
+     ${r.porFecha?`<button class="btn mini" type="button"
+       data-restablecer="1">Usar general</button>`:''}
+    </td>
+   </tr>`).join('')||
+   `<tr><td colspan="6">${V.datos.bloqueada?'Fecha no disponible.':
+    'Sin cupos: elige un sábado o domingo.'}</td></tr>`;
+
+  MOV.escalonar($('cuposRows').children,14);
+ }
+
+ const gen=V.datos.limitesGenerales||[];
+
+ if(gen.length&&!editando($('generalesRows'))&&
+    cambio('generales',gen)) {
+  $('generalesRows').innerHTML=gen.map(g=>`
+   <tr data-e="${esc(g.especialidad)}">
+    <td><b>${esc(g.especialidad)}</b></td>
+    <td>${campoLimite(g.sabado,'data-dia="SABADO"')}</td>
+    <td>${campoLimite(g.domingo,'data-dia="DOMINGO"')}</td>
+    <td><button class="btn mini primary" type="button"
+     data-guardar="GENERAL">Guardar</button></td>
+   </tr>`).join('');
+ }
+}
+
+async function guardarLimites(fila,alcance,restablecer) {
+ const esp=fila.dataset.e;
+ const cambios=[];
+
+ if(alcance==='FECHA') {
+  const input=fila.querySelector('input');
+  cambios.push({alcance,fecha:V.fecha,especialidad:esp,
+   limite:restablecer?'':input.value.trim()});
+ } else {
+  fila.querySelectorAll('input[data-dia]').forEach(input=>{
+   if(input.value.trim()!==input.dataset.orig) {
+    cambios.push({alcance,dia:input.dataset.dia,
+     especialidad:esp,limite:input.value.trim()});
+   }
+  });
+ }
+
+ if(!cambios.length) {
+  aviso('No hay cambios para guardar.');
+  return;
+ }
+
+ const r=(V.datos.cupos||[]).find(x=>x.especialidad===esp);
+ const nuevo=cambios[0].limite;
+
+ if(alcance==='FECHA'&&r&&nuevo!==''&&Number(nuevo)<r.ocupados&&
+    !confirm('Ya hay '+r.ocupados+' agendados. El nuevo límite ('+nuevo+
+     ') es menor: no se cancelan, pero no habrá cupos. ¿Continuar?')) {
+  return;
+ }
+
+ try {
+  for(const c of cambios) {
+   await api('actualizarLimite',UGM.token,c);
+  }
+  if(document.activeElement)document.activeElement.blur();
+  fila.querySelectorAll('input.cambiado')
+   .forEach(i=>i.classList.remove('cambiado'));
+  MOV.exito();
+  aviso('Límite actualizado: '+esp+'. Los técnicos lo verán en segundos.');
+  V.firmas={};
+  await refrescar(true);
+ }catch(e) {
+  if(sesionTerminada(e,limpiarTodo))return;
+  aviso(e.message);
+ }
+}
+
+function montarLimites() {
+ ['cuposRows','generalesRows'].forEach(id=>{
+  const cont=$(id);
+
+  cont.addEventListener('click',ev=>{
+   const paso=ev.target.closest('[data-paso]');
+
+   if(paso) {
+    const input=paso.parentElement.querySelector('input');
+    const v=Math.max(0,Math.min(200,
+     (Number(input.value)||0)+Number(paso.dataset.paso)));
+    input.value=v;
+    input.classList.toggle('cambiado',String(v)!==input.dataset.orig);
+    MOV.pulso(input);
+    return;
+   }
+
+   const fila=ev.target.closest('tr[data-e]');
+   if(!fila)return;
+
+   if(ev.target.closest('[data-guardar]')) {
+    guardarLimites(fila,ev.target.closest('[data-guardar]').dataset.guardar);
+   } else if(ev.target.closest('[data-restablecer]')) {
+    guardarLimites(fila,'FECHA',true);
+   }
+  });
+
+  cont.addEventListener('input',ev=>{
+   const input=ev.target.closest('input');
+   if(input)input.classList.toggle('cambiado',
+    input.value.trim()!==input.dataset.orig);
+  });
+ });
 }
 
 function pintarBase() {
@@ -1466,6 +1734,8 @@ function limpiarTodo() {
  V.datos=null;
  V.firmas={};
  V.feedVistos=new Set();
+ V.colaIds=null;
+ V.filtroSol='sinverificar';
  cerrarModal();
 }
 
@@ -1528,6 +1798,8 @@ function iniciar() {
  });
 
  $('btnReporte').addEventListener('click',descargarReporte);
+ $('btnCola').addEventListener('click',irABandeja);
+ montarLimites();
 
  document.addEventListener('click',ev=>{
   const b=ev.target.closest('[data-cerrar]');
