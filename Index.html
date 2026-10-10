@@ -1,0 +1,2415 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<base target="_top">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UGM | Control de Sobrecupos</title>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<style>
+:root{
+ --bg:#031423;
+ --bg2:#092d49;
+ --panel:#0a3250;
+ --panel2:#0c405f;
+ --text:#f1f9ff;
+ --muted:#9db9cd;
+ --border:#18658b;
+ --input:#082b47;
+ --cyan:#13c9f5;
+ --green:#38dfad;
+ --yellow:#ffd06a;
+ --red:#ff7988;
+ --ring:rgba(15,167,218,.16);
+ --shadow:rgba(0,0,0,.28)
+}
+body.light{
+ --bg:#edf5fa;
+ --bg2:#dcecf5;
+ --panel:#ffffff;
+ --panel2:#f1f8fc;
+ --text:#12354e;
+ --muted:#58768a;
+ --border:#c2dae9;
+ --input:#ffffff;
+ --cyan:#087fac;
+ --green:#087c58;
+ --yellow:#a06a00;
+ --red:#c23f52;
+ --ring:rgba(8,125,170,.09);
+ --shadow:rgba(16,63,94,.13)
+}
+*{box-sizing:border-box}
+html,body{
+ margin:0;min-height:100%;
+ font-family:"Segoe UI",Arial,sans-serif
+}
+body{
+ color:var(--text);
+ background:
+  radial-gradient(circle at 50% 38%,var(--ring),transparent 49%),
+  linear-gradient(135deg,var(--bg),var(--bg2),var(--bg));
+ transition:background .3s,color .3s
+}
+body:before{
+ content:"";
+ position:fixed;inset:0;z-index:-1;
+ pointer-events:none;opacity:.2;
+ background:repeating-radial-gradient(
+ circle at 52% 42%,
+ transparent 0 120px,
+ var(--border) 121px 122px,
+ transparent 123px 240px)
+}
+.hidden{display:none!important}
+button,input,select,textarea{font:inherit}
+button{cursor:pointer}
+.glass{
+ background:var(--panel);
+ border:1px solid var(--border);
+ border-radius:17px;
+ box-shadow:0 13px 38px var(--shadow);
+ transition:background .3s,border-color .3s
+}
+.btn{
+ min-height:44px;
+ padding:11px 17px;
+ color:var(--text);
+ background:var(--panel2);
+ border:1px solid var(--border);
+ border-radius:9px;font-weight:700;
+ transition:transform .18s,box-shadow .18s
+}
+.btn.primary{
+ color:#032d43;
+ background:linear-gradient(110deg,#06b9ec,#45dffc);
+ border-color:#08bde9
+}
+.btn.danger{
+ color:#fff;
+ background:#a93343;
+ border-color:#d15e6c
+}
+.btn:hover:not(:disabled){
+ transform:translateY(-2px);
+ box-shadow:0 6px 22px var(--shadow)
+}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+input,select,textarea{
+ width:100%;min-height:45px;
+ padding:12px;background:var(--input);
+ border:1px solid var(--border);
+ border-radius:8px;
+ color:var(--text);outline:none
+}
+input:focus,select:focus,textarea:focus{
+ border-color:var(--cyan);
+ box-shadow:0 0 0 3px var(--ring)
+}
+input::placeholder,textarea::placeholder{
+ color:var(--muted)
+}
+option{
+ background:var(--panel);
+ color:var(--text)
+}
+label{
+ display:block;font-weight:700;
+ font-size:13px;margin-bottom:8px
+}
+.field{margin-bottom:16px}
+.required{color:var(--red)}
+.muted{color:var(--muted)}
+.small{font-size:12px}
+.logo{
+ display:flex;align-items:center;gap:13px
+}
+.logo-mark{
+ width:58px;height:63px;flex:none
+}
+.logo-text{
+ color:var(--cyan);font-size:17px;
+ font-weight:900;line-height:1.12;
+ letter-spacing:.03em
+}
+.logo-text small{
+ display:block;margin-top:5px;
+ color:var(--text);font-size:10px;
+ letter-spacing:.1em
+}
+#login{
+ min-height:100vh;
+ display:flex;justify-content:center;
+ align-items:center;padding:20px
+}
+.login-card{
+ width:min(530px,100%);
+ padding:35px
+}
+.login-card h1{
+ font-size:28px;margin:28px 0 8px
+}
+.login-card p{
+ font-size:13px;color:var(--muted)
+}
+.top{
+ min-height:106px;
+ display:flex;align-items:center;
+ gap:22px;padding:15px 29px
+}
+.top .logo-mark{
+ width:51px;height:56px
+}
+.top .logo-text{font-size:15px}
+.unit{
+ border-left:1px solid var(--border);
+ padding-left:22px;font-size:11px;
+ font-weight:800;letter-spacing:.16em;
+ color:var(--cyan)
+}
+.top-actions{
+ display:flex;align-items:center;
+ gap:16px;margin-left:auto
+}
+.theme-btn{
+ width:45px;height:45px;
+ border-radius:50%;
+ border:1px solid var(--border);
+ background:var(--panel);
+ color:var(--cyan);
+ display:grid;place-items:center;
+ font-size:23px
+}
+.theme-btn:hover{
+ transform:rotate(20deg)
+}
+.profile{
+ text-align:right;font-size:13px
+}
+.profile small{
+ display:block;margin-top:5px;
+ color:var(--muted)
+}
+.profile a{color:var(--cyan)}
+.layout{
+ display:grid;
+ grid-template-columns:245px minmax(0,1fr);
+ gap:14px;padding:0 14px 15px
+}
+.sidebar{
+ min-height:calc(100vh - 120px);
+ display:flex;flex-direction:column;
+ padding:24px 0
+}
+.nav{
+ display:flex;align-items:center;
+ gap:15px;width:100%;
+ padding:19px 20px;
+ background:transparent;
+ color:var(--muted);border:0;
+ border-left:4px solid transparent;
+ text-align:left
+}
+.nav i{
+ width:27px;font-style:normal;
+ font-size:21px
+}
+.nav:hover,.nav.active{
+ color:var(--text);
+ background:var(--ring);
+ border-left-color:var(--cyan)
+}
+.side-bottom{
+ margin-top:auto;text-align:center;
+ padding:30px 10px;font-size:10px;
+ letter-spacing:.24em;line-height:2;
+ color:var(--cyan)
+}
+.main{padding:22px;min-width:0}
+.crumb{
+ font-size:12px;color:var(--muted);
+ margin-bottom:23px
+}
+.heading{
+ display:flex;align-items:center;
+ gap:14px;margin-bottom:22px
+}
+.heading .symbol{
+ font-size:34px;color:var(--cyan)
+}
+.heading h1{
+ margin:0 0 5px;font-size:33px
+}
+.heading small{color:var(--muted)}
+.hospital{
+ margin-left:auto;text-align:right;
+ font-weight:800;color:var(--cyan)
+}
+.hospital small{
+ display:block;margin-top:5px;
+ font-weight:400
+}
+.kpis{
+ display:grid;
+ grid-template-columns:repeat(2,minmax(0,1fr));
+ gap:13px;margin-bottom:18px
+}
+.kpis.supervisor-kpis{
+ grid-template-columns:repeat(4,minmax(0,1fr))
+}
+.kpi{
+ min-height:112px;padding:18px;
+ display:flex;align-items:center;gap:15px
+}
+.kpi-icon{
+ width:47px;height:47px;flex:none;
+ display:grid;place-items:center;
+ background:var(--ring);
+ border-radius:50%;
+ font-size:22px;color:var(--cyan)
+}
+.kpi strong{
+ display:block;color:var(--cyan);
+ font-size:31px
+}
+.kpi b{
+ display:block;font-size:14px
+}
+.kpi small{
+ display:block;color:var(--muted);
+ font-size:11px;margin-top:6px
+}
+.panel{
+ padding:23px;margin-bottom:16px;
+ min-width:0
+}
+.panel h2{
+ margin:0 0 6px;font-size:19px
+}
+.panel h2 span{color:var(--cyan)}
+.desc{
+ font-size:13px;color:var(--muted);
+ margin:0 0 20px
+}
+.form-grid{
+ display:grid;
+ grid-template-columns:repeat(2,minmax(0,1fr));
+ gap:0 20px
+}
+.full{grid-column:1/-1}
+.buttons{
+ display:flex;gap:10px;
+ flex-wrap:wrap;margin-top:10px
+}
+.form-actions{
+ display:flex;justify-content:space-between;
+ gap:14px;flex-wrap:wrap
+}
+.dui-helper{
+ font-size:11px;color:var(--muted);
+ margin-top:5px
+}
+.toolbar{
+ display:flex;justify-content:space-between;
+ align-items:center;gap:12px;
+ flex-wrap:wrap;margin-bottom:15px
+}
+.toolbar input{max-width:230px}
+.tablebox{
+ overflow:auto;max-height:490px
+}
+table{
+ width:100%;border-collapse:collapse;
+ font-size:12px;white-space:nowrap
+}
+th{
+ text-align:left;padding:13px 10px;
+ color:var(--cyan);
+ border-bottom:1px solid var(--border)
+}
+td{
+ padding:12px 10px;
+ border-bottom:1px solid var(--border)
+}
+tbody tr:hover{background:var(--ring)}
+tbody tr{cursor:pointer}
+.activity{
+ display:flex;justify-content:space-between;
+ gap:12px;padding:13px 0;
+ border-bottom:1px solid var(--border);
+ font-size:13px
+}
+.bottom{
+ display:flex;justify-content:space-between;
+ align-items:center;gap:12px
+}
+.overlay{
+ position:fixed;inset:0;z-index:20;
+ background:rgba(0,12,25,.85);
+ display:flex;justify-content:center;
+ align-items:center;padding:20px
+}
+.modal{
+ width:min(650px,100%);
+ padding:24px;max-height:92vh;
+ overflow:auto
+}
+.toast{
+ position:fixed;right:20px;bottom:20px;
+ z-index:30;max-width:430px;
+ background:var(--panel);color:var(--text);
+ border:1px solid var(--cyan);
+ border-radius:10px;padding:16px;
+ box-shadow:0 12px 36px var(--shadow);
+ font-size:13px
+}
+.dropzone{
+ padding:25px 17px;
+ border:2px dashed var(--border);
+ border-radius:13px;background:var(--ring);
+ text-align:center;cursor:pointer;
+ transition:.2s
+}
+.dropzone:hover,.dropzone.dragging{
+ border-color:var(--cyan);
+ background:rgba(19,201,245,.17)
+}
+.dropzone strong{
+ display:block;font-size:14px
+}
+.dropzone small{
+ display:block;color:var(--muted);
+ margin-top:7px
+}
+.preview-file{
+ margin-top:12px;
+ border:1px solid var(--border);
+ border-radius:12px;
+ padding:12px;text-align:center
+}
+.preview-file img{
+ display:block;max-width:100%;
+ max-height:240px;margin:0 auto 10px;
+ object-fit:contain;border-radius:7px
+}
+.pdf-preview{
+ font-size:14px;padding:22px;
+ text-align:center;background:var(--ring);
+ border-radius:9px
+}
+.notice{
+ border:1px solid var(--border);
+ border-radius:12px;
+ padding:16px;margin-bottom:16px;
+ background:var(--ring)
+}
+.notice.warning{
+ border-color:#c28e36;
+ background:rgba(194,142,54,.12)
+}
+.notice strong{
+ display:block;margin-bottom:7px
+}
+.notice p{
+ margin:0;font-size:13px;
+ color:var(--muted)
+}
+.status-grid{
+ display:grid;
+ grid-template-columns:repeat(3,1fr);
+ gap:12px;margin-bottom:18px
+}
+.status-item{
+ background:var(--ring);
+ padding:15px;border-radius:10px
+}
+.status-item small{
+ display:block;color:var(--muted)
+}
+.status-item strong{
+ display:block;font-size:20px;
+ margin-top:6px
+}
+.error-overlay{
+ position:fixed;inset:0;z-index:50;
+ display:flex;align-items:center;
+ justify-content:center;
+ padding:20px;
+ background:rgba(0,7,18,.93);
+ backdrop-filter:blur(9px)
+}
+.error-panel{
+ width:min(690px,100%);
+ background:var(--panel);
+ color:var(--text);
+ border:2px solid var(--red);
+ border-radius:22px;
+ padding:40px;
+ box-shadow:0 0 90px rgba(255,88,110,.19);
+ text-align:center
+}
+.error-symbol{
+ font-size:65px;color:var(--red);
+ margin-bottom:16px
+}
+.error-panel h2{
+ font-size:30px;color:var(--red);
+ margin:0 0 15px
+}
+.error-panel p{
+ font-size:16px;
+ line-height:1.65;
+ margin:0 0 26px
+}
+.error-panel .btn{
+ min-width:210px
+}
+@media(max-width:1100px){
+ .kpis.supervisor-kpis{
+  grid-template-columns:repeat(2,1fr)
+ }
+}
+@media(max-width:720px){
+ .top{padding:12px}
+ .unit,.hospital{display:none}
+ .layout{grid-template-columns:1fr}
+ .sidebar{
+  min-height:0;flex-direction:row;
+  overflow:auto;padding:0
+ }
+ .nav{min-width:140px;padding:12px}
+ .side-bottom{display:none}
+ .main{padding:14px}
+ .heading h1{font-size:26px}
+ .form-grid{grid-template-columns:1fr}
+ .full{grid-column:1}
+ .kpi{padding:12px}
+ .kpi strong{font-size:25px}
+ .profile{font-size:11px}
+ .status-grid{grid-template-columns:1fr}
+ .error-panel{padding:25px}
+ .error-panel h2{font-size:23px}
+}
+</style>
+</head>
+<body>
+
+<!-- ACCESO -->
+<div id="login">
+ <section class="login-card glass">
+  <div class="logo">
+   <svg class="logo-mark" viewBox="0 0 70 75">
+    <path d="M25 4L65 15V69H56V22L34 16V68H25Z"
+     fill="none" stroke="#05c2ef" stroke-width="5"/>
+    <path d="M7 22L40 32V69H32V38L15 33V69H7Z"
+     fill="none" stroke="#fff" stroke-width="5"/>
+   </svg>
+   <div class="logo-text">
+    RED NACIONAL<br>DE HOSPITALES
+    <small>NUEVO HOSPITAL ROSALES</small>
+   </div>
+  </div>
+
+  <h1>Unidad de Gestión Médica</h1>
+  <p>Control de sobrecupos · Acceso del personal</p>
+
+  <form id="loginForm" autocomplete="off">
+   <div class="field">
+    <label>Nombre del colaborador</label>
+    <input id="loginName" required
+     autocomplete="off" placeholder="Nombres y apellidos">
+   </div>
+
+   <div class="field">
+    <label>Clave de acceso</label>
+    <input id="loginPass" type="password" required
+     autocomplete="new-password"
+     placeholder="Clave de acceso">
+   </div>
+
+   <button id="btnLogin" class="btn primary"
+    type="submit" style="width:100%">
+    Ingresar al sistema
+   </button>
+  </form>
+
+  <p class="small">
+   Versión piloto · Utilizar datos ficticios.
+  </p>
+ </section>
+</div>
+
+<!-- SISTEMA -->
+<div id="app" class="hidden">
+
+<header class="top">
+ <div class="logo">
+  <svg class="logo-mark" viewBox="0 0 70 75">
+   <path d="M25 4L65 15V69H56V22L34 16V68H25Z"
+    fill="none" stroke="#05c2ef" stroke-width="5"/>
+   <path d="M7 22L40 32V69H32V38L15 33V69H7Z"
+    fill="none" stroke="#fff" stroke-width="5"/>
+  </svg>
+
+  <div class="logo-text">
+   RED NACIONAL<br>DE HOSPITALES
+   <small>NUEVO HOSPITAL ROSALES</small>
+  </div>
+ </div>
+
+ <div class="unit">
+  UNIDAD DE GESTIÓN MÉDICA · UGM
+ </div>
+
+ <div class="top-actions">
+  <button id="themeToggle" class="theme-btn"
+   type="button">☀</button>
+
+  <div class="profile">
+   <strong id="who"></strong>
+   <small id="clock"></small>
+   <small>
+    <span id="sync">● Conectado</span> ·
+    <a href="#" id="btnSalir">Salir</a>
+   </small>
+  </div>
+ </div>
+</header>
+
+<div class="layout">
+
+<aside class="sidebar glass">
+ <button class="nav active" data-page="dashboard">
+  <i>⌕</i>Vista principal
+ </button>
+
+ <button class="nav" data-page="agenda">
+  <i>▦</i>Disponibilidad
+ </button>
+
+ <button class="nav" data-page="solicitudes">
+  <i>♧</i>Solicitudes
+ </button>
+
+ <button class="nav" data-page="actualizacion">
+  <i>↥</i>Actualizar agenda
+ </button>
+
+ <button class="nav supervisor" data-page="reportes">
+  <i>▥</i>Reportes
+ </button>
+
+ <button class="nav supervisor" data-page="actividad">
+  <i>◷</i>Personal en línea
+ </button>
+
+ <div class="side-bottom">
+  TECNOLOGÍA<br>AL SERVICIO<br>DE TU SALUD
+ </div>
+</aside>
+
+<main class="main glass">
+
+ <div class="crumb">
+  Inicio › UGM › <span id="crumbPage">Vista técnico</span>
+ </div>
+
+ <div class="heading">
+  <div class="symbol">♙</div>
+  <div>
+   <h1 id="title">Vista técnico</h1>
+   <small>Gestión y registro de sobrecupos</small>
+  </div>
+
+  <div class="hospital">
+   Nuevo Hospital Rosales
+   <small>Unidad de Gestión Médica</small>
+  </div>
+ </div>
+
+ <!-- KPIS -->
+ <div class="kpis" id="kpiContainer">
+
+  <div class="kpi glass supervisor">
+   <div class="kpi-icon">▦</div>
+   <div>
+    <strong id="kLimit">0</strong>
+    <b>Sobrecupos generados</b>
+    <small>Según pacientes activos</small>
+   </div>
+  </div>
+
+  <div class="kpi glass">
+   <div class="kpi-icon">✚</div>
+   <div>
+    <strong id="kUsed">0</strong>
+    <b>Cupos ocupados</b>
+    <small>Reservados y confirmados</small>
+   </div>
+  </div>
+
+  <div class="kpi glass supervisor">
+   <div class="kpi-icon">◉</div>
+   <div>
+    <strong id="kAvail">0</strong>
+    <b>Disponibles</b>
+    <small>Capacidad restante</small>
+   </div>
+  </div>
+
+  <div class="kpi glass">
+   <div class="kpi-icon">◷</div>
+   <div>
+    <strong id="kPending">0</strong>
+    <b>Pendientes de validar</b>
+    <small>Solicitudes por gestionar</small>
+   </div>
+  </div>
+ </div>
+
+ <!-- ALERTA AGENDA -->
+ <div class="notice warning hidden" id="agendaAlert">
+  <strong>Actualización de agenda requerida</strong>
+  <p id="agendaAlertText">
+   Debes actualizar la agenda hospitalaria.
+  </p>
+  <div class="buttons">
+   <button class="btn primary"
+    id="btnGoUpload" type="button">
+    Actualizar agenda
+   </button>
+  </div>
+ </div>
+
+ <!-- FORMULARIO -->
+ <section class="page" id="dashboard">
+  <div class="panel glass">
+   <h2><span>✚</span> Registro de sobrecupo</h2>
+   <p class="desc">
+    Un sobrecupo por cada diez pacientes activos,
+    únicamente en las especialidades habilitadas
+    de sábado y domingo.
+   </p>
+
+   <form id="formRequest" autocomplete="off">
+    <div class="form-grid">
+
+     <div class="field full">
+      <label>Especialidad
+       <span class="required">*</span>
+      </label>
+      <select id="esp" required>
+       <option value="">Seleccione especialidad</option>
+      </select>
+     </div>
+
+     <div class="field full">
+      <label>Nombres
+       <span class="required">*</span>
+      </label>
+      <input id="patientName"
+       required maxlength="120"
+       autocomplete="off"
+       placeholder="Nombres y apellidos">
+     </div>
+
+     <div class="field">
+      <label>DUI
+       <span class="required">*</span>
+      </label>
+      <input id="doc" type="text"
+       inputmode="numeric"
+       required maxlength="10"
+       minlength="10"
+       autocomplete="off"
+       pattern="[0-9]{8}-[0-9]"
+       placeholder="00000000-0">
+      <div class="dui-helper">
+       El guion se agrega automáticamente.
+      </div>
+     </div>
+
+     <div class="field">
+      <label>Fecha del sobrecupo
+       <span class="required">*</span>
+      </label>
+      <input id="date"
+       type="date" required
+       autocomplete="off">
+     </div>
+
+     <div class="field full">
+      <label>A solicitud de
+       <span class="required">*</span>
+      </label>
+      <input id="requestedBy"
+       required maxlength="100"
+       autocomplete="off"
+       placeholder="Profesional solicitante">
+     </div>
+    </div>
+
+    <div class="form-actions">
+     <button id="btnAvailability"
+      class="btn" type="button">
+      Ver disponibilidad
+     </button>
+
+     <button id="btnRequest"
+      class="btn primary" type="submit">
+      ✚ Guardar sobrecupo
+     </button>
+    </div>
+   </form>
+  </div>
+ </section>
+
+ <!-- DISPONIBILIDAD -->
+ <section class="page hidden" id="agenda">
+  <div class="panel glass">
+   <div class="toolbar">
+    <h2>Disponibilidad por especialidad</h2>
+    <input id="filterDate" type="date">
+   </div>
+
+   <p class="desc">
+    Citas activas únicas, sobrecupos generados,
+    ocupados y disponibles para toda la jornada.
+   </p>
+
+   <div class="tablebox">
+    <table>
+     <thead>
+      <tr>
+       <th>Especialidad</th>
+       <th>Activas</th>
+       <th>Pendientes</th>
+       <th>Generados</th>
+       <th>Ocupados</th>
+       <th>Disponibles</th>
+       <th>Estado</th>
+      </tr>
+     </thead>
+     <tbody id="agendaRows"></tbody>
+    </table>
+   </div>
+  </div>
+ </section>
+
+ <!-- SOLICITUDES -->
+ <section class="page hidden" id="solicitudes">
+  <div class="panel glass">
+   <h2>Solicitudes registradas</h2>
+   <p class="desc">
+    Selecciona una solicitud para consultar o gestionar.
+   </p>
+
+   <div class="tablebox">
+    <table>
+     <thead>
+      <tr>
+       <th>Referencia</th>
+       <th>Paciente</th>
+       <th>Especialidad</th>
+       <th>Fecha</th>
+       <th>Registrado por</th>
+       <th>Estado</th>
+      </tr>
+     </thead>
+     <tbody id="requestsRows"></tbody>
+    </table>
+   </div>
+  </div>
+ </section>
+
+ <!-- ACTUALIZACIÓN -->
+ <section class="page hidden" id="actualizacion">
+  <div class="panel glass">
+
+   <h2>Actualización de agenda hospitalaria</h2>
+
+   <p class="desc">
+    Importa un Excel exportado del sistema hospitalario.
+    La información se guardará en la hoja AGENDA_EXCEL,
+    sin borrar los sobrecupos registrados.
+   </p>
+
+   <div class="notice">
+    <strong>Estado de la agenda</strong>
+    <p id="uploadStatus">Sin información.</p>
+   </div>
+
+   <div class="status-grid">
+    <div class="status-item">
+     <small>Última actualización</small>
+     <strong id="lastUpdate">Sin datos</strong>
+    </div>
+    <div class="status-item">
+     <small>Vigencia para registrar</small>
+     <strong>30 minutos</strong>
+    </div>
+    <div class="status-item">
+     <small>Sincronización</small>
+     <strong>10 segundos</strong>
+    </div>
+   </div>
+
+   <div class="dropzone" id="excelZone"
+    role="button" tabindex="0">
+    <strong>Arrastra aquí el archivo Excel</strong>
+    <small>
+     O haz clic para seleccionar el archivo.
+    </small>
+    <small>Formatos .xlsx, .xls y .csv</small>
+   </div>
+
+   <input id="excelFile" type="file"
+    class="hidden"
+    accept=".xlsx,.xls,.csv">
+
+   <div class="buttons supervisor">
+    <button class="btn danger"
+     id="btnUrgent" type="button">
+     Solicitar actualización extraordinaria
+    </button>
+   </div>
+
+   <p class="desc" style="margin-top:20px">
+    La última carga válida se compartirá con todos
+    los técnicos y supervisores conectados.
+   </p>
+  </div>
+ </section>
+
+ <!-- REPORTES -->
+ <section class="page hidden" id="reportes">
+  <div class="panel glass">
+   <h2>Resumen operativo</h2>
+   <div id="reportContent"></div>
+  </div>
+ </section>
+
+ <!-- SUPERVISOR -->
+ <section class="page hidden" id="actividad">
+  <div class="panel glass">
+   <h2>Personal en línea</h2>
+   <div id="sessionRows"></div>
+  </div>
+
+  <div class="panel glass">
+   <h2>Historial de operaciones</h2>
+   <div id="auditRows"></div>
+  </div>
+ </section>
+
+ <div class="bottom">
+  <span class="small muted"
+   id="status">Sistema UGM</span>
+
+  <button id="btnRefresh"
+   class="btn" type="button">
+   ↻ Actualizar ahora
+  </button>
+ </div>
+</main>
+</div>
+</div>
+
+<!-- GESTIÓN DE SOBRECUPOS -->
+<div id="modal" class="overlay hidden">
+ <div class="modal glass" id="modalContent"></div>
+</div>
+
+<!-- ERROR GRANDE -->
+<div id="errorOverlay" class="error-overlay hidden"
+ role="alertdialog" aria-modal="true"
+ aria-labelledby="errorTitle">
+ <div class="error-panel">
+  <div class="error-symbol">⚠</div>
+  <h2 id="errorTitle">
+   NO HAY CUPOS DISPONIBLES
+  </h2>
+
+  <p id="errorText">
+   No se puede registrar esta solicitud.
+  </p>
+
+  <button id="btnCloseError"
+   class="btn primary" type="button">
+   Entendido, volver al formulario
+  </button>
+ </div>
+</div>
+
+<!-- NOTIFICACIONES -->
+<div id="toast" class="toast hidden"></div>
+
+<script>
+'use strict';
+
+/* =====================================================
+   ESTADO
+   ===================================================== */
+
+const S = {
+ token:'',
+ nombre:'',
+ perfil:'',
+ fecha:'',
+ pagina:'dashboard',
+ consultando:false,
+ guardando:false,
+ cerrando:false,
+ importando:false,
+ archivo:null,
+ previewURL:null,
+ timer:null,
+ generacion:0,
+ datos:{
+  lista:[],
+  solicitudes:[],
+  personal:[],
+  auditoria:[],
+  pendientesGlobales:0,
+  agenda:{}
+ }
+};
+
+const $ = id => document.getElementById(id);
+
+function esc(v) {
+ return String(v==null?'':v).replace(
+  /[&<>"']/g,c=>({
+   '&':'&amp;',
+   '<':'&lt;',
+   '>':'&gt;',
+   '"':'&quot;',
+   "'":'&#39;'
+  })[c]
+ );
+}
+
+function aviso(texto) {
+ $('toast').textContent=texto;
+ $('toast').classList.remove('hidden');
+
+ clearTimeout(window.ugmToast);
+
+ window.ugmToast=setTimeout(
+  ()=>$('toast').classList.add('hidden'),
+  6500
+ );
+}
+
+function api(funcion,...args) {
+ return new Promise((resolve,reject)=>{
+  if(!window.google ||
+     !google.script ||
+     !google.script.run) {
+   reject(Error(
+    'Abre la aplicación desde Google Apps Script.'
+   ));
+   return;
+  }
+
+  google.script.run
+   .withSuccessHandler(resolve)
+   .withFailureHandler(e=>reject(
+    Error(e&&e.message?e.message:String(e))
+   ))[funcion](...args);
+ });
+}
+
+/* =====================================================
+   ALERTAS GRANDES
+   ===================================================== */
+
+const ERRORES_GRANDES = {
+ SIN_CUPOS:'NO HAY CUPOS DISPONIBLES',
+ DIA_NO_HABILITADO:'DÍA NO AUTORIZADO',
+ ESPECIALIDAD_NO_HABILITADA:
+  'ESPECIALIDAD NO AUTORIZADA',
+ DUPLICADO:'SOLICITUD DUPLICADA',
+ AGENDA_DESACTUALIZADA:
+  'ACTUALIZACIÓN DE AGENDA REQUERIDA'
+};
+
+function mostrarError(error) {
+ const original=String(
+  error&&error.message?error.message:error
+ );
+
+ const codigos=Object.keys(ERRORES_GRANDES);
+
+ let codigo='';
+
+ for(const c of codigos) {
+  if(original.includes(c+'|')) {
+   codigo=c;
+   break;
+  }
+ }
+
+ if(!codigo) {
+  aviso(original);
+  return;
+ }
+
+ const texto=original.split(codigo+'|').pop();
+
+ $('errorTitle').textContent=
+  ERRORES_GRANDES[codigo];
+
+ $('errorText').textContent=texto;
+
+ $('errorOverlay').classList.remove('hidden');
+ $('btnCloseError').focus();
+}
+
+function cerrarError() {
+ $('errorOverlay').classList.add('hidden');
+}
+
+/* =====================================================
+   TEMA
+   ===================================================== */
+
+function aplicarTema(t) {
+ const claro=t==='claro';
+
+ document.body.classList.toggle('light',claro);
+
+ $('themeToggle').textContent=claro?'☾':'☀';
+
+ try {
+  localStorage.setItem('UGM_TEMA',t);
+ }catch(e){}
+}
+
+function iniciarTema() {
+ let t='oscuro';
+
+ try {
+  t=localStorage.getItem('UGM_TEMA')||'oscuro';
+ }catch(e){}
+
+ aplicarTema(t);
+}
+
+/* =====================================================
+   FECHAS
+   ===================================================== */
+
+function hoy() {
+ const partes=new Intl.DateTimeFormat('en-US',{
+  timeZone:'America/El_Salvador',
+  year:'numeric',
+  month:'2-digit',
+  day:'2-digit'
+ }).formatToParts(new Date());
+
+ const p={};
+
+ partes.forEach(x=>p[x.type]=x.value);
+
+ return `${p.year}-${p.month}-${p.day}`;
+}
+
+function reloj() {
+ $('clock').textContent=
+  new Date().toLocaleString('es-SV',{
+   timeZone:'America/El_Salvador',
+   dateStyle:'medium',
+   timeStyle:'short'
+  });
+}
+
+function diaSemana(fecha) {
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(fecha||'')){
+  return '';
+ }
+
+ const n=new Date(
+  fecha+'T12:00:00Z'
+ ).getUTCDay();
+
+ return n===6?'SABADO':n===0?'DOMINGO':'SEMANA';
+}
+
+/* =====================================================
+   ACCESO
+   ===================================================== */
+
+async function login(ev) {
+ ev.preventDefault();
+
+ const b=$('btnLogin');
+
+ b.disabled=true;
+ b.textContent='Ingresando...';
+
+ try {
+  const r=await api(
+   'entrar',
+   $('loginName').value,
+   $('loginPass').value
+  );
+
+  S.token=r.token;
+  S.nombre=r.nombre;
+  S.perfil=r.perfil;
+  S.fecha=hoy();
+  S.cerrando=false;
+  S.generacion++;
+
+  $('login').classList.add('hidden');
+  $('app').classList.remove('hidden');
+
+  $('loginPass').value='';
+
+  const roles={
+   TECNICO:'Técnico',
+   AUTORIZADO:'Técnico autorizado',
+   SUPERVISOR:'Supervisor'
+  };
+
+  $('who').textContent=
+   S.nombre+' · '+roles[S.perfil];
+
+  const supervisor=S.perfil==='SUPERVISOR';
+
+  $('kpiContainer').classList.toggle(
+   'supervisor-kpis',
+   supervisor
+  );
+
+  document.querySelectorAll('.supervisor')
+   .forEach(el=>{
+    el.classList.toggle('hidden',!supervisor);
+   });
+
+  limpiarFormulario();
+
+  $('filterDate').value=S.fecha;
+
+  page('dashboard');
+
+  await refrescar();
+
+  if(S.timer)clearInterval(S.timer);
+
+  S.timer=setInterval(refrescar,10000);
+
+  aviso('Bienvenido al sistema UGM.');
+
+ }catch(e){
+  aviso(e.message);
+ }finally{
+  b.disabled=false;
+  b.textContent='Ingresar al sistema';
+ }
+}
+
+/* =====================================================
+   CIERRE DE SESIÓN
+   ===================================================== */
+
+function resetearVisual() {
+ if(S.timer)clearInterval(S.timer);
+
+ S.timer=null;
+ S.generacion++;
+ S.token='';
+ S.nombre='';
+ S.perfil='';
+ S.consultando=false;
+ S.guardando=false;
+ S.cerrando=false;
+
+ limpiarArchivo();
+ limpiarFormulario();
+
+ S.datos={
+  lista:[],
+  solicitudes:[],
+  personal:[],
+  auditoria:[],
+  pendientesGlobales:0,
+  agenda:{}
+ };
+
+ $('loginForm').reset();
+ $('who').textContent='';
+
+ $('app').classList.add('hidden');
+ $('login').classList.remove('hidden');
+
+ cerrarModal();
+ cerrarError();
+}
+
+async function salir(ev) {
+ if(ev)ev.preventDefault();
+
+ if(S.cerrando)return;
+
+ S.cerrando=true;
+
+ const anterior=S.token;
+
+ resetearVisual();
+
+ try {
+  if(anterior){
+   await api('salir',anterior);
+  }
+  aviso('Sesión cerrada.');
+ }catch(e){
+  aviso(
+   'Se volvió al acceso, pero no se pudo '+
+   'confirmar el cierre remoto.'
+  );
+ }
+}
+
+/* =====================================================
+   NAVEGACIÓN
+   ===================================================== */
+
+function page(n) {
+ if(['reportes','actividad'].includes(n) &&
+    S.perfil!=='SUPERVISOR') {
+  return;
+ }
+
+ S.pagina=n;
+
+ document.querySelectorAll('.page')
+  .forEach(el=>{
+   el.classList.toggle('hidden',el.id!==n);
+  });
+
+ document.querySelectorAll('.nav')
+  .forEach(el=>{
+   el.classList.toggle(
+    'active',
+    el.dataset.page===n
+   );
+  });
+
+ const titulos={
+  dashboard:S.perfil==='SUPERVISOR'
+   ?'Vista supervisor':'Vista técnico',
+  agenda:'Disponibilidad',
+  solicitudes:'Solicitudes',
+  actualizacion:'Actualizar agenda',
+  reportes:'Reportes',
+  actividad:'Personal en línea'
+ };
+
+ $('title').textContent=titulos[n]||'UGM';
+ $('crumbPage').textContent=titulos[n]||'UGM';
+}
+
+/* =====================================================
+   SINCRONIZACIÓN
+   ===================================================== */
+
+async function refrescar() {
+ if(!S.token ||
+    S.consultando ||
+    S.cerrando ||
+    S.importando) {
+  return;
+ }
+
+ S.consultando=true;
+
+ const token=S.token;
+ const generacion=S.generacion;
+ const fecha=S.fecha;
+
+ try {
+  const datos=await api(
+   'sincronizar',
+   token,
+   fecha,
+   'Consultando '+S.pagina
+  );
+
+  if(generacion!==S.generacion ||
+     token!==S.token ||
+     fecha!==S.fecha) {
+   return;
+  }
+
+  S.datos=datos;
+
+  dibujar();
+
+  $('sync').textContent='● Sincronizado';
+  $('sync').style.color='var(--green)';
+
+  $('status').textContent=
+   'Última sincronización: '+
+   new Date().toLocaleTimeString('es-SV');
+
+ }catch(e) {
+  if(generacion!==S.generacion ||
+     !S.token) {
+   return;
+  }
+
+  $('sync').textContent='● Error';
+  $('sync').style.color='var(--red)';
+  $('status').textContent=e.message;
+
+ }finally {
+  if(generacion===S.generacion) {
+   S.consultando=false;
+  }
+ }
+}
+
+/* =====================================================
+   DIBUJAR INDICADORES
+   ===================================================== */
+
+function dibujar() {
+ const lista=S.datos.lista||[];
+ const solicitudes=S.datos.solicitudes||[];
+
+ const total=lista.reduce((a,r)=>{
+  a.generados+=Number(r.generados)||0;
+  a.ocupados+=Number(r.ocupados)||0;
+  a.disponibles+=Number(r.disponibles)||0;
+  return a;
+ },{
+  generados:0,
+  ocupados:0,
+  disponibles:0
+ });
+
+ $('kLimit').textContent=total.generados;
+ $('kUsed').textContent=total.ocupados;
+ $('kAvail').textContent=total.disponibles;
+
+ $('kPending').textContent=
+  Number(S.datos.pendientesGlobales)||0;
+
+ $('agendaRows').innerHTML=lista.map(r=>`
+  <tr>
+   <td>${esc(r.especialidad)}</td>
+   <td>${r.activas}</td>
+   <td>${r.pendientes}</td>
+   <td>${r.generados}</td>
+   <td>${r.ocupados}</td>
+   <td style="color:${
+    r.disponibles>0?
+    'var(--green)':'var(--red)'
+   }">${r.disponibles}</td>
+   <td>${
+    !r.habilitada?'No habilitado':
+    r.incidencia?'Excede capacidad':
+    r.disponibles>0?'Disponible':'Agotado'
+   }</td>
+  </tr>
+ `).join('')||`
+  <tr>
+   <td colspan="7">
+    No hay sobrecupos autorizados para esta fecha.
+   </td>
+  </tr>
+ `;
+
+ $('requestsRows').innerHTML=
+  solicitudes.map(r=>`
+   <tr data-id="${esc(r.ID)}">
+    <td>${esc(r.ID)}</td>
+    <td>${esc(r.Nombres)}</td>
+    <td>${esc(r.Especialidad)}</td>
+    <td>${esc(r.FechaSobrecupo)}</td>
+    <td>${esc(r.RegistradoPor)}</td>
+    <td>${esc(r.Estado)}</td>
+   </tr>
+  `).join('');
+
+ document.querySelectorAll(
+  '#requestsRows tr[data-id]'
+ ).forEach(tr=>{
+  tr.addEventListener(
+   'click',
+   ()=>abrirSolicitud(tr.dataset.id)
+  );
+ });
+
+ dibujarAgendaEstado();
+
+ if(S.perfil==='SUPERVISOR') {
+  $('reportContent').innerHTML=`
+   <div class="status-grid">
+    <div class="status-item">
+     <small>Generados</small>
+     <strong>${total.generados}</strong>
+    </div>
+    <div class="status-item">
+     <small>Ocupados</small>
+     <strong>${total.ocupados}</strong>
+    </div>
+    <div class="status-item">
+     <small>Disponibles</small>
+     <strong>${total.disponibles}</strong>
+    </div>
+   </div>
+  `;
+
+  $('sessionRows').innerHTML=
+   (S.datos.personal||[]).map(r=>`
+    <div class="activity">
+     <div>
+      <b>${esc(r.Nombre)}</b>
+      <div class="small muted">
+       ${esc(r.Perfil)} · ${esc(r.Actividad)}
+      </div>
+     </div>
+     <span class="small muted">
+      ${esc(r.UltimaActividad)}
+     </span>
+    </div>
+   `).join('')||
+   '<p class="muted">Sin sesiones recientes.</p>';
+
+  $('auditRows').innerHTML=
+   (S.datos.auditoria||[]).map(r=>`
+    <div class="activity">
+     <div>
+      <b>${esc(r.Usuario)}</b>
+      <div class="small muted">
+       ${esc(r.Accion)} · ${esc(r.Referencia)}
+      </div>
+     </div>
+     <span class="small muted">
+      ${esc(r.FechaHora)}
+     </span>
+    </div>
+   `).join('');
+ }
+}
+
+function dibujarAgendaEstado() {
+ const a=S.datos.agenda||{};
+
+ $('lastUpdate').textContent=a.fecha
+  ?new Date(a.fecha).toLocaleString('es-SV')
+  :'Sin datos';
+
+ $('uploadStatus').textContent=a.fecha
+  ?'Última carga: '+a.archivo+
+   ' · Responsable: '+a.usuario+
+   ' · Antigüedad: '+a.minutos+' minutos.'
+  :'Todavía no se ha importado una agenda.';
+
+ const mostrar=Boolean(a.alert);
+
+ $('agendaAlert').classList.toggle(
+  'hidden',!mostrar
+ );
+
+ $('agendaAlertText').textContent=a.extraordinaria
+  ?'El supervisor solicitó una actualización '+
+   'extraordinaria. Una nueva carga válida '+
+   'eliminará la alerta para todos.'
+  :'Se requiere actualizar la agenda hospitalaria. '+
+   'La alerta se eliminará cuando alguien cargue '+
+   'una nueva agenda válida.';
+}
+
+/* =====================================================
+   FORMULARIO
+   ===================================================== */
+
+function formatearDUI(v) {
+ const digitos=String(v||'')
+  .replace(/\D/g,'').slice(0,9);
+
+ return digitos.length>8
+  ?digitos.slice(0,8)+'-'+digitos.slice(8)
+  :digitos;
+}
+
+function limpiarFormulario() {
+ $('formRequest').reset();
+
+ [
+  'esp',
+  'patientName',
+  'doc',
+  'date',
+  'requestedBy'
+ ].forEach(id=>{
+  $(id).value='';
+ });
+}
+
+async function enviar(ev) {
+ ev.preventDefault();
+
+ if(S.guardando)return;
+
+ const datos={
+  especialidad:$('esp').value,
+  nombres:$('patientName').value.trim(),
+  documento:$('doc').value.trim(),
+  fecha:$('date').value,
+  solicitadoPor:$('requestedBy').value.trim()
+ };
+
+ if(!/^[0-9]{8}-[0-9]$/.test(datos.documento)) {
+  mostrarError(
+   'DUPLICADO|El DUI debe contener nueve '+
+   'dígitos en formato 00000000-0.'
+  );
+  return;
+ }
+
+ const boton=$('btnRequest');
+
+ S.guardando=true;
+ boton.disabled=true;
+ boton.textContent='Validando disponibilidad...';
+
+ try {
+  const r=await api(
+   'crearSolicitud',
+   S.token,
+   datos
+  );
+
+  if(!r||!r.ok||!r.id) {
+   throw Error(
+    'No se confirmó el registro en Google Sheets.'
+   );
+  }
+
+  limpiarFormulario();
+
+  S.fecha=datos.fecha;
+  $('filterDate').value=S.fecha;
+
+  aviso(
+   'Sobrecupo guardado. Referencia: '+r.id
+  );
+
+  await refrescar();
+
+ }catch(e) {
+  // Si falla, conservar todos los campos.
+  mostrarError(e);
+
+ }finally {
+  S.guardando=false;
+  boton.disabled=false;
+  boton.textContent='✚ Guardar sobrecupo';
+ }
+}
+
+/* =====================================================
+   IMPORTACIÓN EXCEL
+   ===================================================== */
+
+function nombreColumna(v) {
+ return String(v==null?'':v)
+  .trim().normalize('NFD')
+  .replace(/[\u0300-\u036f]/g,'')
+  .replace(/[^A-Za-z0-9]/g,'')
+  .toUpperCase();
+}
+
+const ALIAS_COLUMNAS={
+ id:[
+  'ID','CODIGO','CODIGOCITA',
+  'IDCITA','NUMEROCITA','CORRELATIVO'
+ ],
+ fecha:[
+  'FECHA','FECHACITA',
+  'FECHAATENCION','FECHAHORA',
+  'FECHAYHORA'
+ ],
+ especialidad:[
+  'ESPECIALIDAD','ESPECIALIDADES',
+  'SERVICIO','NOMBREESPECIALIDAD'
+ ],
+ estado:[
+  'ESTADO','ESTADOCITA',
+  'ESTADODECITA'
+ ],
+ documento:[
+  'EXPEDIENTE','DOCUMENTO',
+  'DUI','NUMEROEXPEDIENTE',
+  'NOEXPEDIENTE'
+ ],
+ paciente:[
+  'PACIENTE','NOMBREPACIENTE',
+  'NOMBRE','NOMBRES',
+  'NOMBRECOMPLETO'
+ ]
+};
+
+function formatoFechaExcel(valor) {
+ if(valor instanceof Date) {
+  if(isNaN(valor.getTime()))return '';
+
+  return [
+   valor.getFullYear(),
+   String(valor.getMonth()+1).padStart(2,'0'),
+   String(valor.getDate()).padStart(2,'0')
+  ].join('-');
+ }
+
+ if(typeof valor==='number' && window.XLSX) {
+  const f=XLSX.SSF.parse_date_code(valor);
+
+  if(f) {
+   return `${f.y}-${String(f.m).padStart(2,'0')}`+
+    `-${String(f.d).padStart(2,'0')}`;
+  }
+ }
+
+ const texto=String(valor||'').trim();
+
+ let m=texto.match(
+  /^(\d{4})-(\d{1,2})-(\d{1,2})/
+ );
+
+ if(m) {
+  return `${m[1]}-${m[2].padStart(2,'0')}`+
+   `-${m[3].padStart(2,'0')}`;
+ }
+
+ m=texto.match(
+  /^(\d{1,2})\/(\d{1,2})\/(\d{4})/
+ );
+
+ if(m) {
+  return `${m[3]}-${m[2].padStart(2,'0')}`+
+   `-${m[1].padStart(2,'0')}`;
+ }
+
+ return '';
+}
+
+function detectarEncabezados(fila) {
+ const campos={};
+
+ Object.entries(ALIAS_COLUMNAS).forEach(
+  ([campo,alternativas])=>{
+   const i=fila.findIndex(c=>
+    alternativas.includes(nombreColumna(c))
+   );
+
+   if(i>=0)campos[campo]=i;
+  }
+ );
+
+ if(
+  campos.fecha===undefined ||
+  campos.especialidad===undefined ||
+  campos.estado===undefined
+ ) {
+  return null;
+ }
+
+ return campos;
+}
+
+async function procesarExcel(archivo) {
+ if(!window.XLSX) {
+  throw Error(
+   'No pudo cargarse el lector Excel. '+
+   'Comprueba tu conexión.'
+  );
+ }
+
+ const buffer=await archivo.arrayBuffer();
+
+ const libro=XLSX.read(buffer,{
+  type:'array',
+  cellDates:true
+ });
+
+ let mejor=null;
+ let total=0;
+
+ // Se revisan todas las hojas hasta encontrar
+ // encabezados reconocibles.
+ for(const nombre of libro.SheetNames) {
+  const hoja=libro.Sheets[nombre];
+
+  const matriz=XLSX.utils.sheet_to_json(
+   hoja,{
+    header:1,
+    defval:'',
+    raw:true,
+    blankrows:false
+   }
+  );
+
+  for(let i=0;i<Math.min(25,matriz.length);i++) {
+   const campos=detectarEncabezados(matriz[i]);
+
+   if(campos) {
+    const cantidad=matriz.length-i-1;
+
+    if(!mejor || cantidad>total) {
+     mejor={matriz,inicio:i+1,campos};
+     total=cantidad;
+    }
+   }
+  }
+ }
+
+ if(!mejor) {
+  throw Error(
+   'No encontré las columnas de Fecha, '+
+   'Especialidad y Estado en el archivo.'
+  );
+ }
+
+ const registros=[];
+
+ const {matriz,inicio,campos}=mejor;
+
+ for(let i=inicio;i<matriz.length;i++) {
+  const fila=matriz[i];
+
+  if(!fila || !fila.some(x=>
+   x!=='' && x!==null && x!==undefined
+  ))continue;
+
+  function valor(campo) {
+   const indice=campos[campo];
+
+   return indice===undefined
+    ?''
+    :fila[indice];
+  }
+
+  registros.push({
+   id:String(valor('id')??''),
+   fecha:formatoFechaExcel(valor('fecha')),
+   especialidad:String(
+    valor('especialidad')??''
+   ),
+   estado:String(valor('estado')??''),
+   documento:String(
+    valor('documento')??''
+   ),
+   paciente:String(valor('paciente')??'')
+  });
+ }
+
+ return registros;
+}
+
+async function importarArchivo(archivo) {
+ if(!archivo || S.importando)return;
+
+ S.importando=true;
+
+ $('status').textContent=
+  'Procesando agenda Excel...';
+
+ try {
+  const registros=await procesarExcel(archivo);
+
+  if(!registros.length) {
+   throw Error('El archivo no contiene citas.');
+  }
+
+  const r=await api(
+   'importarAgenda',
+   S.token,
+   registros,
+   archivo.name
+  );
+
+  if(!r||!r.ok) {
+   throw Error(
+    'El servidor no confirmó la importación.'
+   );
+  }
+
+  aviso(
+   'Agenda actualizada: '+r.total+
+   ' citas válidas. Omitidas: '+r.omitidas+'.'
+  );
+
+  await refrescar();
+
+  if(r.fechas&&r.fechas.length) {
+   const actual=S.fecha;
+
+   if(!r.fechas.includes(actual)) {
+    const proxima=r.fechas.find(f=>f>=hoy());
+    S.fecha=proxima||
+     r.fechas[r.fechas.length-1];
+
+    $('filterDate').value=S.fecha;
+
+    await refrescar();
+   }
+  }
+
+ }catch(e) {
+  mostrarError(e);
+
+ }finally {
+  S.importando=false;
+  $('excelFile').value='';
+ }
+}
+
+function montarExcel() {
+ const zona=$('excelZone');
+ const input=$('excelFile');
+
+ zona.addEventListener('click',()=>{
+  input.click();
+ });
+
+ zona.addEventListener('keydown',ev=>{
+  if(ev.key==='Enter'||ev.key===' ') {
+   ev.preventDefault();
+   input.click();
+  }
+ });
+
+ input.addEventListener('change',ev=>{
+  importarArchivo(ev.target.files[0]);
+ });
+
+ zona.addEventListener('dragover',ev=>{
+  ev.preventDefault();
+  zona.classList.add('dragging');
+ });
+
+ zona.addEventListener('dragleave',()=>{
+  zona.classList.remove('dragging');
+ });
+
+ zona.addEventListener('drop',ev=>{
+  ev.preventDefault();
+  zona.classList.remove('dragging');
+  importarArchivo(ev.dataTransfer.files[0]);
+ });
+}
+
+/* =====================================================
+   COMPROBANTES
+   ===================================================== */
+
+function limpiarArchivo() {
+ if(S.previewURL) {
+  URL.revokeObjectURL(S.previewURL);
+  S.previewURL=null;
+ }
+
+ S.archivo=null;
+}
+
+function elegirArchivo(archivo) {
+ if(!archivo)return;
+
+ const permitidos=[
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'application/pdf'
+ ];
+
+ if(!permitidos.includes(archivo.type)) {
+  aviso('Selecciona JPG, PNG, WEBP o PDF.');
+  return;
+ }
+
+ if(archivo.size===0 ||
+    archivo.size>5*1024*1024) {
+  aviso('El archivo debe ser menor de 5 MB.');
+  return;
+ }
+
+ limpiarArchivo();
+
+ S.archivo=archivo;
+
+ const cont=$('filePreview');
+
+ if(!cont)return;
+
+ cont.classList.remove('hidden');
+ cont.innerHTML='';
+
+ const titulo=document.createElement('p');
+ titulo.textContent=archivo.name;
+ cont.appendChild(titulo);
+
+ if(archivo.type.startsWith('image/')) {
+  S.previewURL=URL.createObjectURL(archivo);
+
+  const imagen=document.createElement('img');
+
+  imagen.src=S.previewURL;
+  imagen.alt='Comprobante seleccionado';
+
+  cont.appendChild(imagen);
+
+ }else {
+  const texto=document.createElement('div');
+
+  texto.className='pdf-preview';
+  texto.textContent='PDF: '+archivo.name;
+
+  cont.appendChild(texto);
+ }
+
+ const quitar=document.createElement('button');
+
+ quitar.type='button';
+ quitar.className='btn';
+ quitar.textContent='Quitar comprobante';
+
+ quitar.onclick=()=>{
+  limpiarArchivo();
+  cont.innerHTML='';
+  cont.classList.add('hidden');
+  $('fileInput').value='';
+ };
+
+ cont.appendChild(quitar);
+}
+
+function montarComprobante() {
+ const zona=$('dropzone');
+ const input=$('fileInput');
+
+ zona.addEventListener('click',()=>{
+  input.click();
+ });
+
+ zona.addEventListener('keydown',ev=>{
+  if(ev.key==='Enter'||ev.key===' ') {
+   ev.preventDefault();
+   input.click();
+  }
+ });
+
+ input.addEventListener('change',ev=>{
+  elegirArchivo(ev.target.files[0]);
+ });
+
+ zona.addEventListener('dragover',ev=>{
+  ev.preventDefault();
+  zona.classList.add('dragging');
+ });
+
+ zona.addEventListener('dragleave',()=>{
+  zona.classList.remove('dragging');
+ });
+
+ zona.addEventListener('drop',ev=>{
+  ev.preventDefault();
+  zona.classList.remove('dragging');
+  elegirArchivo(ev.dataTransfer.files[0]);
+ });
+}
+
+document.addEventListener('paste',ev=>{
+ if($('modal').classList.contains('hidden') ||
+    !S.token)return;
+
+ const items=Array.from(
+  (ev.clipboardData&&ev.clipboardData.items)||[]
+ );
+
+ const item=items.find(x=>
+  x.kind==='file' &&
+  x.type.startsWith('image/')
+ );
+
+ if(!item)return;
+
+ ev.preventDefault();
+
+ const archivo=item.getAsFile();
+
+ if(archivo) {
+  const extension=archivo.type==='image/jpeg'
+   ?'jpg':archivo.type==='image/webp'?'webp':'png';
+
+  elegirArchivo(new File(
+   [archivo],
+   'captura_'+Date.now()+'.'+extension,
+   {type:archivo.type}
+  ));
+ }
+});
+
+async function archivoBase64(archivo) {
+ const buffer=await archivo.arrayBuffer();
+
+ if(buffer.byteLength>5*1024*1024) {
+  throw Error('Archivo mayor de 5 MB.');
+ }
+
+ const bytes=new Uint8Array(buffer);
+ let binario='';
+
+ for(let i=0;i<bytes.length;i+=8192) {
+  binario+=String.fromCharCode(
+   ...bytes.subarray(i,i+8192)
+  );
+ }
+
+ return btoa(binario);
+}
+
+/* =====================================================
+   GESTIÓN DE SOLICITUDES
+   ===================================================== */
+
+function cerrarModal() {
+ limpiarArchivo();
+
+ $('modal').classList.add('hidden');
+ $('modalContent').innerHTML='';
+}
+
+function abrirSolicitud(id) {
+ const r=(S.datos.solicitudes||[])
+  .find(x=>x.ID===id);
+
+ if(!r)return;
+
+ limpiarArchivo();
+
+ const autorizado=[
+  'SUPERVISOR','AUTORIZADO'
+ ].includes(S.perfil);
+
+ const cerrado=[
+  'REGISTRADO','RECHAZADO','ANULADO'
+ ].includes(r.Estado);
+
+ let html=`
+  <h2>Solicitud ${esc(r.ID)}</h2>
+
+  <p><b>Paciente:</b> ${esc(r.Nombres)}</p>
+  <p><b>DUI:</b> ${esc(r.Documento)}</p>
+  <p><b>Especialidad:</b> ${esc(r.Especialidad)}</p>
+  <p><b>Fecha:</b> ${esc(r.FechaSobrecupo)}</p>
+  <p><b>A solicitud de:</b> ${esc(r.SolicitadoPor)}</p>
+  <p><b>Estado:</b> ${esc(r.Estado)}</p>
+  <p><b>Comprobante:</b> ${
+   r.ComprobanteID?'Adjuntado':'Pendiente'
+  }</p>
+ `;
+
+ if(autorizado&&!cerrado) {
+  html+=`
+   <div class="field">
+    <label>Nuevo estado</label>
+    <select id="newState">
+     <option value="EN GESTION">En gestión</option>
+     <option value="OBSERVADO">Observado</option>
+     <option value="REGISTRADO">Registrado / Confirmado</option>
+     <option value="RECHAZADO">Rechazado</option>
+     <option value="ANULADO">Anulado</option>
+    </select>
+   </div>
+
+   <label>Comprobante</label>
+
+   <div class="dropzone"
+    id="dropzone"
+    role="button" tabindex="0">
+    <strong>Arrastra o pega una imagen aquí</strong>
+    <small>También puedes seleccionar un archivo</small>
+    <small>JPG, PNG, WEBP o PDF · Máximo 5 MB</small>
+   </div>
+
+   <input id="fileInput"
+    type="file" class="hidden"
+    accept="image/jpeg,image/png,image/webp,application/pdf">
+
+   <div id="filePreview"
+    class="preview-file hidden"></div>
+
+   <div class="field" style="margin-top:15px">
+    <label>Observación</label>
+    <textarea id="obs" rows="3"></textarea>
+   </div>
+
+   <p class="desc">
+    La confirmación requiere comprobante.
+    El cupo ya está reservado.
+   </p>
+
+   <div class="buttons">
+    <button id="btnSaveState"
+     class="btn primary" type="button">
+     Guardar gestión
+    </button>
+    <button id="btnClose"
+     class="btn" type="button">
+     Cerrar
+    </button>
+   </div>
+  `;
+ } else {
+  html+=`
+   <button id="btnClose"
+    class="btn" type="button">
+    Cerrar
+   </button>
+  `;
+ }
+
+ $('modalContent').innerHTML=html;
+ $('modal').classList.remove('hidden');
+
+ $('btnClose').onclick=cerrarModal;
+
+ if(autorizado&&!cerrado) {
+  montarComprobante();
+
+  $('btnSaveState').onclick=()=>{
+   gestionar(id);
+  };
+ }
+}
+
+async function gestionar(id) {
+ const boton=$('btnSaveState');
+
+ boton.disabled=true;
+ boton.textContent='Guardando gestión...';
+
+ try {
+  const estado=$('newState').value;
+  const observacion=$('obs').value;
+
+  const solicitud=(S.datos.solicitudes||[])
+   .find(r=>r.ID===id);
+
+  if(estado==='REGISTRADO' &&
+     !S.archivo &&
+     !solicitud.ComprobanteID) {
+   throw Error(
+    'Adjunta un comprobante antes de confirmar.'
+   );
+  }
+
+  if(S.archivo) {
+   const resultado=await api(
+    'adjuntarComprobante',
+    S.token,
+    id,
+    S.archivo.name,
+    S.archivo.type,
+    await archivoBase64(S.archivo)
+   );
+
+   if(!resultado||!resultado.ok) {
+    throw Error(
+     'No se confirmó la carga del comprobante.'
+    );
+   }
+  }
+
+  const resultado=await api(
+   'cambiarEstado',
+   S.token,
+   id,
+   estado,
+   observacion
+  );
+
+  if(!resultado||!resultado.ok) {
+   throw Error(
+    'No se confirmó el cambio de estado.'
+   );
+  }
+
+  cerrarModal();
+  await refrescar();
+
+  aviso('Gestión guardada correctamente.');
+
+ }catch(e) {
+  aviso(e.message);
+  boton.disabled=false;
+  boton.textContent='Guardar gestión';
+ }
+}
+
+/* =====================================================
+   ALERTA EXTRAORDINARIA
+   ===================================================== */
+
+async function alertaExtraordinaria() {
+ if(S.perfil!=='SUPERVISOR')return;
+
+ try {
+  const r=await api(
+   'solicitarActualizacionGlobal',
+   S.token
+  );
+
+  if(r&&r.ok) {
+   await refrescar();
+   aviso(
+    'Alerta de actualización enviada a todos.'
+   );
+  }
+
+ }catch(e) {
+  aviso(e.message);
+ }
+}
+
+/* =====================================================
+   INICIALIZACIÓN
+   ===================================================== */
+
+function iniciar() {
+ iniciarTema();
+
+ $('themeToggle').addEventListener(
+  'click',()=>{
+   aplicarTema(
+    document.body.classList.contains('light')
+     ?'oscuro':'claro'
+   );
+  }
+ );
+
+ $('loginForm').addEventListener(
+  'submit',login
+ );
+
+ $('btnSalir').addEventListener(
+  'click',salir
+ );
+
+ document.querySelectorAll('.nav')
+  .forEach(b=>{
+   b.addEventListener(
+    'click',
+    ()=>page(b.dataset.page)
+   );
+  });
+
+ $('formRequest').addEventListener(
+  'submit',enviar
+ );
+
+ $('doc').addEventListener('input',()=>{
+  $('doc').value=formatearDUI(
+   $('doc').value
+  );
+ });
+
+ $('date').addEventListener('change',()=>{
+  S.fecha=$('date').value;
+  $('filterDate').value=S.fecha;
+  refrescar();
+ });
+
+ $('filterDate').addEventListener('change',()=>{
+  S.fecha=$('filterDate').value;
+  refrescar();
+ });
+
+ $('btnAvailability').addEventListener(
+  'click',()=>page('agenda')
+ );
+
+ $('btnGoUpload').addEventListener(
+  'click',()=>page('actualizacion')
+ );
+
+ $('btnUrgent').addEventListener(
+  'click',alertaExtraordinaria
+ );
+
+ $('btnRefresh').addEventListener(
+  'click',refrescar
+ );
+
+ $('btnCloseError').addEventListener(
+  'click',cerrarError
+ );
+
+ $('modal').addEventListener('click',ev=>{
+  if(ev.target===$('modal')) {
+   cerrarModal();
+  }
+ });
+
+ montarExcel();
+
+ const nombres=[
+  'Medicina Familiar - Diabetología',
+  'Gastroenterología',
+  'Medicina Familiar',
+  'Cuidados Paliativos',
+  'Nefrología',
+  'Cirugía Vascular Periférica',
+  'Fisiatría',
+  'Endocrinología',
+  'Urología',
+  'Neurología',
+  'Neurocirugía',
+  'Cirugía General',
+  'Medicina Interna',
+  'Nutriología',
+  'Nutriología-Diabetología',
+  'Otorrinolaringología',
+  'Cardiología - Estudios Especiales',
+  'Ortopedia y Traumatología',
+  'Cardiología',
+  'Nutrición-PE',
+  'Ginecología',
+  'Oftalmología'
+ ];
+
+ $('esp').innerHTML=
+  '<option value="">Seleccione especialidad</option>'+
+  nombres.map(n=>`
+   <option value="${esc(n)}">
+    ${esc(n)}
+   </option>
+  `).join('');
+
+ limpiarFormulario();
+
+ reloj();
+
+ setInterval(reloj,1000);
+}
+
+if(document.readyState==='loading') {
+ document.addEventListener(
+  'DOMContentLoaded',
+  iniciar
+ );
+} else {
+ iniciar();
+}
+</script>
+
+</body>
+</html>
