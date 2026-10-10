@@ -324,8 +324,9 @@ function dui3_(valor) {
   const digitos = t.replace(/\D/g, '');
 
   // Excel guarda el DUI como número y pierde los ceros
-  // iniciales (00916089-9 -> 9160899): se completan.
-  const numerico = /^\d{7,8}$/.test(t);
+  // iniciales (00916089-9 -> 9160899, 000969393 -> 969393):
+  // se completan hasta 9 dígitos.
+  const numerico = /^\d{5,8}$/.test(t);
 
   const nueve = numerico
     ? digitos.padStart(9, '0')
