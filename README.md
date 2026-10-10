@@ -35,4 +35,5 @@ Instalación y actualización: `entregables/0_GUIA_INSTALACION.txt`.
 - Mismo día: no se agenda sobrecupo, salvo que el médico lo exija (solicitud médica).
 - Fechas bloqueadas: 24–27 y 31 dic 2026; 1–3 ene 2027.
 - DUI: 9 dígitos; los de 8 dígitos de la base se completan con un cero inicial.
+- Solo supervisión carga la agenda del día y la base de pacientes; los técnicos solo consultan.
 - Asistencia: se marca el día de la cita o después; supervisión descarga el reporte en Excel.
