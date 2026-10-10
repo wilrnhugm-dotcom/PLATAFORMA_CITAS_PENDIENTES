@@ -1,0 +1,130 @@
+==========================================================
+ UGM 2026 · DOS PLATAFORMAS (TÉCNICOS Y SUPERVISIÓN)
+ Nuevo Hospital Rosales · Unidad de Gestión Médica
+==========================================================
+
+ARCHIVOS (5) - los nombres deben ser EXACTOS
+----------------------------------------------------------
+ 1_CODIGO_GS.txt       ->  Código.gs     (Script)
+ 2_TECNICO_HTML.txt    ->  Tecnico       (HTML)
+ 3_SUPERVISOR_HTML.txt ->  Supervisor    (HTML)
+ 4_ESTILOS_HTML.txt    ->  Estilos       (HTML)
+ 5_COMUN_HTML.txt      ->  Comun         (HTML)
+
+ Sin tildes ni ".html" en los nombres: Tecnico, Supervisor,
+ Estilos, Comun. El archivo "Index" ya no se usa: bórralo.
+
+CLAVES (sin espacios)
+----------------------------------------------------------
+ Técnicos:     UGM2026
+ Supervisión:  SUP1
+ Técnico autorizado: HNRUGM$ (entra a ambas)
+
+==========================================================
+ ACTUALIZAR EL PROYECTO QUE YA INSTALASTE
+ (hoja "Citas Sábado y Domingo")
+==========================================================
+1. Abre la hoja > Extensiones > Apps Script.
+2. Código.gs: Ctrl+A, borrar, pegar 1_CODIGO_GS.txt.
+3. Archivo "Index": tres puntos > Eliminar.
+4. "+" > HTML > nombre  Tecnico     > pegar 2_TECNICO_HTML.txt
+   "+" > HTML > nombre  Supervisor  > pegar 3_SUPERVISOR_HTML.txt
+   "+" > HTML > nombre  Estilos     > pegar 4_ESTILOS_HTML.txt
+   "+" > HTML > nombre  Comun       > pegar 5_COMUN_HTML.txt
+5. Guardar todo (Ctrl+S).
+6. Elegir la función  instalarUGM  > ▶ Ejecutar.
+   Agrega la hoja ASISTENCIA y las columnas nuevas de
+   SOBRECUPOS (Tipo, TicketFrente, TicketReverso).
+   NO borra datos. Si pide permisos (Google Drive para
+   guardar los tickets): Permitir.
+7. Implementar > Gestionar implementaciones > ✏️ Editar >
+   Versión: Nueva versión > Implementar.
+   (Así la URL no cambia.)
+
+==========================================================
+ ENLACES
+==========================================================
+ Técnicos:     URL/exec            (o URL/exec?vista=tecnico)
+ Supervisión:  URL/exec?vista=supervisor
+
+ Cada enlace abre SU plataforma. Con la clave equivocada
+ el sistema indica qué enlace usar.
+
+==========================================================
+ ¿QUÉ ARCHIVO SE CARGA EN CADA LUGAR?
+==========================================================
+ AGENDA DEL DÍA  (técnicos y supervisión)
+   -> El "Reporte de Citas" que se descarga CADA DÍA del
+      sistema hospitalario (Reporte_Citas_AAAA-MM-DD....xlsx).
+   -> Alimenta Consultas del día y la asistencia.
+
+ BASE DE PACIENTES  (solo supervisión)
+   -> La base de pacientes que envía REPORTERÍA (nombre y
+      DUI). Si llega en Google Sheets: Archivo > Descargar >
+      Microsoft Excel (.xlsx), o copiar las celdas y pegar.
+   -> Alimenta el buscador / autocompletado por DUI.
+   -> Solo cuando Reportería envía una base nueva.
+
+ Si se sube el archivo en el lugar equivocado, el sistema
+ lo detecta y muestra "ARCHIVO EQUIVOCADO".
+
+==========================================================
+ QUÉ HACE CADA PLATAFORMA
+==========================================================
+TÉCNICOS
+ - Consultas del día: pestañas por especialidad, buscador
+   por nombre/DUI y botones Asistió / No asistió.
+ - Solicitud de sobrecupo (formulario obligatorio):
+   * Sábado y domingo. Cupos por especialidad y día =
+     límite de la especialidad (10; Cuidados Paliativos 5;
+     Nutrición-PE 7). Se muestra "X de 10 disponibles".
+   * Al agendar el último (10.º) sale un aviso de ÚLTIMO
+     CUPO. Desde el 11.º el sistema BLOQUEA por restricción
+     médica, para cualquier técnico.
+   * Ticket SIEMPRE obligatorio: frente y reverso sellado
+     y firmado por el médico.
+   * Entre semana: ALERTA con el día que se agenda; solo si
+     el médico lo indicó.
+   * Para el MISMO DÍA (hoy): no se agenda, salvo que el
+     médico lo exija (misma alerta y solicitud médica).
+   * Fechas bloqueadas de diciembre y enero: nunca.
+ - Mis solicitudes, Buscar paciente, Actualizar agenda.
+
+SUPERVISIÓN
+ - Centro de control en vivo: técnicos en línea, gráficas
+   de cupos, asistencia, estados y actividad por hora.
+ - Bandeja de solicitudes: todo llega "Sin verificar".
+   Alerta al entrar y aviso permanente con la cantidad
+   pendiente (en rojo si son urgentes: cita en 2 días o
+   más de 2 horas esperando). Procesar = Agendar, Enviar a
+   validación de otra área, Observar, Rechazar o Anular.
+   Procesar NO libera cupos; solo Rechazar, Anular o
+   "Liberar cupo" (de un agendado) lo hacen.
+ - Cupos y límites: cambiar el límite de una especialidad
+   solo para una fecha (disponibilidad médica del día) o
+   el límite general de sábados/domingos.
+ - Asistencia: resumen por especialidad y botón
+   "Descargar reporte Excel" para el reporte del día.
+ - Personal en línea: qué hace cada técnico y cerrar
+   sesiones de forma remota.
+ - Disponibilidad, Base de pacientes, Agenda, Auditoría.
+
+==========================================================
+ INSTALACIÓN DESDE CERO (otra hoja nueva)
+==========================================================
+ sheets.new > Extensiones > Apps Script > crear los 5
+ archivos como arriba > ejecutar instalarUGM > Implementar
+ > Nueva implementación > Aplicación web > Ejecutar como
+ "Yo" > copiar URL.
+
+==========================================================
+ SI ALGO FALLA
+==========================================================
+ - Pantalla en blanco o "No se encontró el archivo HTML":
+   revisar que los nombres sean exactos (Tecnico,
+   Supervisor, Estilos, Comun).
+ - "Clave incorrecta": UGM2026 / SUP1, sin espacios.
+ - "No cuentas con el permiso...": Ejecutar como "Yo" y
+   ejecutar diagnosticoUGM para revisar.
+ - Cambios que no se ven: falta publicar "Nueva versión".
+==========================================================
