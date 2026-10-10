@@ -856,6 +856,16 @@ function iniciales(nombre) {
   .toUpperCase();
 }
 
+// "martes, 13 de octubre de 2026"
+function fechaLarga(f) {
+ const d=new Date(String(f)+'T12:00:00Z');
+ if(isNaN(d.getTime()))return String(f||'');
+ return d.toLocaleDateString('es-SV',{
+  weekday:'long',day:'numeric',month:'long',
+  year:'numeric',timeZone:'UTC'
+ });
+}
+
 function horaCorta(iso) {
  const d=new Date(iso);
  if(isNaN(d.getTime()))return '';

@@ -407,7 +407,7 @@
        <th>Especialidad</th>
        <th>Activas</th>
        <th>Pendientes</th>
-       <th>Límite</th>
+       <th>Capacidad (citas + sobrecupo)</th>
        <th>Generados</th>
        <th>Ocupados</th>
        <th>Disponibles</th>
@@ -770,7 +770,7 @@ function pintarCupos(animar) {
 
  cont.innerHTML=filas.map(r=>`
   <div class="bar-row" data-e="${esc(r.especialidad)}"
-   title="${esc(r.especialidad)}: ${r.ocupados} ocupados de ${r.generados} autorizados · ${r.activas} pacientes activos">
+   title="${esc(r.especialidad)}: ${r.ocupados} ocupados de ${r.generados} autorizados · ${r.activas} pacientes activos · límite ${r.limite} + ${r.capacidad-r.limite}">
    <span class="lbl">${esc(r.especialidad)}</span>
    <div class="track">
     <span class="gen" data-v="${r.generados/max}"></span>
@@ -1403,7 +1403,7 @@ function pintarTablaCupos() {
    <td>${esc(r.especialidad)}</td>
    <td>${r.activas}</td>
    <td>${r.pendientes}</td>
-   <td>${r.limite==null?'N/A':r.limite}</td>
+   <td>${r.limite==null?'N/A':r.limite+' + '+(r.capacidad-r.limite)+' = '+r.capacidad}</td>
    <td>${r.generados}</td>
    <td>${r.ocupados}</td>
    <td style="color:${r.disponibles>0?'var(--green)':'var(--red)'}">

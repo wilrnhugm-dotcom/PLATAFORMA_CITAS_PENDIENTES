@@ -224,10 +224,11 @@
   <div class="panel glass">
    <h2><span>✚</span> Solicitud de sobrecupo</h2>
    <p class="desc">
-    Sobrecupos únicamente <b>sábado y domingo</b>. Otro día
-    solo con <b>solicitud médica</b>: adjunta el ticket de
-    la consulta (frente) y el reverso sellado y firmado por
-    el médico.
+    Sobrecupos <b>sábado y domingo</b>: máximo <b>1 sobrecupo
+    por especialidad y día</b> (límite de citas + 1; por
+    ejemplo 10 + 1 = 11). Entre semana solo si el
+    <b>médico lo indica</b>. Siempre adjunta el ticket de la
+    consulta: frente y reverso sellado y firmado.
    </p>
 
    <div class="cupo-box" id="cupoBox">
@@ -296,9 +297,8 @@
      </div>
 
      <div class="field full">
-      <label class="req-label" id="ticketLabel">Ticket de la consulta
+      <label>Ticket de la consulta (frente y reverso sellado y firmado)
        <span class="required">*</span>
-       <span class="muted small" id="ticketOpc">(opcional en fin de semana)</span>
       </label>
       <div class="tickets">
        <div class="ticket" id="tFrente" role="button" tabindex="0">
@@ -969,8 +969,6 @@ function revisarFecha() {
   $('medico').checked=false;
  }
 
- $('ticketLabel').classList.toggle('on',mostrarMedico);
- $('ticketOpc').classList.toggle('hidden',mostrarMedico);
 
  if(!S.guardando) {
   $('btnRequest').disabled=Boolean(bloqueada||pasada||
@@ -1046,13 +1044,84 @@ async function pintarCupos() {
  }
 
  poner(fila.disponibles,
-  '<b>Cupos disponibles</b> de '+fila.generados+
-  ' autorizados · '+fila.activas+' pacientes activos · '+
-  fila.ocupados+' ocupados'+
+  (fila.disponibles>0?'<b>Sobrecupo disponible</b>':
+   '<b>Sin sobrecupo disponible</b>')+' · Límite <b>'+fila.limite+
+  ' citas + '+(fila.capacidad-fila.limite)+' sobrecupo = '+
+  fila.capacidad+'</b> · '+fila.activas+' pacientes activos · '+
+  fila.ocupados+' ocupado(s) de '+fila.generados+' autorizado(s)'+
+  (fila.generados?'':'<br>Se habilita 1 sobrecupo al llegar a 10 '+
+   'pacientes activos.')+
   (r.agenda&&!r.agenda.vigente
    ?'<br><span style="color:var(--yellow)">Actualiza la agenda '+
     'antes de enviar (vigencia 30 min).</span>':''),
   fila.disponibles>0?'':'sin');
+}
+
+/* ---------- Alerta de día entre semana ---------- */
+
+function dialogo({titulo,html,ok,cancelar}) {
+ return new Promise(resolver=>{
+  $('modalContent').innerHTML=`
+   <div class="aviso-dia">
+    <div class="aviso-ico">⚕</div>
+    <h2>${titulo}</h2>
+    ${html}
+    <div class="buttons">
+     <button class="btn" id="dlgNo" type="button">${cancelar}</button>
+     <button class="btn primary" id="dlgSi" type="button">${ok}</button>
+    </div>
+   </div>`;
+
+  $('modal').classList.remove('hidden');
+  MOV.modal();
+
+  if(MOV.ok)gsap.fromTo('.aviso-ico',{scale:.4,rotate:-30},
+   {scale:1,rotate:0,duration:.7,ease:'elastic.out(1,.45)'});
+
+  const fin=v=>{
+   $('modal').classList.add('hidden');
+   $('modalContent').innerHTML='';
+   resolver(v);
+  };
+
+  $('dlgSi').onclick=()=>fin(true);
+  $('dlgNo').onclick=()=>fin(false);
+  $('dlgSi').focus();
+ });
+}
+
+// Al elegir un día entre semana se informa qué día se
+// está agendando y que solo procede si el médico lo indicó.
+async function avisoEntreSemana() {
+ const f=$('date').value;
+
+ if(!f||esFinDeSemana(f)||fechaBloqueada(f)||
+    (T.datos&&f<T.datos.hoy))return;
+
+ const ok=await dialogo({
+  titulo:'SOBRECUPO EN DÍA DE SEMANA',
+  html:`<p>Estás agendando un sobrecupo para el</p>
+   <div class="dia-grande">${esc(fechaLarga(f))}</div>
+   <p>Los sobrecupos se agendan <b>sábado y domingo</b>.</p>
+   <ul class="aviso-lista">
+    <li>Continúa solo si el <b>médico indicó</b> esta fecha.</li>
+    <li>Adjunta el ticket: <b>frente</b> y <b>reverso sellado
+     y firmado</b> por el médico.</li>
+    <li>No se calculan cupos: queda <b>pendiente de aprobación</b>
+     de supervisión.</li>
+   </ul>`,
+  ok:'El médico lo indicó · continuar',
+  cancelar:'Cambiar fecha'
+ });
+
+ if(ok) {
+  $('medico').checked=true;
+ } else {
+  $('date').value='';
+  $('date').focus();
+ }
+
+ revisarFecha();
 }
 
 /* ---------- Tickets ---------- */
@@ -1190,10 +1259,24 @@ async function enviar(ev) {
   return;
  }
 
- if(entreSemana&&(!T.tickets.frente||!T.tickets.reverso)) {
+ if(!T.tickets.frente||!T.tickets.reverso) {
   mostrarError('TICKET_REQUERIDO|Adjunta el ticket de la '+
    'consulta: frente y reverso sellado y firmado por el médico.');
   return;
+ }
+
+ if(entreSemana) {
+  const ok=await dialogo({
+   titulo:'CONFIRMAR SOBRECUPO ENTRE SEMANA',
+   html:`<div class="dia-grande">${esc(fechaLarga(datos.fecha))}</div>
+    <p><b>${esc(datos.nombres)}</b> · DUI ${esc(datos.documento)}<br>
+    ${esc(datos.especialidad)} · indicado por <b>${esc(datos.solicitadoPor)}</b></p>
+    <p>La solicitud quedará <b>pendiente de aprobación</b>
+    de supervisión.</p>`,
+   ok:'Confirmar y enviar',
+   cancelar:'Revisar'
+  });
+  if(!ok)return;
  }
 
  const boton=$('btnRequest');
@@ -1337,7 +1420,10 @@ function iniciar() {
  $('formRequest').addEventListener('submit',enviar);
  $('btnLimpiar').addEventListener('click',limpiarFormulario);
  $('esp').addEventListener('change',actualizarCupos);
- $('date').addEventListener('change',revisarFecha);
+ $('date').addEventListener('change',()=>{
+  revisarFecha();
+  avisoEntreSemana();
+ });
  $('medico').addEventListener('change',revisarFecha);
 
  $('doc').addEventListener('input',()=>{

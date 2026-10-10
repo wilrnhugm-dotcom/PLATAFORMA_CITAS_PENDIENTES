@@ -19,6 +19,8 @@
  *
  * REGLAS:
  * - 1 sobrecupo por 10 pacientes activos únicos.
+ * - DISPONIBILIDAD.Limite = citas por especialidad y día.
+ *   Máximo MAX_SOBRECUPOS_DIA (1) adicional: 10 + 1 = 11.
  * - Redondeo hacia abajo.
  * - Sábado y domingo exclusivamente.
  * - Máximos definidos por especialidad y día.
@@ -69,6 +71,10 @@ const UGM3 = {
   LOTE_PACIENTES: 5000,
   PAGINA_PACIENTES: 20000,
   MAX_RESULTADOS: 20,
+
+  // Sobrecupos máximos por especialidad y día de fin de
+  // semana, por encima del límite de citas (10 + 1 = 11).
+  MAX_SOBRECUPOS_DIA: 1,
 
   SABADO: {
     'Medicina Familiar - Diabetología': 10,
@@ -1372,7 +1378,7 @@ function calcular3_(fecha,agenda,solicitudes) {
     const bloqueada=bloqueada3_(fecha);
 
     const autorizados=limite===null || bloqueada
-      ? 0 : Math.min(base,limite);
+      ? 0 : Math.min(base,UGM3.MAX_SOBRECUPOS_DIA);
 
     const ocupados=ocupados3_(
       solicitudes,fecha,especialidad
@@ -1383,6 +1389,8 @@ function calcular3_(fecha,agenda,solicitudes) {
       activas:pacientes.activas,
       pendientes:pacientes.pendientes,
       limite,
+      capacidad:limite===null
+        ? null : limite+UGM3.MAX_SOBRECUPOS_DIA,
       generados:autorizados,
       ocupados,
       disponibles:Math.max(
@@ -1609,12 +1617,12 @@ function crearSolicitud(token,datos,archivos) {
   const frente=ticket3_(archivos && archivos.frente);
   const reverso=ticket3_(archivos && archivos.reverso);
 
-  if (medico && (!frente || !reverso)) {
+  // El ticket es obligatorio en toda solicitud.
+  if (!frente || !reverso) {
     fallo3_(
       'TICKET_REQUERIDO',
-      'La solicitud médica requiere el ticket de la '+
-      'consulta: frente y reverso sellado y firmado '+
-      'por el médico.'
+      'Adjunta el ticket de la consulta: frente y '+
+      'reverso sellado y firmado por el médico.'
     );
   }
 
@@ -1692,9 +1700,10 @@ function crearSolicitud(token,datos,archivos) {
         const pacientes=contarAgenda3_(
           agenda,fecha,especialidad
         );
+        const limiteCitas=limite3_(fecha,especialidad);
         const generados=Math.min(
           Math.floor(pacientes.activas/10),
-          limite3_(fecha,especialidad)
+          UGM3.MAX_SOBRECUPOS_DIA
         );
         const ocupados=ocupados3_(
           existentes,fecha,especialidad
@@ -1706,7 +1715,10 @@ function crearSolicitud(token,datos,archivos) {
             'No hay cupos disponibles para '+
             especialidad+' el '+fecha+'. '+
             'Pacientes activos: '+pacientes.activas+
-            '. Sobrecupos autorizados: '+generados+
+            '. Límite: '+limiteCitas+' citas + '+
+            UGM3.MAX_SOBRECUPOS_DIA+' sobrecupo ('+
+            (limiteCitas+UGM3.MAX_SOBRECUPOS_DIA)+
+            ' en total). Sobrecupos autorizados: '+generados+
             '. Ocupados: '+ocupados+'.'
           );
         }

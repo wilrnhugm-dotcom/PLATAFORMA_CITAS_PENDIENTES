@@ -56,10 +56,16 @@ CLAVES (sin espacios)
 TÉCNICOS
  - Consultas del día: pestañas por especialidad, buscador
    por nombre/DUI y botones Asistió / No asistió.
- - Solicitud de sobrecupo: sábado y domingo según cupos.
-   Otro día solo como "Solicitud médica" con ticket
-   (frente + reverso sellado y firmado). Fechas bloqueadas
-   de diciembre y enero: nunca.
+ - Solicitud de sobrecupo (formulario obligatorio):
+   * Sábado y domingo. Máximo 1 sobrecupo por especialidad
+     y día: límite de citas + 1 (10 + 1 = 11). El
+     sobrecupo se habilita con 10 pacientes activos.
+   * Ticket SIEMPRE obligatorio: frente y reverso sellado
+     y firmado por el médico.
+   * Entre semana: sale una ALERTA con el día que se está
+     agendando; solo continúa si el médico lo indicó y
+     queda pendiente de aprobación de supervisión.
+   * Fechas bloqueadas de diciembre y enero: nunca.
  - Mis solicitudes, Buscar paciente, Actualizar agenda.
 
 SUPERVISIÓN

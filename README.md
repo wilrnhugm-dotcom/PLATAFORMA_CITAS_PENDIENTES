@@ -27,8 +27,9 @@ Instalación y actualización: `entregables/0_GUIA_INSTALACION.txt`.
 
 ## Reglas
 
-- Sobrecupos: sábado y domingo, 1 por cada 10 pacientes activos, con límite por especialidad.
-- Otro día: solo solicitud médica con ticket (frente y reverso sellado y firmado), aprobación de supervisión.
+- Sobrecupos: sábado y domingo, 1 por cada 10 pacientes activos, máximo `UGM3.MAX_SOBRECUPOS_DIA` (1) por especialidad y día: límite de citas + 1 (10 + 1 = 11).
+- Ticket obligatorio en toda solicitud (frente y reverso sellado y firmado).
+- Otro día: solo si el médico lo indica; alerta con el día agendado, confirmación y aprobación de supervisión.
 - Fechas bloqueadas: 24–27 y 31 dic 2026; 1–3 ene 2027 (`UGM3.FECHAS_BLOQUEADAS` y `Comun.html`).
 - DUI: 9 dígitos; los de 8 dígitos de la base se completan con un cero inicial.
 - Asistencia: se marca el día de la cita o después; supervisión descarga el reporte en Excel.
