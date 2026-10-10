@@ -193,7 +193,7 @@ const MOV=(()=>{
      clearProps:limpiar},'-=.3')
     .from('.main',{y:18,opacity:0,duration:.45,
      clearProps:limpiar},'-=.45')
-    .from('#kpiContainer .kpi:not(.hidden)',{
+    .from('#kpiContainer .kpi:not(.hidden), .page:not(.hidden) .kpi',{
      y:16,opacity:0,scale:.97,stagger:.06,
      duration:.42,clearProps:limpiar},'-=.28')
     .from('.page:not(.hidden) .panel, .page:not(.hidden) .card',{
@@ -308,7 +308,7 @@ function aplicarTema(t) {
 
  document.body.classList.toggle('light',claro);
 
- $('themeToggle').textContent=claro?'☾':'☀';
+ $('themeToggle').innerHTML=icono(claro?'luna':'sol');
  MOV.giro($('themeToggle'));
 
  try {
@@ -672,6 +672,72 @@ async function archivoBase64(archivo) {
 }
 
 
+
+/* =====================================================
+   ICONOGRAFÍA (SVG de línea, sin emojis)
+   ===================================================== */
+
+const ICONOS_SVG={
+ lista:'<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4M12 16h4M8 11h.01M8 16h.01"/>',
+ agregar:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M12 18v-6M9 15h6"/>',
+ bandeja:'<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
+ buscar:'<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
+ subir:'<path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2"/><path d="M12 12v9M8 16l4-4 4 4"/>',
+ calendario:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+ calendarioCheck:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M9 16l2 2 4-4"/>',
+ usuarios:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+ paciente:'<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+ asistio:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m16 11 2 2 4-4"/>',
+ noAsistio:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m17 8 5 5M22 8l-5 5"/>',
+ reloj:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+ pulso:'<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+ control:'<path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/>',
+ ticket:'<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6M16 12H8M13 16H8"/>',
+ sello:'<path d="M5 22h14"/><path d="M19.27 13.73A2.5 2.5 0 0 0 17.5 13h-11A2.5 2.5 0 0 0 4 15.5V17a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-1.5c0-.66-.26-1.3-.73-1.77Z"/><path d="M14 13V8.5C14 7 15 7 15 5a3 3 0 0 0-6 0c0 2 1 2 1 3.5V13"/>',
+ firma:'<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+ estetoscopio:'<path d="M4.8 2.3A.3.3 0 1 0 5 2H4a2 2 0 0 0-2 2v5a6 6 0 0 0 12 0V4a2 2 0 0 0-2-2h-1a.2.2 0 1 0 .3.3"/><path d="M8 15v1a6 6 0 0 0 12 0v-4"/><circle cx="20" cy="10" r="2"/>',
+ alerta:'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4M12 17h.01"/>',
+ bloqueo:'<circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/>',
+ info:'<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>',
+ campana:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+ apagar:'<path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/>',
+ base:'<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>',
+ grafica:'<path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/>',
+ check:'<path d="M20 6 9 17l-5-5"/>',
+ x:'<path d="M18 6 6 18M6 6l12 12"/>',
+ descargar:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/>',
+ refrescar:'<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>',
+ sol:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
+ luna:'<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+ historial:'<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5M12 7v5l4 2"/>',
+ deshacer:'<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
+ ajustes:'<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
+ archivo:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>',
+ entrar:'<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5M15 12H3"/>',
+ salir:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/>',
+ intercambio:'<path d="M8 3 4 7l4 4M4 7h16M16 21l4-4-4-4M20 17H4"/>',
+ clip:'<path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
+ enviar:'<path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>',
+ cruz:'<path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"/>',
+ dui:'<rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="8" cy="11" r="2"/><path d="M14 9h4M14 13h4M5 16.5c.6-1.2 1.7-1.8 3-1.8s2.4.6 3 1.8"/>',
+ imagen:'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21"/>'
+};
+
+function icono(nombre,clase) {
+ const d=ICONOS_SVG[nombre]||ICONOS_SVG.info;
+ return '<svg class="ico-svg'+(clase?' '+clase:'')+'" viewBox="0 0 24 24" '+
+  'aria-hidden="true">'+d+'</svg>';
+}
+
+// Convierte <i data-ico="nombre"></i> en su ícono.
+function pintarIconos(raiz) {
+ (raiz||document).querySelectorAll('[data-ico]').forEach(el=>{
+  if(el.dataset.icoListo===el.dataset.ico)return;
+  el.innerHTML=icono(el.dataset.ico);
+  el.dataset.icoListo=el.dataset.ico;
+ });
+}
+
 /* =====================================================
    SESIÓN COMPARTIDA
    ===================================================== */
@@ -844,6 +910,136 @@ Object.assign(MOV,{
 document.addEventListener('pointerdown',ev=>MOV.onda(ev));
 
 /* =====================================================
+   SCROLLTRIGGER: aparición al hacer scroll, encabezado,
+   barra de progreso y paralaje suave del fondo.
+   ===================================================== */
+
+const ST=MOV.ok&&window.ScrollTrigger?ScrollTrigger:null;
+
+if(MOV.ok) {
+ gsap.ticker.lagSmoothing(500,33);
+ if(ST)gsap.registerPlugin(ScrollTrigger);
+}
+
+Object.assign(MOV,{
+ // Aparición escalonada a medida que entran en pantalla.
+ revelar(elementos) {
+  const lista=Array.from(elementos||[]).filter(el=>
+   el&&!el.dataset.revelado&&el.offsetParent!==null
+  );
+
+  if(!lista.length)return;
+
+  lista.forEach(el=>{el.dataset.revelado='1';});
+
+  if(!MOV.ok)return;
+
+  if(!ST) {
+   MOV.escalonar(lista,lista.length);
+   return;
+  }
+
+  gsap.set(lista,{opacity:0,y:26});
+
+  ScrollTrigger.batch(lista,{
+   start:'top 94%',
+   once:true,
+   onEnter:lote=>gsap.to(lote,{
+    opacity:1,y:0,duration:.6,stagger:.07,
+    ease:'power3.out',overwrite:true,
+    clearProps:'transform,opacity'
+   })
+  });
+
+  // Seguridad: nada queda invisible si no hubo scroll.
+  setTimeout(()=>{
+   lista.forEach(el=>{
+    if(el.getBoundingClientRect().top<innerHeight&&
+       getComputedStyle(el).opacity==='0') {
+     gsap.to(el,{opacity:1,y:0,duration:.4,
+      clearProps:'transform,opacity'});
+    }
+   });
+  },1800);
+ },
+
+ // Reinicia las apariciones al cambiar de sección.
+ reiniciarRevelado(raiz) {
+  (raiz||document).querySelectorAll('[data-revelado]').forEach(el=>{
+   delete el.dataset.revelado;
+   if(MOV.ok)gsap.set(el,{clearProps:'transform,opacity'});
+  });
+ },
+
+ // Ejecuta fn cuando el elemento se vuelve visible.
+ alVer(el,fn) {
+  if(!ST||!el) {fn();return;}
+  const r=el.getBoundingClientRect();
+  if(r.top<innerHeight*.95&&r.bottom>0) {fn();return;}
+  ScrollTrigger.create({trigger:el,start:'top 92%',once:true,onEnter:fn});
+ },
+
+ // Número que entra deslizándose al cambiar.
+ cifra(el) {
+  if(!MOV.ok||!el)return;
+  gsap.fromTo(el,{yPercent:-45,opacity:0},{
+   yPercent:0,opacity:1,duration:.45,ease:'back.out(2.2)',
+   clearProps:'transform,opacity'
+  });
+ },
+
+ sacudir(el) {
+  if(!MOV.ok||!el)return;
+  gsap.fromTo(el,{x:-8},{x:0,duration:.7,ease:'elastic.out(1,.28)',
+   clearProps:'transform'});
+ },
+
+ // Encabezado, barra de progreso y fondo con el scroll.
+ desplazamiento() {
+  // Encabezado compacto (simple y sin depender de GSAP).
+  let compacto=false;
+  window.addEventListener('scroll',()=>{
+   const c=scrollY>12;
+   if(c===compacto)return;
+   compacto=c;
+   document.querySelectorAll('.top')
+    .forEach(t=>t.classList.toggle('scrolled',c));
+  },{passive:true});
+
+  if(!ST)return;
+
+  const barra=document.querySelector('.scroll-progress span');
+
+  if(barra) {
+   gsap.to(barra,{scaleX:1,ease:'none',
+    scrollTrigger:{start:0,end:'max',scrub:.4}});
+  }
+
+  gsap.to('.bg-orbs',{y:-140,ease:'none',
+   scrollTrigger:{start:0,end:'max',scrub:1.2}});
+ },
+
+ refrescarScroll() {
+  if(ST)requestAnimationFrame(()=>ScrollTrigger.refresh());
+ },
+
+ // Recalcula ScrollTrigger cuando cambia el alto de la
+ // página (datos nuevos, cambio de sección).
+ vigilarAlto() {
+  if(!ST||!window.ResizeObserver)return;
+  let alto=0;
+  let espera=null;
+  new ResizeObserver(()=>{
+   const h=document.documentElement.scrollHeight;
+   if(Math.abs(h-alto)<4)return;
+   alto=h;
+   clearTimeout(espera);
+   espera=setTimeout(()=>ScrollTrigger.refresh(),120);
+  }).observe(document.body);
+ }
+});
+
+/* =====================================================
    UTILIDADES
    ===================================================== */
 
@@ -975,11 +1171,11 @@ async function prepararArchivo(archivo) {
    ALERTAS CON CONFIRMACIÓN
    ===================================================== */
 
-function dialogo({titulo,html,ok,cancelar,tipo,icono}) {
+function dialogo({titulo,html,ok,cancelar,tipo,icono:icono_}) {
  return new Promise(resolver=>{
   $('modalContent').innerHTML=`
    <div class="aviso-dia ${tipo||''}">
-    <div class="aviso-ico">${icono||'⚕'}</div>
+    <div class="aviso-ico">${icono(icono_||'estetoscopio')}</div>
     <h2>${titulo}</h2>
     ${html}
     <div class="buttons">
@@ -1246,9 +1442,13 @@ function montarAcceso(vista,alEntrar,alSalir) {
    ===================================================== */
 
 function mostrarPagina(n,titulo,sinAnimar) {
+ MOV.reiniciarRevelado($('app'));
+
  document.querySelectorAll('.page').forEach(el=>{
   el.classList.toggle('hidden',el.id!==n);
  });
+
+ if(!sinAnimar)window.scrollTo({top:0,behavior:'smooth'});
 
  let activa=null;
 
@@ -1265,10 +1465,14 @@ function mostrarPagina(n,titulo,sinAnimar) {
 
  if(!sinAnimar) {
   MOV.pagina($(n));
-  MOV.escalonar(
-   $(n).querySelectorAll('.panel, .card'),8
-  );
+  if(MOV.ok)gsap.fromTo('#title',{y:14,opacity:0},
+   {y:0,opacity:1,duration:.45,clearProps:'transform,opacity'});
+  MOV.revelar($(n).querySelectorAll(
+   '.kpi, .panel, .card, .cola, .notice'
+  ));
  }
+
+ MOV.refrescarScroll();
 }
 
 function montarComun() {
@@ -1286,9 +1490,13 @@ function montarComun() {
  reloj();
  setInterval(reloj,1000);
 
+ pintarIconos();
+
  MOV.login();
  MOV.fondo();
  MOV.brillo();
+ MOV.desplazamiento();
+ MOV.vigilarAlto();
 
  window.addEventListener('resize',()=>{
   MOV.tinta(document.querySelector('.nav.active'));

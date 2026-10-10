@@ -658,7 +658,7 @@ body.light .orb{opacity:.16}
 .kpi:hover,.card:hover{transform:translateY(-3px)}
 
 /* Indicador del menú */
-.sidebar.has-ink{position:relative}
+.sidebar.has-ink{position:sticky}
 .nav-ink{
  position:absolute;left:0;top:0;width:4px;height:60px;
  border-radius:0 4px 4px 0;background:var(--cyan);
@@ -1042,10 +1042,97 @@ body.light .orb{opacity:.16}
  background:var(--ring);font-size:13px;line-height:1.8
 }
 .aviso-dia .buttons{justify-content:center}
+/* Íconos SVG */
+svg.ico-svg{
+ width:1.1em;height:1.1em;flex:none;fill:none;stroke:currentColor;
+ stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;
+ vertical-align:-.18em
+}
+.nav i{display:grid;place-items:center}
+.nav i svg,.kpi-icon svg,.theme-btn svg{width:22px;height:22px}
+.symbol svg{width:36px;height:36px}
+.panel h2 span svg{width:20px;height:20px;vertical-align:-3px}
+.ticket .ico svg{width:40px;height:40px;stroke-width:1.5}
+.aviso-ico svg{width:42px;height:42px;stroke-width:1.6}
+.empty .ico svg{width:46px;height:46px;stroke-width:1.5}
+.error-symbol svg{width:66px;height:66px;stroke-width:1.6}
+.feed-ico svg{width:16px;height:16px}
+.cupo-box .num svg{width:40px;height:40px}
+.quitar svg{width:14px;height:14px}
+.btn svg{width:17px;height:17px;vertical-align:-3px}
+
+/* Encabezado fijo que se compacta con el scroll */
+.top{
+ position:sticky;top:0;z-index:16;
+ background:var(--bg);
+ background:color-mix(in srgb,var(--bg) 70%,transparent);
+ backdrop-filter:blur(10px);
+ transition:background .3s,box-shadow .3s,min-height .3s,backdrop-filter .3s
+}
+.top.scrolled{
+ min-height:76px;
+ background:var(--panel);
+ background:color-mix(in srgb,var(--bg) 82%,transparent);
+ backdrop-filter:blur(12px);
+ box-shadow:0 10px 30px var(--shadow)
+}
+.top .brand-logo{transition:width .3s}
+.top.scrolled .brand-logo{width:170px}
+.sidebar{position:sticky;top:96px;align-self:start;min-height:calc(100vh - 110px)}
+.scroll-progress{position:fixed;left:0;right:0;top:0;height:3px;z-index:30;pointer-events:none}
+.scroll-progress span{
+ display:block;height:100%;transform-origin:left center;transform:scaleX(0);
+ background:linear-gradient(90deg,#06b9ec,#45dffc,#38dfad)
+}
+
+/* Microinteracciones */
+.field label{transition:color .2s,transform .25s}
+.field:focus-within label{color:var(--cyan);transform:translateX(3px)}
+.nav i{transition:transform .25s}
+.nav:hover i{transform:translateX(3px) scale(1.08)}
+.ticket .ico{transition:transform .35s}
+.ticket:hover .ico{animation:flotar 1.6s ease-in-out infinite}
+@keyframes flotar{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+.ticket.dragging{background:rgba(19,201,245,.16)}
+.ticket .listo-badge{
+ position:absolute;top:8px;left:8px;width:28px;height:28px;border-radius:50%;
+ display:grid;place-items:center;background:var(--green);color:#03261a
+}
+.ticket .listo-badge svg{width:16px;height:16px;stroke-width:3}
+.overlay{backdrop-filter:blur(6px)}
+
+/* Progreso del formulario */
+.form-progreso{
+ display:flex;align-items:center;gap:14px;margin:0 0 20px;
+ font-size:12px;color:var(--muted)
+}
+.form-progreso .pista{flex:1;height:8px;border-radius:9px;background:var(--ring);overflow:hidden}
+.form-progreso .pista span{
+ display:block;height:100%;transform-origin:left center;transform:scaleX(0);
+ background:linear-gradient(90deg,#06b9ec,#38dfad)
+}
+.form-progreso b{color:var(--cyan);font-variant-numeric:tabular-nums}
+
+/* Ficha del paciente encontrado en la base */
+.ficha{
+ display:grid;grid-template-columns:46px minmax(0,1fr) auto;gap:14px;
+ align-items:center;margin-top:10px;padding:12px 14px;border-radius:13px;
+ border:1px solid var(--green);background:rgba(56,223,173,.08)
+}
+.ficha .avatar{width:46px;height:46px}
+.ficha b{display:block;font-size:14px}
+.ficha small{display:block;color:var(--muted);font-size:11px;margin-top:3px}
+.ficha .fuente{display:flex;align-items:center;gap:6px;font-size:11px;
+ color:var(--green);font-weight:800;white-space:nowrap}
+
 @media(max-width:1100px){
  .span-4,.span-5,.span-6,.span-7,.span-8{grid-column:1/-1}
 }
 @media(max-width:720px){
+ .sidebar,.sidebar.has-ink{position:relative;top:0}
+ .top.scrolled .brand-logo{width:130px}
+ .ficha{grid-template-columns:40px minmax(0,1fr)}
+ .ficha .fuente{grid-column:1/-1}
  .filters{grid-template-columns:1fr}
  .seg{width:100%;overflow-x:auto}
  .cita{grid-template-columns:40px minmax(0,1fr)}

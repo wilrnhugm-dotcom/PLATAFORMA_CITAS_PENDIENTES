@@ -7,9 +7,12 @@
 <title>UGM | Técnicos</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
 <?!= include('Estilos'); ?>
 </head>
 <body>
+
+<div class="scroll-progress" aria-hidden="true"><span></span></div>
 
 <div class="bg-orbs" aria-hidden="true">
  <span class="orb o1"></span>
@@ -70,7 +73,7 @@
    aria-label="Escudo de El Salvador"></div>
 
   <button id="themeToggle" class="theme-btn"
-   type="button" aria-label="Cambiar tema">☀</button>
+   type="button" aria-label="Cambiar tema"></button>
 
   <div class="profile">
    <strong id="who"></strong>
@@ -89,24 +92,24 @@
  <span class="nav-ink" id="navInk"></span>
 
  <button class="nav active" data-page="consultas">
-  <i>☰</i>Consultas del día
+  <i data-ico="lista"></i>Consultas del día
  </button>
 
  <button class="nav" data-page="solicitud">
-  <i>✚</i>Solicitud de sobrecupo
+  <i data-ico="agregar"></i>Solicitud de sobrecupo
  </button>
 
  <button class="nav" data-page="missolicitudes">
-  <i>♧</i>Mis solicitudes
+  <i data-ico="bandeja"></i>Mis solicitudes
   <span class="badge hidden" id="badgeMias"></span>
  </button>
 
  <button class="nav" data-page="buscar">
-  <i>⚲</i>Buscar paciente
+  <i data-ico="buscar"></i>Buscar paciente
  </button>
 
  <button class="nav" data-page="actualizacion">
-  <i>↥</i>Actualizar agenda
+  <i data-ico="subir"></i>Actualizar agenda
  </button>
 
  <div class="side-bottom">
@@ -121,7 +124,7 @@
  </div>
 
  <div class="heading">
-  <div class="symbol">♙</div>
+  <div class="symbol" data-ico="cruz"></div>
   <div>
    <h1 id="title">Consultas del día</h1>
    <small id="subtitle">Asistencia de pacientes por especialidad</small>
@@ -136,7 +139,7 @@
  <!-- INDICADORES -->
  <div class="kpis supervisor-kpis" id="kpiContainer">
   <div class="kpi glass">
-   <div class="kpi-icon">☰</div>
+   <div class="kpi-icon" data-ico="calendario"></div>
    <div>
     <strong id="kCitas">0</strong>
     <b>Citas del día</b>
@@ -145,7 +148,7 @@
   </div>
 
   <div class="kpi glass verde">
-   <div class="kpi-icon">✓</div>
+   <div class="kpi-icon" data-ico="asistio"></div>
    <div>
     <strong id="kSi">0</strong>
     <b>Asistieron</b>
@@ -154,7 +157,7 @@
   </div>
 
   <div class="kpi glass rojo">
-   <div class="kpi-icon">✕</div>
+   <div class="kpi-icon" data-ico="noAsistio"></div>
    <div>
     <strong id="kNo">0</strong>
     <b>No asistieron</b>
@@ -221,7 +224,7 @@
   </div>
 
   <div class="panel glass">
-   <h2><span>✚</span> Solicitud de sobrecupo</h2>
+   <h2><span data-ico="agregar"></span> Solicitud de sobrecupo</h2>
    <p class="desc">
     Sobrecupos <b>sábado y domingo</b> según los cupos de
     cada especialidad (por restricción médica, al llenarse
@@ -235,6 +238,12 @@
     <div class="num" id="cupoNum">—</div>
     <p id="cupoTexto">Selecciona especialidad y fecha
      para ver los cupos disponibles.</p>
+   </div>
+
+   <div class="form-progreso">
+    <span>Avance del formulario</span>
+    <div class="pista"><span id="progresoBarra"></span></div>
+    <b id="progresoTexto">0 de 6</b>
    </div>
 
    <form id="formRequest" autocomplete="off">
@@ -259,15 +268,21 @@
         role="listbox"></div>
       </div>
       <div class="dui-helper" id="patientHelper">
-       Escribe al menos 3 letras para buscar en la base de pacientes.
+       Escribe el nombre o el DUI: los datos se completan desde la
+       base de pacientes.
       </div>
+      <div id="ficha"></div>
      </div>
 
      <div class="field">
       <label>DUI <span class="required">*</span></label>
-      <input id="doc" type="text" inputmode="numeric" required
-       maxlength="10" autocomplete="off"
-       pattern="[0-9]{8}-[0-9]" placeholder="00000000-0">
+      <div class="search-box">
+       <input id="doc" type="text" inputmode="numeric" required
+        maxlength="10" autocomplete="off"
+        pattern="[0-9]{8}-[0-9]" placeholder="00000000-0">
+       <div id="docResults" class="search-results hidden"
+        role="listbox"></div>
+      </div>
       <div class="dui-helper" id="docHelper">
        El guion se agrega automáticamente.
       </div>
@@ -302,13 +317,13 @@
       </label>
       <div class="tickets">
        <div class="ticket" id="tFrente" role="button" tabindex="0">
-        <span class="ico">▤</span>
+        <span class="ico" data-ico="ticket"></span>
         <strong>Frente del ticket</strong>
         <small>Arrastra, pega (Ctrl+V) o haz clic</small>
         <small>JPG, PNG, WEBP o PDF · máx. 5 MB</small>
        </div>
        <div class="ticket" id="tReverso" role="button" tabindex="0">
-        <span class="ico">✍</span>
+        <span class="ico" data-ico="sello"></span>
         <strong>Reverso sellado y firmado</strong>
         <small>Sello y firma del médico visibles</small>
         <small>JPG, PNG, WEBP o PDF · máx. 5 MB</small>
@@ -324,7 +339,7 @@
     <div class="form-actions">
      <button id="btnLimpiar" class="btn" type="button">Limpiar</button>
      <button id="btnRequest" class="btn primary" type="submit">
-      ✚ Enviar solicitud
+      <i data-ico="enviar"></i> Enviar solicitud
      </button>
     </div>
    </form>
@@ -359,7 +374,7 @@
  <!-- BUSCAR PACIENTE -->
  <section class="page hidden" id="buscar">
   <div class="panel glass">
-   <h2><span>⚲</span> Buscar paciente</h2>
+   <h2><span data-ico="buscar"></span> Buscar paciente</h2>
    <p class="desc">Busca en la base de pacientes por nombre, DUI o
     expediente y filtra por especialidad.</p>
    <div class="search-grid">
@@ -424,7 +439,7 @@
  <div class="bottom">
   <span class="small muted" id="status">Sistema UGM</span>
   <button id="btnRefresh" class="btn" type="button">
-   ↻ Actualizar ahora
+   <i data-ico="refrescar"></i> Actualizar ahora
   </button>
  </div>
 </main>
@@ -438,7 +453,7 @@
 <div id="errorOverlay" class="error-overlay hidden"
  role="alertdialog" aria-modal="true" aria-labelledby="errorTitle">
  <div class="error-panel">
-  <div class="error-symbol">⚠</div>
+  <div class="error-symbol" data-ico="alerta"></div>
   <h2 id="errorTitle">AVISO</h2>
   <p id="errorText"></p>
   <button id="btnCloseError" class="btn primary" type="button">
@@ -758,10 +773,10 @@ function htmlCita(c,texto) {
     <div class="asis">
      <button type="button" class="si${c.asistencia==='ASISTIO'?' on':''}"
       data-a="ASISTIO" ${futura?'disabled':''}
-      title="${futura?'Se marca el día de la cita':'Marcar asistencia'}">✓ Asistió</button>
+      title="${futura?'Se marca el día de la cita':'Marcar asistencia'}">${icono('check')} Asistió</button>
      <button type="button" class="no${c.asistencia==='NO_ASISTIO'?' on':''}"
       data-a="NO_ASISTIO" ${futura?'disabled':''}
-      title="${futura?'Se marca el día de la cita':'Marcar inasistencia'}">✕ No asistió</button>
+      title="${futura?'Se marca el día de la cita':'Marcar inasistencia'}">${icono('x')} No asistió</button>
     </div>
     <div class="marcado">${c.marcadoPor
      ?'Marcado por '+esc(c.marcadoPor)+' · '+esc(horaCorta(c.hora))
@@ -787,7 +802,7 @@ function pintarConsultas(animar) {
 
  if(!consultas().length) {
   cont.innerHTML=`<div class="empty">
-   <span class="ico">☰</span>
+   <span class="ico">${icono('calendario')}</span>
    <b>No hay citas para esta fecha</b>
    Carga la agenda del día en "Actualizar agenda" o elige
    otra fecha.</div>`;
@@ -798,7 +813,7 @@ function pintarConsultas(animar) {
 
  if(!lista.length) {
   cont.innerHTML=`<div class="empty">
-   <span class="ico">⚲</span>
+   <span class="ico">${icono('buscar')}</span>
    <b>Sin coincidencias</b>
    Prueba con otro nombre, DUI o filtro.</div>`;
   $('cPie').textContent='';
@@ -811,7 +826,10 @@ function pintarConsultas(animar) {
   ?'Mostrando 300 de '+lista.length+'. Usa el buscador para encontrar al paciente.'
   :lista.length+' paciente(s)';
 
- if(animar)MOV.escalonar(cont.querySelectorAll('.cita'),14);
+ if(animar) {
+  MOV.revelar(cont.querySelectorAll('.cita'));
+  MOV.refrescarScroll();
+ }
 }
 
 async function marcar(clave,valor,boton) {
@@ -849,7 +867,7 @@ async function marcar(clave,valor,boton) {
   c.hora=r.hora;
 
   aviso(nuevo
-   ?(nuevo==='ASISTIO'?'✓ Asistencia':'✕ Inasistencia')+
+   ?(nuevo==='ASISTIO'?'Asistencia':'Inasistencia')+
     ' registrada: '+c.paciente
    :'Marca eliminada: '+c.paciente);
 
@@ -989,7 +1007,7 @@ function revisarBoton() {
 function avisoCompleto(fila,f) {
  return dialogo({
   tipo:'bloqueo',
-  icono:'⛔',
+  icono:'bloqueo',
   titulo:'YA NO SE PUEDE AGENDAR MÁS',
   html:`<p>Por <b>restricción médica</b>, el cupo de
    <b>${esc(fila.especialidad)}</b> para el</p>
@@ -1021,10 +1039,13 @@ async function pintarCupos() {
  const box=$('cupoBox');
 
  const poner=(num,html,clase)=>{
+  const antes=box.className;
   box.className='cupo-box'+(clase?' '+clase:'');
-  if($('cupoNum').textContent!==String(num)) {
-   $('cupoNum').textContent=num;
-   MOV.pulso($('cupoNum'));
+  if(T.cupoNum!==String(num)) {
+   T.cupoNum=String(num);
+   $('cupoNum').innerHTML=String(num).startsWith('<')?num:esc(num);
+   MOV.cifra($('cupoNum'));
+   if(clase==='sin'&&antes!==box.className)MOV.sacudir(box);
   }
   $('cupoTexto').innerHTML=html;
  };
@@ -1036,13 +1057,13 @@ async function pintarCupos() {
  }
 
  if(fechaBloqueada(f)) {
-  poner('✕','<b>Fecha no disponible.</b> No se permiten '+
+  poner(icono('bloqueo'),'<b>Fecha no disponible.</b> No se permiten '+
    'nuevas programaciones ni cupos.','sin');
   return;
  }
 
  if(!esFinDeSemana(f)) {
-  poner('⚕','<b>Solicitud médica.</b> Fuera de fin de semana '+
+  poner(icono('estetoscopio'),'<b>Solicitud médica.</b> Fuera de fin de semana '+
    'no se calculan cupos: requiere ticket sellado y '+
    'firmado y la aprobación de supervisión.','medico');
   return;
@@ -1154,10 +1175,10 @@ function pintarTicket(cual) {
  if(!archivo) {
   zona.classList.remove('listo');
   zona.innerHTML=cual==='frente'
-   ?'<span class="ico">▤</span><strong>Frente del ticket</strong>'+
+   ?'<span class="ico">'+icono('ticket')+'</span><strong>Frente del ticket</strong>'+
     '<small>Arrastra, pega (Ctrl+V) o haz clic</small>'+
     '<small>JPG, PNG, WEBP o PDF · máx. 5 MB</small>'
-   :'<span class="ico">✍</span><strong>Reverso sellado y firmado</strong>'+
+   :'<span class="ico">'+icono('sello')+'</span><strong>Reverso sellado y firmado</strong>'+
     '<small>Sello y firma del médico visibles</small>'+
     '<small>JPG, PNG, WEBP o PDF · máx. 5 MB</small>';
   return;
@@ -1171,11 +1192,12 @@ function pintarTicket(cual) {
   T.urls[cual]=URL.createObjectURL(archivo);
   vista='<img alt="Ticket" src="'+T.urls[cual]+'">';
  } else {
-  vista='<span class="ico">⎙</span><strong>PDF</strong>';
+  vista='<span class="ico">'+icono('archivo')+'</span><strong>PDF</strong>';
  }
 
  zona.innerHTML=vista+'<small>'+esc(archivo.name)+'</small>'+
-  '<button type="button" class="quitar" title="Quitar">✕</button>';
+  '<button type="button" class="quitar" title="Quitar">'+icono('x')+'</button>'+
+  '<span class="listo-badge">'+icono('check')+'</span>';
 
  zona.querySelector('.quitar').onclick=ev=>{
   ev.stopPropagation();
@@ -1205,6 +1227,7 @@ function elegirTicket(cual,archivo) {
 
  T.tickets[cual]=archivo;
  pintarTicket(cual);
+ actualizarProgreso();
 }
 
 function montarTickets() {
@@ -1240,6 +1263,10 @@ function limpiarFormulario() {
 
  revisarDUI();
  revisarFecha();
+ pintarFicha(null);
+ cerrarDocResultados();
+ T.progreso=-1;
+ actualizarProgreso();
 }
 
 async function enviar(ev) {
@@ -1306,7 +1333,7 @@ async function enviar(ev) {
   if(fila.disponibles===1) {
    const ok=await dialogo({
     tipo:'info',
-    icono:'ℹ',
+    icono:'info',
     titulo:'ÚLTIMO CUPO DISPONIBLE',
     html:`<p>Vas a agendar el <b>último sobrecupo</b>
      (${fila.limite} de ${fila.limite}) de
@@ -1361,7 +1388,7 @@ async function enviar(ev) {
   if(!r.medico&&r.disponibles===0) {
    setTimeout(()=>dialogo({
     tipo:'info',
-    icono:'ℹ',
+    icono:'info',
     titulo:'CUPO COMPLETO',
     html:`<p>Se agendó el último sobrecupo de
      <b>${esc(datos.especialidad)}</b> para el</p>
@@ -1382,9 +1409,169 @@ async function enviar(ev) {
  }finally {
   S.guardando=false;
   boton.disabled=false;
-  boton.textContent='✚ Enviar solicitud';
+  boton.innerHTML=icono('enviar')+' Enviar solicitud';
   revisarFecha();
  }
+}
+
+
+/* =====================================================
+   AUTOCOMPLETAR POR DUI Y FICHA DEL PACIENTE
+   ===================================================== */
+
+const D={resultados:[],seq:0};
+
+function pintarFicha(p) {
+ const cont=$('ficha');
+
+ if(!p) {
+  cont.innerHTML='';
+  return;
+ }
+
+ cont.innerHTML=`
+  <div class="ficha">
+   <div class="avatar">${esc(iniciales(p.nombre))}</div>
+   <div style="min-width:0">
+    <b>${esc(p.nombre)}</b>
+    <small>${icono('dui')} DUI ${esc(p.documento||'—')}
+     ${p.expediente?' · Exp. '+esc(p.expediente):''}
+     ${(p.especialidades||[]).length?' · '+esc(p.especialidades.join(', ')):''}</small>
+   </div>
+   <span class="fuente">${icono('base')} Base de pacientes</span>
+  </div>`;
+
+ if(MOV.ok) {
+  gsap.fromTo(cont.firstElementChild,{y:-8,opacity:0,scale:.98},
+   {y:0,opacity:1,scale:1,duration:.45,ease:'back.out(1.8)',
+    clearProps:'transform,opacity'});
+ }
+}
+
+function cerrarDocResultados() {
+ D.resultados=[];
+ $('docResults').classList.add('hidden');
+ $('docResults').innerHTML='';
+}
+
+function mostrarDocResultados(lista,digitos) {
+ const caja=$('docResults');
+ const oculta=caja.classList.contains('hidden');
+
+ D.resultados=lista;
+
+ caja.innerHTML=lista.map((p,i)=>`
+  <div class="search-item${i===0?' active':''}" data-i="${i}" role="option">
+   <b>${esc(p.documento||p.original)}</b>
+   <small>${esc(p.nombre)}${p.expediente?' · Exp. '+esc(p.expediente):''}</small>
+  </div>`).join('')||
+  `<div class="search-empty">Ningún paciente con DUI ${esc(digitos)}…</div>`;
+
+ caja.classList.remove('hidden');
+ if(oculta)MOV.lista(caja);
+}
+
+// Al escribir el DUI se busca en la base y se completa
+// el nombre (y la especialidad si el paciente tiene una).
+async function buscarPorDui() {
+ const valor=$('doc').value;
+ const digitos=valor.replace(/\D/g,'');
+
+ if(S.paciente&&S.paciente.documento===valor) {
+  cerrarDocResultados();
+  return;
+ }
+
+ if(digitos.length<4) {
+  cerrarDocResultados();
+  return;
+ }
+
+ let lista;
+
+ if(P.listo) {
+  lista=buscarLocal(digitos,'',8,false).map(vistaPaciente);
+  if(digitos.length===8) {
+   buscarLocal('0'+digitos,'',8,false).map(vistaPaciente)
+    .forEach(p=>{
+     if(!lista.some(x=>x.documento===p.documento))lista.push(p);
+    });
+  }
+ } else {
+  if(digitos.length<8)return;
+  const seq=++D.seq;
+  try {
+   const r=await api('buscarPacientes',UGM.token,digitos);
+   if(seq!==D.seq)return;
+   lista=(r&&r.resultados)||[];
+  }catch(e) {
+   return;
+  }
+ }
+
+ // Exacto con 9 dígitos, o con 8 aplicando el cero inicial.
+ const exactos=lista.filter(p=>{
+  const d=String(p.documento).replace(/\D/g,'');
+  return d===digitos||(digitos.length===8&&d==='0'+digitos);
+ });
+
+ if(digitos.length>=8&&exactos.length===1) {
+  cerrarDocResultados();
+  aplicarPaciente(exactos[0]);
+  return;
+ }
+
+ mostrarDocResultados(lista,digitos);
+}
+
+function montarDui() {
+ const input=$('doc');
+
+ input.addEventListener('keydown',ev=>{
+  if($('docResults').classList.contains('hidden'))return;
+  if(ev.key==='Enter'&&D.resultados[0]) {
+   ev.preventDefault();
+   aplicarPaciente(D.resultados[0]);
+   cerrarDocResultados();
+  } else if(ev.key==='Escape') {
+   cerrarDocResultados();
+  }
+ });
+
+ input.addEventListener('blur',()=>setTimeout(cerrarDocResultados,150));
+
+ $('docResults').addEventListener('mousedown',ev=>{
+  const item=ev.target.closest('.search-item');
+  if(!item)return;
+  ev.preventDefault();
+  aplicarPaciente(D.resultados[Number(item.dataset.i)]);
+  cerrarDocResultados();
+ });
+}
+
+/* =====================================================
+   AVANCE DEL FORMULARIO
+   ===================================================== */
+
+function actualizarProgreso() {
+ const pasos=[
+  Boolean($('esp').value),
+  $('patientName').value.trim().length>=3,
+  /^[0-9]{8}-[0-9]$/.test($('doc').value),
+  Boolean($('date').value)&&!fechaBloqueada($('date').value),
+  $('requestedBy').value.trim().length>=3,
+  Boolean(T.tickets.frente&&T.tickets.reverso)
+ ];
+
+ const hechos=pasos.filter(Boolean).length;
+ const barra=$('progresoBarra');
+
+ if(T.progreso===hechos)return;
+ T.progreso=hechos;
+
+ $('progresoTexto').textContent=hechos+' de '+pasos.length;
+ MOV.escalaX(barra,hechos/pasos.length);
+ MOV.cifra($('progresoTexto'));
 }
 
 /* =====================================================
@@ -1418,6 +1605,7 @@ async function alEntrar() {
  ));
 
  await refrescar();
+ pintarConsultas(true);
 
  if(T.timer)clearInterval(T.timer);
  T.timer=setInterval(refrescar,10000);
@@ -1440,7 +1628,7 @@ function iniciar() {
   T.datos=null;
   T.firma='';
   T.firmaTabs='';
-  $('cLista').innerHTML='<div class="empty"><span class="ico">↻</span>'+
+  $('cLista').innerHTML='<div class="empty"><span class="ico">'+icono('refrescar')+'</span>'+
    '<b>Cargando citas...</b></div>';
   T.consultando=false;
   refrescar().then(()=>pintarConsultas(true));
@@ -1494,9 +1682,20 @@ function iniciar() {
  });
  $('medico').addEventListener('change',revisarFecha);
 
+ let esperaDui=null;
+
  $('doc').addEventListener('input',()=>{
   $('doc').value=formatearDUI($('doc').value);
   revisarDUI();
+  clearTimeout(esperaDui);
+  const n=$('doc').value.replace(/\D/g,'').length;
+  esperaDui=setTimeout(buscarPorDui,n===8?550:P.listo?60:300);
+ });
+
+ montarDui();
+
+ ['input','change'].forEach(t=>{
+  $('formRequest').addEventListener(t,actualizarProgreso);
  });
 
  montarBuscador();
@@ -2059,7 +2258,20 @@ function aplicarPaciente(p) {
    'ingrésalo manualmente.','bad');
  }
 
+ // Especialidad: si el paciente tiene una sola, se propone.
+ const candidatas=(p.especialidades||[])
+  .map(especialidadCatalogo).filter(Boolean);
+
+ if(!$('esp').value&&candidatas.length===1) {
+  $('esp').value=candidatas[0];
+  MOV.pulso($('esp'));
+  actualizarCupos();
+ }
+
+ pintarFicha(Object.assign({},p,{documento:documento||p.original}));
  MOV.pulso($('doc'));
+ MOV.pulso($('patientName'));
+ actualizarProgreso();
 }
 
 function elegirPaciente(i) {
@@ -2083,6 +2295,7 @@ function montarBuscador() {
     $('doc').value='';
    }
    S.paciente=null;
+   pintarFicha(null);
    ayuda('patientHelper',
     'Escribe al menos 3 letras para buscar en la '+
     'base de pacientes.');
