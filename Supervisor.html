@@ -564,7 +564,7 @@
 
    <div class="notice">
     <strong>Estado de la agenda</strong>
-    <p id="uploadStatus">Sin información.</p>
+    <div id="uploadStatus">Sin información.</div>
    </div>
 
    <div class="dropzone" id="excelZone" role="button" tabindex="0">
@@ -741,12 +741,19 @@ function dibujar(animar) {
  const a=d.agenda||{};
 
  $('blockedNotice').classList.toggle('hidden',!d.bloqueada);
- $('agendaAlert').classList.toggle('hidden',!a.alerta);
- $('agendaAlertText').textContent=a.fecha
-  ?'Última carga hace '+a.minutos+' minutos ('+a.archivo+
-   '). Actualízala para que Consultas del día y la '+
-   'asistencia muestren a todos los pacientes.'
-  :'Todavía no se ha importado la agenda hospitalaria.';
+ // Aviso arriba solo si falta la agenda o si la cargada
+ // no trae la fecha de operación elegida.
+ const fechasAgenda=Object.keys(a.porFecha||{});
+ const faltaFecha=Boolean(a.fecha)&&fechasAgenda.length>0&&
+  !fechasAgenda.includes(V.fecha)&&V.datos.dia!=='SEMANA';
+
+ $('agendaAlert').classList.toggle('hidden',!(a.alerta||faltaFecha));
+ $('agendaAlertText').textContent=!a.fecha
+  ?'Todavía no se ha importado la agenda hospitalaria.'
+  :faltaFecha
+   ?'La agenda cargada ('+a.archivo+') no trae citas para el '+
+    fechaLarga(V.fecha)+'. Si hay atención ese día, carga el Reporte de Citas de esa fecha.'
+   :'Supervisión solicitó una actualización extraordinaria de la agenda.';
 
  pintarKpis();
  pintarBadges();
@@ -2352,12 +2359,61 @@ function pintarBase() {
 
 function pintarAgenda() {
  const a=V.datos.agenda||{};
+ const dias=Object.keys(a.porFecha||{}).sort();
 
- $('uploadStatus').textContent=a.fecha
-  ?'Última carga: '+a.archivo+' · Responsable: '+a.usuario+
-   ' · Antigüedad: '+a.minutos+' minutos.'+
-   (a.extraordinaria?' · Actualización extraordinaria solicitada.':'')
-  :'Todavía no se ha importado una agenda.';
+ const html=a.fecha
+  ?`<div class="carga-ok">
+     <div class="carga-ico">${icono('check')}</div>
+     <div>
+      <b>Agenda cargada · no es necesario volver a subirla</b>
+      <small>${esc(a.archivo)}</small>
+      <small>Subida por <b>${esc(a.usuario)}</b> · ${esc(fechaHora(a.fecha))}
+       · hace ${esc(hace(Math.max(0,(a.minutos||0)*60)))}</small>
+     </div>
+     <div class="carga-num"><strong>${a.total||'—'}</strong><small>citas</small></div>
+    </div>
+    ${dias.length?`<div class="pac-dias-lista" style="margin-top:10px">${dias.map(f=>`
+     <button type="button" class="pac-dia${f===V.fecha?' on':''}" data-f="${esc(f)}">
+      <span>${esc(fechaLarga(f))}</span>
+      <strong>${a.porFecha[f]}</strong>
+      <small>citas activas o pendientes</small>
+     </button>`).join('')}</div>`:''}
+    <p class="muted small" style="margin:10px 0 0">Solo súbela otra vez si el
+     sistema hospitalario tiene cambios nuevos: la nueva <b>reemplaza</b> a esta.</p>`
+  :`<div class="carga-falta">
+     <b>Todavía no se ha cargado la agenda del día.</b>
+     <small>Descarga el Reporte de Citas del sistema hospitalario y súbelo aquí.</small>
+    </div>`;
+
+ if(cambio('agendaEstado',[html])) {
+  $('uploadStatus').innerHTML=html;
+  MOV.pulso($('uploadStatus').firstElementChild);
+ }
+}
+
+// Antes de reemplazar algo ya cargado, se pide confirmación
+// mostrando quién lo subió y cuándo.
+async function confirmarReemplazo(que,estado,detalle) {
+ if(!estado||!estado.fecha)return true;
+ return confirmarSeguro({
+  titulo:'YA HAY '+que.toUpperCase()+' CARGADA',
+  tipo:'urgente',
+  icono:'alerta',
+  html:`<p>La subió <b>${esc(estado.usuario||'—')}</b> el
+   <b>${esc(fechaHora(estado.fecha))}</b>.</p>
+   <p class="muted">${esc(estado.archivo||'')}${detalle?' · '+esc(detalle):''}</p>
+   <p>Si subes otra, <b>reemplaza</b> a la actual para todos.
+   ¿Seguro que necesitas subirla de nuevo?</p>`,
+  ok:'Sí, reemplazar',
+  cancelar:'No, dejar la actual'
+ });
+}
+
+async function subirAgenda(archivo,alTerminar) {
+ const a=(V.datos||{}).agenda||{};
+ if(!await confirmarReemplazo('una agenda',a,
+   a.total?a.total+' citas':''))return;
+ return importarAgendaArchivo(archivo,alTerminar);
 }
 
 async function alertaExtraordinaria() {
@@ -2465,8 +2521,9 @@ function iniciar() {
  });
 
  // Día de la base de Reportería -> fecha de operación.
- $('pacDias').addEventListener('click',ev=>{
-  const b=ev.target.closest('.pac-dia');
+ // Días de la base o de la agenda -> fecha de operación.
+ document.addEventListener('click',ev=>{
+  const b=ev.target.closest('#pacDias .pac-dia, #uploadStatus .pac-dia');
   if(!b)return;
   $('fecha').value=b.dataset.f;
   $('fecha').dispatchEvent(new Event('change'));
@@ -2519,7 +2576,7 @@ function iniciar() {
  };
 
  montarZona($('excelZone'),$('excelFile'),
-  f=>importarAgendaArchivo(f,recargar));
+  f=>subirAgenda(f,recargar));
 
  montarZona($('patientsZone'),$('patientsFile'),importarPacientes);
 
@@ -2538,7 +2595,7 @@ function iniciar() {
   }
 
   if(V.pagina==='actualizacion') {
-   pegarComoTabla(ev,f=>importarAgendaArchivo(f,recargar));
+   pegarComoTabla(ev,f=>subirAgenda(f,recargar));
   } else if(V.pagina==='basepacientes') {
    pegarComoTabla(ev,importarPacientes);
   }
@@ -2820,6 +2877,13 @@ async function importarPacientes(origen) {
 
  if(!puedeGestionar()) {
   aviso('Solo el supervisor puede cargar la base.');
+  return;
+ }
+
+ const pac=(V.datos||{}).pacientes||{};
+ if(!await confirmarReemplazo('una base de pacientes',pac,
+   pac.total?pac.total+' pacientes':'')) {
+  $('patientsFile').value='';
   return;
  }
 

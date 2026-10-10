@@ -1321,4 +1321,24 @@ input:focus,select:focus,textarea:focus{
  box-shadow:0 14px 40px rgba(0,0,0,.45);font-size:13px;line-height:1.45
 }
 .toolbar-acciones{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+
+/* Estado de carga (agenda) */
+.carga-ok{
+ display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:12px;align-items:center;
+ margin-top:8px;padding:12px 14px;border-radius:14px;
+ border:1px solid var(--green);background:rgba(56,223,173,.09)
+}
+.carga-ok b{color:var(--green)}
+.carga-ok small{display:block;color:var(--muted);font-size:12px;margin-top:2px;overflow-wrap:anywhere}
+.carga-ok small b{color:var(--text)}
+.carga-ico{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;
+ color:var(--green);border:1px solid var(--green);background:rgba(56,223,173,.12)}
+.carga-ico svg{width:22px;height:22px}
+.carga-num{text-align:center}
+.carga-num strong{display:block;font-size:28px;color:var(--green);line-height:1}
+.carga-num small{color:var(--muted);font-size:11px}
+.carga-falta{margin-top:8px;padding:12px 14px;border-radius:14px;
+ border:1px dashed var(--yellow);background:rgba(255,208,106,.08)}
+.carga-falta b{color:var(--yellow);display:block}
+.carga-falta small{color:var(--muted)}
 </style>

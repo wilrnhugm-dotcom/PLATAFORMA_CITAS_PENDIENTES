@@ -1081,6 +1081,7 @@ function importarAgenda(token, registros, archivo) {
 
   const validos = [];
   const fechas = new Set();
+  const porFecha = {};
 
   const errores = {
     sinFecha:0,
@@ -1132,6 +1133,7 @@ function importarAgenda(token, registros, archivo) {
     }
 
     fechas.add(f);
+    if (estado !== 'CANCELADA') porFecha[f] = (porFecha[f] || 0) + 1;
 
     validos.push([
       '', f, esp, estado,
@@ -1223,6 +1225,8 @@ function importarAgenda(token, registros, archivo) {
       UGM3_AGENDA_ARCHIVO:
         texto3_(archivo).slice(0,150),
       UGM3_AGENDA_USUARIO:usuario.nombre,
+      UGM3_AGENDA_TOTAL:String(validos.length),
+      UGM3_AGENDA_FECHAS:JSON.stringify(porFecha),
       UGM3_ALERTA_AT:''
     });
 
@@ -1247,6 +1251,7 @@ function importarAgenda(token, registros, archivo) {
     cargaID,
     total:validos.length,
     fechas:[...fechas].sort(),
+    porFecha,
     omitidas:registros.length-validos.length,
     errores,
     mensaje:'Agenda Excel actualizada correctamente.'
@@ -1276,7 +1281,14 @@ function estadoAgenda3_() {
 
   const hayAlerta = Boolean(extraordinaria);
 
+  let porFecha = {};
+  try {
+    porFecha = JSON.parse(p.getProperty('UGM3_AGENDA_FECHAS') || '{}');
+  } catch(e) {}
+
   return {
+    total:Number(p.getProperty('UGM3_AGENDA_TOTAL')) || 0,
+    porFecha,
     fecha,
     archivo:p.getProperty(
       'UGM3_AGENDA_ARCHIVO'
@@ -1293,9 +1305,11 @@ function estadoAgenda3_() {
       minutos >= 0 &&
       minutos < UGM3.VIGENCIA_MINUTOS &&
       !hayAlerta,
+    // Solo se alerta si no hay agenda o si se pidió una
+    // actualización extraordinaria. La antigüedad ya no
+    // alerta: así nadie vuelve a subirla sin necesidad.
     alerta:
       minutos === null ||
-      minutos >= UGM3.ALERTA_MINUTOS ||
       hayAlerta,
     extraordinaria:hayAlerta
   };
