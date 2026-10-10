@@ -332,12 +332,28 @@
    <div class="toolbar">
     <div>
      <h2>Reporte de asistencia</h2>
-     <p class="desc" style="margin:0">Resumen por especialidad
-      para el reporte de fin de día.</p>
+     <p class="desc" style="margin:0">Separado por origen y por
+      especialidad. El Excel incluye un resumen y una gráfica en
+      cada hoja.</p>
     </div>
     <button class="btn primary" id="btnReporte" type="button">
      <i data-ico="descargar"></i> Descargar reporte Excel
     </button>
+   </div>
+   <div class="tablebox" style="margin-bottom:18px">
+    <table>
+     <thead>
+      <tr>
+       <th>Origen</th>
+       <th>Citas</th>
+       <th>Asistieron</th>
+       <th>No asistieron</th>
+       <th>Sin marcar</th>
+       <th>% asistencia</th>
+      </tr>
+     </thead>
+     <tbody id="origenRows"></tbody>
+    </table>
    </div>
    <div class="tablebox">
     <table>
@@ -1478,7 +1494,73 @@ function pintarAsistencia(animar) {
   $('detEsp').value=actual;
  }
 
+ pintarOrigen();
  pintarDetalle(animar);
+}
+
+/* ---------- Origen: agenda del sistema vs. sobrecupos ---------- */
+
+const GRUPOS={
+ AGENDA:{
+  nombre:'Agenda del sistema',
+  corto:'Agenda del sistema',
+  hoja:'Agenda del sistema',
+  detalle:'Pacientes que ya venían agendados en el Reporte de Citas del sistema hospitalario.'
+ },
+ SOBRECUPO:{
+  nombre:'Sobrecupos (Reportería)',
+  corto:'Sobrecupo (Reportería)',
+  hoja:'Sobrecupos Reportería',
+  detalle:'Pacientes agendados como sobrecupo por los técnicos a partir de la base de Reportería.'
+ }
+};
+
+// Un sobrecupo que luego aparece en el reporte del
+// sistema sigue contando como sobrecupo.
+function grupoReporte(c) {
+ return c.origen==='SOBRECUPO'||c.sobrecupo?'SOBRECUPO':'AGENDA';
+}
+
+function conteo(lista) {
+ const t={citas:lista.length,asistio:0,noAsistio:0,sinMarcar:0};
+ lista.forEach(c=>{
+  if(c.asistencia==='ASISTIO')t.asistio++;
+  else if(c.asistencia==='NO_ASISTIO')t.noAsistio++;
+  else t.sinMarcar++;
+ });
+ const m=t.asistio+t.noAsistio;
+ t.pct=m?Math.round(t.asistio/m*100):0;
+ t.texto=m?t.pct+'%':'—';
+ return t;
+}
+
+function porEspecialidad(lista) {
+ const g={};
+ lista.forEach(c=>{(g[c.especialidad]=g[c.especialidad]||[]).push(c);});
+ return Object.keys(g)
+  .map(e=>Object.assign({especialidad:e},conteo(g[e])))
+  .sort((a,b)=>b.citas-a.citas);
+}
+
+function pintarOrigen() {
+ const lista=V.datos.consultas||[];
+ const filas=[
+  ['Agenda del sistema',conteo(lista.filter(c=>grupoReporte(c)==='AGENDA'))],
+  ['Sobrecupos (Reportería)',conteo(lista.filter(c=>grupoReporte(c)==='SOBRECUPO'))],
+  ['TOTAL',conteo(lista)]
+ ];
+
+ if(!cambio('origen',filas))return;
+
+ $('origenRows').innerHTML=filas.map(([n,t])=>`
+  <tr${n==='TOTAL'?' style="font-weight:800"':''}>
+   <td><b>${n}</b></td>
+   <td>${t.citas}</td>
+   <td style="color:var(--green)">${t.asistio}</td>
+   <td style="color:var(--red)">${t.noAsistio}</td>
+   <td style="color:var(--yellow)">${t.sinMarcar}</td>
+   <td>${t.texto}</td>
+  </tr>`).join('');
 }
 
 function detalleFiltrado() {
@@ -1507,7 +1589,7 @@ function pintarDetalle(animar) {
    <td><b>${esc(c.paciente)}</b></td>
    <td>${esc(c.documento)}</td>
    <td>${esc(c.especialidad)}</td>
-   <td>${c.origen==='SOBRECUPO'?'Sobrecupo':'Agenda'}</td>
+   <td>${esc(GRUPOS[grupoReporte(c)].corto)}</td>
    <td style="color:${c.asistencia==='ASISTIO'?'var(--green)':
     c.asistencia==='NO_ASISTIO'?'var(--red)':'var(--yellow)'}">
     <b>${textoAsistencia(c.asistencia)}</b></td>
@@ -1517,7 +1599,361 @@ function pintarDetalle(animar) {
   '<tr><td colspan="7">Sin registros en este filtro.</td></tr>';
 }
 
-function descargarReporte() {
+/* =====================================================
+   REPORTE EXCEL CON RESUMEN Y GRÁFICAS (ExcelJS)
+   Se carga solo al descargar. Si no carga, se usa el
+   reporte simple.
+   ===================================================== */
+
+const EXCELJS_URL=
+ 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';
+
+function cargarScript(url) {
+ return new Promise((ok,ko)=>{
+  const s=document.createElement('script');
+  s.src=url;
+  s.onload=ok;
+  s.onerror=()=>ko(Error('No se pudo cargar el generador de Excel.'));
+  document.head.appendChild(s);
+ });
+}
+
+const COLOR_REP={
+ si:'#21A67A',no:'#D24B5D',sin:'#E0A526',
+ azul:'#10456B',cian:'#0A9FD0',texto:'#12354E',gris:'#58768A'
+};
+
+function lienzo(w,h) {
+ const c=document.createElement('canvas');
+ c.width=w*2;c.height=h*2;
+ const x=c.getContext('2d');
+ x.scale(2,2);
+ x.fillStyle='#FFFFFF';
+ x.fillRect(0,0,w,h);
+ x.font='14px Segoe UI, Arial, sans-serif';
+ return {c,x};
+}
+
+// Dona: asistieron / no asistieron / sin marcar.
+function graficaDona(t,titulo) {
+ const W=560,H=300;
+ const {c,x}=lienzo(W,H);
+
+ x.fillStyle=COLOR_REP.texto;
+ x.font='bold 17px Segoe UI, Arial, sans-serif';
+ x.fillText(titulo,20,30);
+
+ const seg=[
+  ['Asistieron',t.asistio,COLOR_REP.si],
+  ['No asistieron',t.noAsistio,COLOR_REP.no],
+  ['Sin marcar',t.sinMarcar,COLOR_REP.sin]
+ ];
+
+ const cx=140,cy=170,r=95,g=34;
+ let a=-Math.PI/2;
+
+ if(!t.citas) {
+  x.strokeStyle='#E3EDF3';x.lineWidth=g;
+  x.beginPath();x.arc(cx,cy,r,0,Math.PI*2);x.stroke();
+ }
+
+ seg.forEach(([,v,col])=>{
+  if(!v)return;
+  const b=a+v/t.citas*Math.PI*2;
+  x.strokeStyle=col;x.lineWidth=g;
+  x.beginPath();x.arc(cx,cy,r,a,b);x.stroke();
+  a=b;
+ });
+
+ x.textAlign='center';
+ x.fillStyle=COLOR_REP.texto;
+ x.font='bold 30px Segoe UI, Arial, sans-serif';
+ x.fillText(t.texto,cx,cy+6);
+ x.font='12px Segoe UI, Arial, sans-serif';
+ x.fillStyle=COLOR_REP.gris;
+ x.fillText('asistencia',cx,cy+26);
+ x.textAlign='left';
+
+ seg.forEach(([n,v,col],i)=>{
+  const y=110+i*44;
+  x.fillStyle=col;
+  x.fillRect(290,y-12,16,16);
+  x.fillStyle=COLOR_REP.texto;
+  x.font='bold 18px Segoe UI, Arial, sans-serif';
+  x.fillText(String(v),316,y+3);
+  x.font='14px Segoe UI, Arial, sans-serif';
+  x.fillStyle=COLOR_REP.gris;
+  x.fillText(n+(t.citas?' · '+Math.round(v/t.citas*100)+'%':''),356,y+2);
+ });
+
+ x.fillStyle=COLOR_REP.gris;
+ x.font='13px Segoe UI, Arial, sans-serif';
+ x.fillText('Total de citas: '+t.citas,290,250);
+
+ return c.toDataURL('image/png');
+}
+
+// Barras apiladas por especialidad (o por grupo).
+function graficaBarras(filas,titulo) {
+ const W=760,fila=30,H=90+Math.max(1,filas.length)*fila;
+ const {c,x}=lienzo(W,H);
+
+ x.fillStyle=COLOR_REP.texto;
+ x.font='bold 17px Segoe UI, Arial, sans-serif';
+ x.fillText(titulo,20,30);
+
+ const ley=[['Asistieron',COLOR_REP.si],['No asistieron',COLOR_REP.no],
+  ['Sin marcar',COLOR_REP.sin]];
+ ley.forEach(([n,col],i)=>{
+  x.fillStyle=col;x.fillRect(20+i*150,44,12,12);
+  x.fillStyle=COLOR_REP.gris;x.font='12px Segoe UI, Arial, sans-serif';
+  x.fillText(n,38+i*150,55);
+ });
+
+ const max=Math.max(1,...filas.map(f=>f.citas));
+ const x0=250,ancho=W-x0-120;
+
+ filas.forEach((f,i)=>{
+  const y=72+i*fila;
+  x.fillStyle=COLOR_REP.texto;
+  x.font='13px Segoe UI, Arial, sans-serif';
+  const et=f.especialidad.length>34?f.especialidad.slice(0,33)+'…':f.especialidad;
+  x.fillText(et,20,y+15);
+
+  let px=x0;
+  [[f.asistio,COLOR_REP.si],[f.noAsistio,COLOR_REP.no],
+   [f.sinMarcar,COLOR_REP.sin]].forEach(([v,col])=>{
+   const w=v/max*ancho;
+   x.fillStyle=col;
+   x.fillRect(px,y+2,w,18);
+   px+=w;
+  });
+
+  x.fillStyle=COLOR_REP.gris;
+  x.fillText(f.asistio+'/'+f.citas+(f.asistio+f.noAsistio?' · '+f.texto:''),
+   px+8,y+16);
+ });
+
+ return {url:c.toDataURL('image/png'),alto:H};
+}
+
+// Impresión: horizontal, ajustada al ancho de una página.
+function paraImprimir(ws) {
+ ws.pageSetup={paperSize:9,orientation:'landscape',fitToPage:true,
+  fitToWidth:1,fitToHeight:0,
+  margins:{left:.4,right:.4,top:.5,bottom:.5,header:.2,footer:.2}};
+}
+
+function estiloTitulo(celda,tamano) {
+ celda.font={bold:true,size:tamano||16,color:{argb:'FFFFFFFF'}};
+ celda.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF10456B'}};
+ celda.alignment={vertical:'middle'};
+}
+
+function encabezados(fila) {
+ fila.eachCell(c=>{
+  c.font={bold:true,color:{argb:'FFFFFFFF'}};
+  c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF0A9FD0'}};
+  c.alignment={vertical:'middle',horizontal:'center',wrapText:true};
+  c.border={bottom:{style:'thin',color:{argb:'FF10456B'}}};
+ });
+ fila.height=22;
+}
+
+const ARGB={si:'FF21A67A',no:'FFD24B5D',sin:'FFE0A526'};
+
+// Bloque de resumen: Citas, Asistieron, No asistieron,
+// Sin marcar, % asistencia.
+function bloqueResumen(ws,filaInicio,t) {
+ const cab=ws.getRow(filaInicio);
+ cab.values=['Citas','Asistieron','No asistieron','Sin marcar','% asistencia'];
+ encabezados(cab);
+
+ const v=ws.getRow(filaInicio+1);
+ v.values=[t.citas,t.asistio,t.noAsistio,t.sinMarcar,t.texto];
+ v.height=30;
+ v.eachCell((c,i)=>{
+  c.font={bold:true,size:16,color:{argb:i===2?ARGB.si:i===3?ARGB.no:
+   i===4?ARGB.sin:'FF12354E'}};
+  c.alignment={horizontal:'center',vertical:'middle'};
+  c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF1F8FC'}};
+ });
+}
+
+function hojaGrupo(wb,grupo,lista,d) {
+ const G=GRUPOS[grupo];
+ const t=conteo(lista);
+ const ws=wb.addWorksheet(G.hoja,{properties:{tabColor:{argb:
+  grupo==='AGENDA'?'FF0A9FD0':'FF8E5BD8'}}});
+
+ ws.columns=[{width:30},{width:46},{width:16},{width:16},
+  {width:16},{width:24},{width:10}];
+ paraImprimir(ws);
+
+ ws.mergeCells('A1:G1');
+ ws.getCell('A1').value=G.nombre.toUpperCase()+' · ASISTENCIA '+d.fecha;
+ estiloTitulo(ws.getCell('A1'));
+ ws.getRow(1).height=30;
+
+ ws.mergeCells('A2:G2');
+ ws.getCell('A2').value=G.detalle;
+ ws.getCell('A2').font={italic:true,color:{argb:'FF58768A'}};
+
+ bloqueResumen(ws,4,t);
+
+ const dona=wb.addImage({base64:graficaDona(t,G.nombre),extension:'png'});
+ ws.addImage(dona,{tl:{col:0,row:6.3},ext:{width:560,height:300}});
+
+ const esp=porEspecialidad(lista);
+ const bar=graficaBarras(esp,'Asistencia por especialidad');
+ const barId=wb.addImage({base64:bar.url,extension:'png'});
+ const altoBar=Math.min(bar.alto,620);
+ ws.addImage(barId,{tl:{col:0,row:23.3},
+  ext:{width:Math.round(760*altoBar/bar.alto),height:altoBar}});
+
+ const inicio=24+Math.ceil(altoBar/20)+2;
+
+ ws.getRow(inicio).values=['DETALLE DE PACIENTES'];
+ ws.getRow(inicio).font={bold:true,size:13,color:{argb:'FF10456B'}};
+
+ const cab=ws.getRow(inicio+1);
+ cab.values=['Especialidad','Paciente','Documento','Asistencia',
+  'Marcado por','Hora','Estado'];
+ encabezados(cab);
+
+ lista.slice().sort((a,b)=>
+  a.especialidad.localeCompare(b.especialidad)||
+  a.paciente.localeCompare(b.paciente)
+ ).forEach((c,i)=>{
+  const r=ws.getRow(inicio+2+i);
+  r.values=[c.especialidad,c.paciente,c.documento,
+   textoAsistencia(c.asistencia),c.marcadoPor||'',
+   c.hora?horaCorta(c.hora):'',
+   c.sobrecupo?textoEstado(c.sobrecupo):(c.estadoCita||'')];
+  const a=r.getCell(4);
+  a.font={bold:true,color:{argb:c.asistencia==='ASISTIO'?ARGB.si:
+   c.asistencia==='NO_ASISTIO'?ARGB.no:ARGB.sin}};
+  if(i%2)r.eachCell(x=>{x.fill={type:'pattern',pattern:'solid',
+   fgColor:{argb:'FFF6FAFD'}};});
+ });
+
+ ws.autoFilter={from:{row:inicio+1,column:1},
+  to:{row:inicio+1,column:7}};
+}
+
+function hojaResumen(wb,d,lista) {
+ const ws=wb.addWorksheet('Resumen',{properties:{tabColor:{argb:'FF10456B'}}});
+ ws.columns=[{width:34},{width:12},{width:14},{width:16},
+  {width:14},{width:16}];
+ paraImprimir(ws);
+
+ ws.mergeCells('A1:F1');
+ ws.getCell('A1').value='REPORTE DE ASISTENCIA · UGM · NUEVO HOSPITAL ROSALES';
+ estiloTitulo(ws.getCell('A1'));
+ ws.getRow(1).height=32;
+
+ ws.getCell('A2').value='Fecha de consulta: '+fechaLarga(d.fecha);
+ ws.getCell('A3').value='Generado: '+new Date().toLocaleString('es-SV')+
+  ' · por '+UGM.nombre;
+ ws.getCell('A2').font={bold:true};
+ ws.getCell('A3').font={color:{argb:'FF58768A'}};
+
+ const grupos=[
+  ['Agenda del sistema',conteo(lista.filter(c=>grupoReporte(c)==='AGENDA'))],
+  ['Sobrecupos (Reportería)',conteo(lista.filter(c=>grupoReporte(c)==='SOBRECUPO'))],
+  ['TOTAL',conteo(lista)]
+ ];
+
+ const cab=ws.getRow(5);
+ cab.values=['Origen','Citas','Asistieron','No asistieron','Sin marcar','% asistencia'];
+ encabezados(cab);
+
+ grupos.forEach(([n,t],i)=>{
+  const r=ws.getRow(6+i);
+  r.values=[n,t.citas,t.asistio,t.noAsistio,t.sinMarcar,t.texto];
+  r.getCell(3).font={bold:true,color:{argb:ARGB.si}};
+  r.getCell(4).font={bold:true,color:{argb:ARGB.no}};
+  r.getCell(5).font={bold:true,color:{argb:ARGB.sin}};
+  if(n==='TOTAL') {
+   r.font={bold:true};
+   r.eachCell(x=>{x.fill={type:'pattern',pattern:'solid',
+    fgColor:{argb:'FFE3F2FA'}};});
+  }
+ });
+
+ const total=grupos[2][1];
+ const dona=wb.addImage({base64:graficaDona(total,'Asistencia total del día'),
+  extension:'png'});
+ ws.addImage(dona,{tl:{col:0,row:9.4},ext:{width:560,height:300}});
+
+ const comp=graficaBarras(grupos.slice(0,2).map(([n,t])=>
+  Object.assign({especialidad:n},t)),'Agenda del sistema vs. sobrecupos');
+ const compId=wb.addImage({base64:comp.url,extension:'png'});
+ ws.addImage(compId,{tl:{col:0,row:25.4},ext:{width:760,height:comp.alto}});
+
+ const inicio=26+Math.ceil(comp.alto/20)+2;
+ ws.getRow(inicio).values=['POR ESPECIALIDAD (TODOS LOS ORIGENES)'];
+ ws.getRow(inicio).font={bold:true,size:13,color:{argb:'FF10456B'}};
+
+ const c2=ws.getRow(inicio+1);
+ c2.values=['Especialidad','Citas','Asistieron','No asistieron','Sin marcar','% asistencia'];
+ encabezados(c2);
+
+ porEspecialidad(lista).forEach((e,i)=>{
+  ws.getRow(inicio+2+i).values=[e.especialidad,e.citas,e.asistio,
+   e.noAsistio,e.sinMarcar,e.texto];
+ });
+}
+
+async function descargarReporte() {
+ const d=V.datos;
+
+ if(!d||!d.consultas) {
+  aviso('Espera a que cargue el detalle de asistencia.');
+  return;
+ }
+
+ const boton=$('btnReporte');
+ boton.disabled=true;
+ boton.innerHTML=icono('reloj')+' Generando reporte...';
+
+ try {
+  if(!window.ExcelJS)await cargarScript(EXCELJS_URL);
+
+  const lista=d.consultas;
+  const wb=new ExcelJS.Workbook();
+  wb.creator='UGM · Nuevo Hospital Rosales';
+  wb.created=new Date();
+
+  hojaResumen(wb,d,lista);
+  hojaGrupo(wb,'AGENDA',lista.filter(c=>grupoReporte(c)==='AGENDA'),d);
+  hojaGrupo(wb,'SOBRECUPO',lista.filter(c=>grupoReporte(c)==='SOBRECUPO'),d);
+
+  const buffer=await wb.xlsx.writeBuffer();
+  const blob=new Blob([buffer],{type:
+   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='Reporte_Asistencia_'+d.fecha+'.xlsx';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},3000);
+
+  MOV.exito();
+  aviso('Reporte descargado con resumen y gráficas.');
+
+ }catch(e) {
+  console.error(e);
+  aviso('No se pudieron generar las gráficas; se descarga el reporte simple.');
+  descargarReporteSimple();
+
+ }finally {
+  boton.disabled=false;
+  boton.innerHTML=icono('descargar')+' Descargar reporte Excel';
+ }
+}
+
+function descargarReporteSimple() {
  const d=V.datos;
 
  if(!d||!d.consultas) {
@@ -1548,7 +1984,7 @@ function descargarReporte() {
  ];
 
  const fila=c=>[c.especialidad,c.paciente,c.documento,
-  c.origen==='SOBRECUPO'?'Sobrecupo':'Agenda',
+  GRUPOS[grupoReporte(c)].corto,
   textoAsistencia(c.asistencia),c.marcadoPor,
   c.hora?horaCorta(c.hora):''];
 
