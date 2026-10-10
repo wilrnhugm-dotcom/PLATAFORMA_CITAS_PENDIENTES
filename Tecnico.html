@@ -684,16 +684,23 @@ function filtrarConsultas() {
 }
 
 function etiquetaCita(c) {
+ const hora=c.horaCita
+  ?'<span class="tag hora">'+icono('reloj')+' '+esc(c.horaCita)+'</span> ':'';
+
  if(c.estadoCita==='SOBRECUPO') {
-  return '<span class="tag sobrecupo">Sobrecupo · '+
+  return hora+'<span class="tag sobrecupo">Sobrecupo · '+
    esc(textoEstado(c.sobrecupo))+'</span>';
  }
 
- const tag=c.estadoCita==='ACTIVA'
+ const tag=hora+(c.aumento
+  ?'<span class="tag aumento">Aumento 10%</span> ':'')+
+  (c.origen==='REPORTERIA'
+  ?'<span class="tag activa">Agendado · Reportería</span>':
+  c.estadoCita==='ACTIVA'
   ?'<span class="tag activa">Cita activa</span>'
   :c.estadoCita==='PENDIENTE'
    ?'<span class="tag pendiente">Cita pendiente</span>'
-   :'<span class="tag">Registrada</span>';
+   :'<span class="tag">Registrada</span>');
 
  return tag+(c.sobrecupo
   ?' <span class="tag sobrecupo">Sobrecupo · '+
@@ -715,6 +722,7 @@ function htmlCita(c,texto) {
      ${etiquetaCita(c)}
      ${T.tab?'':'<span>· '+esc(c.especialidad)+'</span>'}
     </div>
+    ${c.observacion?`<div class="obs-ucc" title="Observación del call center">${esc(c.observacion)}</div>`:''}
    </div>
    <div class="asis-wrap">
     <div class="asis">

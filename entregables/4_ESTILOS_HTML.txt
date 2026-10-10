@@ -1290,4 +1290,25 @@ input:focus,select:focus,textarea:focus{
 .overlay.confirma{z-index:70}
 .confirma-caja{width:min(460px,100%)}
 .confirma-caja .buttons{justify-content:center;margin-top:16px}
+
+/* Base de Reportería: días, hora de cita y aumento 10% */
+.tag.aumento{color:#3a2a00;background:var(--yellow);border-color:var(--yellow);font-weight:800}
+.tag.hora{display:inline-flex;align-items:center;gap:4px;font-variant-numeric:tabular-nums}
+.tag.hora svg{width:12px;height:12px}
+.obs-ucc{margin-top:4px;font-size:11px;color:var(--muted);
+ white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.pac-dias{margin:14px 0}
+.pac-dias>b{display:block}
+.pac-dias>small{display:block;color:var(--muted);font-size:11px;margin:2px 0 8px}
+.pac-dias-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.pac-dia{
+ text-align:left;padding:12px 14px;border-radius:14px;cursor:pointer;
+ border:1px solid var(--border);background:var(--panel2);color:var(--text);
+ display:grid;gap:2px;transition:transform .2s,border-color .2s,box-shadow .2s
+}
+.pac-dia span{font-size:12px;text-transform:capitalize;color:var(--muted)}
+.pac-dia strong{font-size:26px;color:var(--cyan);line-height:1.1}
+.pac-dia small{font-size:11px;color:var(--muted)}
+.pac-dia:hover{transform:translateY(-2px);border-color:var(--cyan)}
+.pac-dia.on{border-color:var(--cyan);box-shadow:0 0 0 2px rgba(19,201,245,.25)}
 </style>

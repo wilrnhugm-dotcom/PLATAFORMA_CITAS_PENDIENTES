@@ -207,7 +207,11 @@ const UGM3 = {
       'DocumentoOriginal',
       'Expediente',
       'Especialidad',
-      'Busqueda'
+      'Busqueda',
+      'Fecha',
+      'Hora',
+      'Aumento',
+      'ObservacionUCC'
     ]
   }
 };
@@ -310,12 +314,16 @@ function bloqueada3_(fecha) {
 // Devuelve el DUI como 00000000-0, o '' si no tiene
 // nueve dígitos. Ocho dígitos: se agrega un cero inicial.
 function dui3_(valor) {
-  const digitos = texto3_(valor)
-    .replace(/\.0+$/, '')
-    .replace(/\D/g, '');
+  const t = texto3_(valor).replace(/\.0+$/, '');
+  const digitos = t.replace(/\D/g, '');
 
-  const nueve = digitos.length === 8
-    ? '0' + digitos : digitos;
+  // Excel guarda el DUI como número y pierde los ceros
+  // iniciales (00916089-9 -> 9160899): se completan.
+  const numerico = /^\d{7,8}$/.test(t);
+
+  const nueve = numerico
+    ? digitos.padStart(9, '0')
+    : digitos.length === 8 ? '0' + digitos : digitos;
 
   return nueve.length === 9
     ? nueve.slice(0,8) + '-' + nueve.slice(8)
@@ -2216,6 +2224,7 @@ function hojaPacientes3_(libro,nombre) {
 
   sh.setFrozenRows(1);
   sh.getRange('B:E').setNumberFormat('@');
+  sh.getRange('G:H').setNumberFormat('@');
 
   return sh;
 }
@@ -2234,6 +2243,10 @@ function columnasPacientes3_(sh) {
     expediente:i('Expediente'),
     especialidad:i('Especialidad'),
     busqueda:i('Busqueda'),
+    fecha:i('Fecha'),
+    hora:i('Hora'),
+    aumento:i('Aumento'),
+    observacion:i('ObservacionUCC'),
     ancho:cab.length
   };
 }
@@ -2248,7 +2261,13 @@ function estadoPacientes3_() {
     usuario:c.PAC_USUARIO || '',
     total:Number(c.PAC_TOTAL) || 0,
     invalidos:Number(c.PAC_INVALIDOS) || 0,
-    conEspecialidad:c.PAC_ESPECIALIDAD==='1'
+    conEspecialidad:c.PAC_ESPECIALIDAD==='1',
+    conFechas:c.PAC_CONFECHAS==='1',
+    // {"2026-10-10":{"total":387,"aumento":42}, ...}
+    fechas:(()=>{
+      try { return JSON.parse(c.PAC_FECHAS || '{}'); }
+      catch(e) { return {}; }
+    })()
   };
 }
 
@@ -2298,6 +2317,7 @@ function cargarPacientes(
 
   let invalidos=0;
   let conEspecialidad=false;
+  const fechasLote={};
 
   const filas=lote.map(r => {
     r=r || {};
@@ -2317,13 +2337,29 @@ function cargarPacientes(
     if (!documento) invalidos++;
     if (especialidad) conEspecialidad=true;
 
+    // Fecha de la cita (Reportería): aaaa-mm-dd.
+    const fecha=/^\d{4}-\d{2}-\d{2}$/.test(texto3_(r.fecha))
+      ? texto3_(r.fecha) : '';
+    const aumento=r.aumento===true || texto3_(r.aumento)==='SI';
+
+    if (fecha) {
+      const f=fechasLote[fecha]=fechasLote[fecha] ||
+        {total:0,aumento:0};
+      f.total++;
+      if (aumento) f.aumento++;
+    }
+
     return [
       seguro3_(nombre),
       documento,
       seguro3_(original),
       seguro3_(texto3_(r.expediente).slice(0,50)),
       seguro3_(especialidad),
-      busqueda3_(nombre)
+      busqueda3_(nombre),
+      fecha,
+      texto3_(r.hora).slice(0,10),
+      aumento ? 'SI' : '',
+      seguro3_(texto3_(r.observacion).replace(/\s+/g,' ').slice(0,200))
     ];
   }).filter(Boolean);
 
@@ -2348,7 +2384,8 @@ function cargarPacientes(
       p.setProperties({
         UGM3_PAC_CARGA:carga,
         UGM3_PAC_CARGA_INV:'0',
-        UGM3_PAC_CARGA_ESP:''
+        UGM3_PAC_CARGA_ESP:'',
+        UGM3_PAC_CARGA_FEC:'{}'
       });
 
     } else if (
@@ -2381,9 +2418,21 @@ function cargarPacientes(
     const tieneEspecialidad=conEspecialidad ||
       p.getProperty('UGM3_PAC_CARGA_ESP')==='1';
 
+    let fechas={};
+    try {
+      fechas=JSON.parse(p.getProperty('UGM3_PAC_CARGA_FEC') || '{}');
+    } catch(e) {}
+
+    Object.keys(fechasLote).forEach(f => {
+      const a=fechas[f]=fechas[f] || {total:0,aumento:0};
+      a.total+=fechasLote[f].total;
+      a.aumento+=fechasLote[f].aumento;
+    });
+
     p.setProperties({
       UGM3_PAC_CARGA_INV:String(acumulados),
-      UGM3_PAC_CARGA_ESP:tieneEspecialidad ? '1' : ''
+      UGM3_PAC_CARGA_ESP:tieneEspecialidad ? '1' : '',
+      UGM3_PAC_CARGA_FEC:JSON.stringify(fechas)
     });
 
     if (parte===partes-1) {
@@ -2410,12 +2459,14 @@ function cargarPacientes(
         PAC_USUARIO:s.nombre,
         PAC_TOTAL:total,
         PAC_INVALIDOS:acumulados,
-        PAC_ESPECIALIDAD:tieneEspecialidad ? '1' : '0'
+        PAC_ESPECIALIDAD:tieneEspecialidad ? '1' : '0',
+        PAC_CONFECHAS:Object.keys(fechas).length ? '1' : '0',
+        PAC_FECHAS:JSON.stringify(fechas)
       });
 
       p.setProperty('UGM3_PAC_CARGA','');
 
-      final={total,invalidos:acumulados};
+      final={total,invalidos:acumulados,fechas};
     }
 
   } finally {
@@ -2440,7 +2491,8 @@ function cargarPacientes(
     carga,
     final:Boolean(final),
     total:final ? final.total : 0,
-    invalidos:final ? final.invalidos : 0
+    invalidos:final ? final.invalidos : 0,
+    fechas:final ? final.fechas : {}
   };
 }
 
@@ -2635,7 +2687,54 @@ function claveAsistencia3_(fecha,especialidad,documento,paciente) {
  * Citas de una fecha (agenda + sobrecupos vigentes),
  * una por paciente y especialidad, con su asistencia.
  */
-function consultasDelDia3_(fecha,agenda,solicitudes,asistencia) {
+/**
+ * Pacientes de la base de Reportería con cita en la
+ * fecha (solo si la base trae la columna de fecha). Se
+ * guarda en caché unos minutos por versión de la base,
+ * porque las pantallas se sincronizan cada 10 s.
+ */
+function pacientesDelDia3_(fecha) {
+  const estado=estadoPacientes3_();
+  if (!estado.conFechas || !estado.fechas[fecha]) return [];
+
+  const clave='PACDIA_'+estado.version.slice(0,12)+'_'+fecha;
+  const cache=CacheService.getScriptCache();
+
+  try {
+    const guardado=cache.get(clave);
+    if (guardado) return JSON.parse(guardado);
+  } catch(e) {}
+
+  const sh=base3_().getSheetByName('PACIENTES');
+  if (!sh || sh.getLastRow()<2) return [];
+
+  const c=columnasPacientes3_(sh);
+  if (c.fecha<0) return [];
+
+  const v=(r,i)=>i>=0 ? texto3_(r[i]) : '';
+
+  const lista=sh.getRange(2,1,sh.getLastRow()-1,c.ancho)
+    .getValues()
+    .filter(r=>v(r,c.fecha)===fecha)
+    .map(r=>({
+      nombre:v(r,c.nombre),
+      documento:v(r,c.documento),
+      original:v(r,c.original),
+      especialidad:v(r,c.especialidad).split(' | ')[0] || '',
+      hora:v(r,c.hora),
+      aumento:v(r,c.aumento)==='SI',
+      observacion:v(r,c.observacion)
+    }));
+
+  try {
+    const json=JSON.stringify(lista);
+    if (json.length<95000) cache.put(clave,json,300);
+  } catch(e) {}
+
+  return lista;
+}
+
+function consultasDelDia3_(fecha,agenda,solicitudes,asistencia,reporteria) {
   const mapa=new Map();
 
   agenda.forEach(r => {
@@ -2667,6 +2766,60 @@ function consultasDelDia3_(fecha,agenda,solicitudes,asistencia) {
     });
   });
 
+  // Pacientes de Reportería (ya agendados para el fin de
+  // semana). Si ya están en la agenda del sistema no se
+  // duplican: solo se les agrega la hora y la marca de
+  // aumento del 10 %.
+  const porDui={};
+  const porNombre={};
+
+  mapa.forEach(c => {
+    const d=dui3_(c.documento);
+    if (d) porDui[d+'|'+norm3_(c.especialidad)]=c;
+    porNombre[busqueda3_(c.paciente)+'|'+norm3_(c.especialidad)]=c;
+  });
+
+  (reporteria || []).forEach(p => {
+    const esp=norm3_(p.especialidad);
+    const dui=p.documento || dui3_(p.original);
+    const existente=(dui && porDui[dui+'|'+esp]) ||
+      porNombre[busqueda3_(p.nombre)+'|'+esp];
+
+    if (existente) {
+      existente.reporteria=true;
+      existente.aumento=existente.aumento || p.aumento;
+      existente.horaCita=existente.horaCita || p.hora;
+      existente.observacion=existente.observacion || p.observacion;
+      return;
+    }
+
+    const documento=dui || texto3_(p.original);
+    const clave=claveAsistencia3_(
+      fecha,p.especialidad,documento,p.nombre
+    );
+
+    if (mapa.has(clave)) return;
+
+    const nueva={
+      clave,
+      especialidad:texto3_(p.especialidad),
+      paciente:texto3_(p.nombre),
+      documento,
+      estadoCita:'ACTIVA',
+      origen:'REPORTERIA',
+      referencia:'',
+      sobrecupo:'',
+      reporteria:true,
+      aumento:p.aumento,
+      horaCita:p.hora,
+      observacion:p.observacion
+    };
+
+    mapa.set(clave,nueva);
+    if (dui) porDui[dui+'|'+esp]=nueva;
+    porNombre[busqueda3_(p.nombre)+'|'+esp]=nueva;
+  });
+
   solicitudes.forEach(r => {
     if (texto3_(r.FechaSobrecupo)!==fecha) return;
 
@@ -2678,8 +2831,13 @@ function consultasDelDia3_(fecha,agenda,solicitudes,asistencia) {
       fecha,r.Especialidad,r.Documento,r.Nombres
     );
 
-    if (mapa.has(clave)) {
-      mapa.get(clave).sobrecupo=texto3_(r.Estado);
+    // El mismo paciente puede venir con el DUI escrito
+    // distinto en la agenda: se busca también por DUI.
+    const igual=mapa.get(clave) ||
+      porDui[dui3_(r.Documento)+'|'+norm3_(r.Especialidad)];
+
+    if (igual) {
+      igual.sobrecupo=texto3_(r.Estado);
       return;
     }
 
@@ -2732,6 +2890,7 @@ function consultasDelDia3_(fecha,agenda,solicitudes,asistencia) {
     })
     .sort((a,b) =>
       a.especialidad.localeCompare(b.especialidad) ||
+      String(a.horaCita||'99').localeCompare(String(b.horaCita||'99')) ||
       a.paciente.localeCompare(b.paciente)
     );
 }
@@ -2860,7 +3019,7 @@ function tableroTecnico(token,fecha,actividad) {
   const asistencia=leer3_('ASISTENCIA');
 
   const consultas=consultasDelDia3_(
-    f,agenda,solicitudes,asistencia
+    f,agenda,solicitudes,asistencia,pacientesDelDia3_(f)
   );
 
   const nombre=norm3_(s.nombre);
@@ -2948,7 +3107,7 @@ function tableroSupervisor(token,fecha,opciones) {
   const ahora=Date.now();
 
   const consultas=consultasDelDia3_(
-    f,agenda,solicitudes,asistencia
+    f,agenda,solicitudes,asistencia,pacientesDelDia3_(f)
   );
 
   const cupos=calcular3_(f,agenda,solicitudes);

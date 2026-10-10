@@ -510,6 +510,8 @@
      <strong id="pacFecha">Sin datos</strong></div>
    </div>
 
+   <div class="pac-dias" id="pacDias"></div>
+
    <div class="notice">
     <strong>Estado de la base</strong>
     <p id="patientsStatus">Sin información.</p>
@@ -1544,18 +1546,26 @@ function pintarAsistencia(animar) {
 
 const GRUPOS={
  AGENDA:{
-  nombre:'Agenda del sistema',
-  corto:'Agenda del sistema',
-  hoja:'Agenda del sistema',
-  detalle:'Pacientes que ya venían agendados en el Reporte de Citas del sistema hospitalario.'
+  nombre:'Pacientes agendados',
+  corto:'Agendado',
+  hoja:'Agendados',
+  detalle:'Pacientes que ya estaban agendados para la fecha (base de Reportería y agenda del sistema). El "Aumento 10%" se indica en la columna Tipo.'
  },
  SOBRECUPO:{
-  nombre:'Sobrecupos (Reportería)',
-  corto:'Sobrecupo (Reportería)',
-  hoja:'Sobrecupos Reportería',
-  detalle:'Pacientes agendados como sobrecupo por los técnicos a partir de la base de Reportería.'
+  nombre:'Pacientes adicionales (sobrecupo)',
+  corto:'Adicional (sobrecupo)',
+  hoja:'Adicionales sobrecupo',
+  detalle:'Pacientes adicionales agendados como sobrecupo por los técnicos en la plataforma.'
  }
 };
+
+// Tipo de cita para pantallas y reportes.
+function tipoCita(c) {
+ if(grupoReporte(c)==='SOBRECUPO')return 'Sobrecupo';
+ if(c.aumento)return 'Aumento 10%';
+ if(c.origen==='REPORTERIA')return 'Reportería';
+ return 'Agenda del sistema';
+}
 
 // Un sobrecupo que luego aparece en el reporte del
 // sistema sigue contando como sobrecupo.
@@ -1587,8 +1597,9 @@ function porEspecialidad(lista) {
 function pintarOrigen() {
  const lista=V.datos.consultas||[];
  const filas=[
-  ['Agenda del sistema',conteo(lista.filter(c=>grupoReporte(c)==='AGENDA'))],
-  ['Sobrecupos (Reportería)',conteo(lista.filter(c=>grupoReporte(c)==='SOBRECUPO'))],
+  ['Agendados',conteo(lista.filter(c=>grupoReporte(c)==='AGENDA'))],
+  ['   · de ellos, aumento 10%',conteo(lista.filter(c=>grupoReporte(c)==='AGENDA'&&c.aumento))],
+  ['Adicionales (sobrecupo)',conteo(lista.filter(c=>grupoReporte(c)==='SOBRECUPO'))],
   ['TOTAL',conteo(lista)]
  ];
 
@@ -1631,7 +1642,8 @@ function pintarDetalle(animar) {
    <td><b>${esc(c.paciente)}</b></td>
    <td>${esc(c.documento)}</td>
    <td>${esc(c.especialidad)}</td>
-   <td>${esc(GRUPOS[grupoReporte(c)].corto)}</td>
+   <td>${esc(GRUPOS[grupoReporte(c)].corto)}${c.aumento&&grupoReporte(c)==='AGENDA'
+    ?' <span class="tag aumento">Aumento 10%</span>':''}</td>
    <td style="color:${c.asistencia==='ASISTIO'?'var(--green)':
     c.asistencia==='NO_ASISTIO'?'var(--red)':'var(--yellow)'}">
     <b>${textoAsistencia(c.asistencia)}</b></td>
@@ -1829,7 +1841,7 @@ function hojaGrupo(wb,grupo,lista,d) {
   grupo==='AGENDA'?'FF0A9FD0':'FF8E5BD8'}}});
 
  ws.columns=[{width:30},{width:46},{width:16},{width:16},
-  {width:16},{width:24},{width:10}];
+  {width:16},{width:24},{width:10},{width:18},{width:10}];
  paraImprimir(ws);
 
  ws.mergeCells('A1:G1');
@@ -1860,18 +1872,23 @@ function hojaGrupo(wb,grupo,lista,d) {
 
  const cab=ws.getRow(inicio+1);
  cab.values=['Especialidad','Paciente','Documento','Asistencia',
-  'Marcado por','Hora','Estado'];
+  'Marcado por','Hora marca','Estado','Tipo','Hora cita'];
  encabezados(cab);
 
  lista.slice().sort((a,b)=>
   a.especialidad.localeCompare(b.especialidad)||
+  String(a.horaCita||'').localeCompare(String(b.horaCita||''))||
   a.paciente.localeCompare(b.paciente)
  ).forEach((c,i)=>{
   const r=ws.getRow(inicio+2+i);
   r.values=[c.especialidad,c.paciente,c.documento,
    textoAsistencia(c.asistencia),c.marcadoPor||'',
    c.hora?horaCorta(c.hora):'',
-   c.sobrecupo?textoEstado(c.sobrecupo):(c.estadoCita||'')];
+   c.sobrecupo?textoEstado(c.sobrecupo):(c.estadoCita||''),
+   tipoCita(c),c.horaCita||''];
+  if(c.aumento&&grupoReporte(c)==='AGENDA') {
+   r.getCell(8).font={bold:true,color:{argb:'FFB7791F'}};
+  }
   const a=r.getCell(4);
   a.font={bold:true,color:{argb:c.asistencia==='ASISTIO'?ARGB.si:
    c.asistencia==='NO_ASISTIO'?ARGB.no:ARGB.sin}};
@@ -1880,7 +1897,7 @@ function hojaGrupo(wb,grupo,lista,d) {
  });
 
  ws.autoFilter={from:{row:inicio+1,column:1},
-  to:{row:inicio+1,column:7}};
+  to:{row:inicio+1,column:9}};
 }
 
 function hojaResumen(wb,d,lista) {
@@ -1901,8 +1918,9 @@ function hojaResumen(wb,d,lista) {
  ws.getCell('A3').font={color:{argb:'FF58768A'}};
 
  const grupos=[
-  ['Agenda del sistema',conteo(lista.filter(c=>grupoReporte(c)==='AGENDA'))],
-  ['Sobrecupos (Reportería)',conteo(lista.filter(c=>grupoReporte(c)==='SOBRECUPO'))],
+  ['Agendados',conteo(lista.filter(c=>grupoReporte(c)==='AGENDA'))],
+  ['   · de ellos, aumento 10%',conteo(lista.filter(c=>grupoReporte(c)==='AGENDA'&&c.aumento))],
+  ['Adicionales (sobrecupo)',conteo(lista.filter(c=>grupoReporte(c)==='SOBRECUPO'))],
   ['TOTAL',conteo(lista)]
  ];
 
@@ -2027,12 +2045,12 @@ function descargarReporteSimple() {
  ];
 
  const fila=c=>[c.especialidad,c.paciente,c.documento,
-  GRUPOS[grupoReporte(c)].corto,
+  tipoCita(c),c.horaCita||'',
   textoAsistencia(c.asistencia),c.marcadoPor,
   c.hora?horaCorta(c.hora):''];
 
- const cab=['Especialidad','Paciente','Documento','Origen',
-  'Asistencia','Marcado por','Hora'];
+ const cab=['Especialidad','Paciente','Documento','Tipo','Hora cita',
+  'Asistencia','Marcado por','Hora marca'];
 
  const hoja=(filas,anchos)=>{
   const h=XLSX.utils.aoa_to_sheet(filas);
@@ -2040,11 +2058,19 @@ function descargarReporteSimple() {
   return h;
  };
 
- const anchos=[30,38,16,12,14,26,8];
+ const anchos=[30,38,16,20,10,14,26,10];
  const wb=XLSX.utils.book_new();
 
  XLSX.utils.book_append_sheet(wb,
   hoja(resumen,[34,10,12,14,12,14]),'Resumen');
+ // Igual que el reporte completo: agendados y adicionales
+ // en hojas separadas.
+ XLSX.utils.book_append_sheet(wb,
+  hoja([cab,...d.consultas.filter(c=>grupoReporte(c)==='AGENDA').map(fila)],anchos),
+  'Agendados');
+ XLSX.utils.book_append_sheet(wb,
+  hoja([cab,...d.consultas.filter(c=>grupoReporte(c)==='SOBRECUPO').map(fila)],anchos),
+  'Adicionales sobrecupo');
  XLSX.utils.book_append_sheet(wb,
   hoja([cab,...d.consultas.filter(c=>c.asistencia==='ASISTIO').map(fila)],anchos),
   'Asistieron');
@@ -2240,6 +2266,24 @@ function pintarBase() {
 
  $('pacTotal').textContent=pac.total||0;
  $('pacInv').textContent=pac.invalidos||0;
+
+ // Pacientes por día de cita (base de Reportería).
+ const dias=Object.keys(pac.fechas||{}).sort();
+ const htmlDias=dias.length
+  ?'<b>Pacientes por día</b><small>Toca un día para verlo en Consultas del día.</small>'+
+   '<div class="pac-dias-lista">'+dias.map(f=>{
+    const x=pac.fechas[f];
+    return `<button type="button" class="pac-dia${f===V.fecha?' on':''}" data-f="${esc(f)}">
+     <span>${esc(fechaLarga(f))}</span>
+     <strong>${x.total}</strong>
+     <small>${x.total-x.aumento} agendados${x.aumento?' · '+x.aumento+' aumento 10%':''}</small>
+    </button>`;
+   }).join('')+'</div>'
+  :'';
+ if(cambio('pacDias',[htmlDias])) {
+  $('pacDias').innerHTML=htmlDias;
+  MOV.escalonar($('pacDias').querySelectorAll('.pac-dia'));
+ }
  $('pacFecha').textContent=pac.fecha
   ?new Date(pac.fecha).toLocaleDateString('es-SV'):'Sin datos';
 }
@@ -2310,6 +2354,15 @@ function iniciar() {
   V.fecha=$('fecha').value;
   V.firmas={};
   refrescar(true);
+ });
+
+ // Día de la base de Reportería -> fecha de operación.
+ $('pacDias').addEventListener('click',ev=>{
+  const b=ev.target.closest('.pac-dia');
+  if(!b)return;
+  $('fecha').value=b.dataset.f;
+  $('fecha').dispatchEvent(new Event('change'));
+  aviso('Fecha de operación: '+fechaLarga(b.dataset.f)+'.');
  });
 
  $('solChips').addEventListener('click',ev=>{
@@ -2400,7 +2453,8 @@ if(document.readyState==='loading') {
 const ALIAS_PACIENTES={
  completo:[
   'NOMBRECOMPLETO','NOMBREDELPACIENTE',
-  'NOMBREPACIENTE','PACIENTE',
+  'NOMBREPACIENTE','PACIENTE','PACIENTENOMBRE',
+  'NOMBREDEPACIENTE',
   'NOMBREYAPELLIDO','NOMBREYAPELLIDOS',
   'NOMBRESYAPELLIDOS'
  ],
@@ -2422,7 +2476,19 @@ const ALIAS_PACIENTES={
  ],
  expediente:[
   'EXPEDIENTE','NUMEROEXPEDIENTE',
-  'NOEXPEDIENTE','NUMERODEEXPEDIENTE'
+  'NOEXPEDIENTE','NUMERODEEXPEDIENTE',
+  'PACIENTECODIGO','CODIGOPACIENTE','CODIGODEPACIENTE'
+ ],
+ // Base de Reportería (call center): fecha y hora de la
+ // cita y observaciones.
+ fecha:[
+  'FECHAYHORA','FECHAHORA','FECHA','FECHACITA',
+  'FECHADECITA','FECHADELACITA'
+ ],
+ hora:['HORA','HORACITA','HORADECITA'],
+ observacion:[
+  'OBSERVACIONESUCC','OBSERVACIONUCC','OBSERVACIONES',
+  'OBSERVACION'
  ],
  especialidad:[
   'ESPECIALIDAD','ESPECIALIDADES',
@@ -2456,7 +2522,10 @@ function encabezadosPacientes(fila) {
   partes,
   documento,
   expediente:uno(ALIAS_PACIENTES.expediente),
-  especialidad:uno(ALIAS_PACIENTES.especialidad)
+  especialidad:uno(ALIAS_PACIENTES.especialidad),
+  fecha:uno(ALIAS_PACIENTES.fecha),
+  hora:uno(ALIAS_PACIENTES.hora),
+  observacion:uno(ALIAS_PACIENTES.observacion)
  };
 }
 
@@ -2471,16 +2540,16 @@ async function procesarPacientes(origen) {
     header:1,
     defval:'',
     raw:false,
-    blankrows:false
+    blankrows:true
    }
   );
 
-  for(let i=0;i<Math.min(25,matriz.length);i++) {
+  for(let i=0;i<Math.min(40,matriz.length);i++) {
    const campos=encabezadosPacientes(matriz[i]);
 
    if(campos&&(!mejor||
       matriz.length-i>mejor.matriz.length-mejor.inicio)) {
-    mejor={matriz,inicio:i+1,campos};
+    mejor={matriz,inicio:i+1,campos,hoja:nombre};
     break;
    }
   }
@@ -2502,17 +2571,53 @@ async function procesarPacientes(origen) {
   );
  }
 
- const {matriz,inicio,campos}=mejor;
+ const {matriz,inicio}=mejor;
+ let campos=mejor.campos;
  const registros=[];
+
+ // Valores crudos (fechas como Date) de la misma hoja.
+ const crudo=XLSX.utils.sheet_to_json(
+  libro.Sheets[mejor.hoja],{header:1,defval:'',raw:true,blankrows:true}
+ );
+
+ // La base de Reportería trae varias secciones, cada una
+ // con su título y sus encabezados repetidos. Desde la
+ // sección "AUMENTO DEL 10%" los pacientes se marcan aparte.
+ let aumento=false;
 
  for(let i=inicio;i<matriz.length;i++) {
   const fila=matriz[i]||[];
+  const llenas=fila.filter(v=>String(v??'').trim()!=='');
+
+  // Encabezado repetido: si le falta alguna columna (p. ej.
+  // "FECHA Y HORA" en Fisiatría) se conserva la anterior.
+  const otraCabecera=encabezadosPacientes(fila);
+  if(otraCabecera) {
+   ['expediente','especialidad','fecha','hora','observacion']
+    .forEach(k=>{if(otraCabecera[k]<0)otraCabecera[k]=campos[k];});
+   campos=otraCabecera;
+   continue;
+  }
+
+  if(llenas.length===1&&
+     /AUMENTO/.test(nombreColumna(llenas[0]))) {
+   aumento=true;
+   continue;
+  }
 
   const nombre=limpiarNombrePaciente(campos.partes
    .map(c=>String(fila[c]??'').trim())
    .filter(Boolean).join(' '));
 
-  if(!nombre)continue;
+  if(!nombre||llenas.length<2)continue;
+
+  const cita=campos.fecha>=0
+   ?fechaReporteria((crudo[i]||[])[campos.fecha],fila[campos.fecha])
+   :{fecha:'',hora:''};
+
+  if(campos.hora>=0&&!cita.hora) {
+   cita.hora=horaReporteria(fila[campos.hora]);
+  }
 
   registros.push({
    nombre,
@@ -2520,11 +2625,71 @@ async function procesarPacientes(origen) {
    expediente:campos.expediente>=0
     ?String(fila[campos.expediente]??''):'',
    especialidad:campos.especialidad>=0
-    ?String(fila[campos.especialidad]??''):''
+    ?String(fila[campos.especialidad]??''):'',
+   fecha:cita.fecha,
+   hora:cita.hora,
+   aumento,
+   observacion:campos.observacion>=0
+    ?String(fila[campos.observacion]??'').trim():''
   });
  }
 
  return registros;
+}
+
+// Hora "7:00 am", "1:00 pm", "13:30" -> "07:00", "13:00".
+function horaReporteria(v) {
+ const m=String(v??'').toLowerCase()
+  .match(/(\d{1,2})\s*[:.h]\s*(\d{2})\s*([ap])?\.?\s*m?/);
+ if(!m)return '';
+ let h=Number(m[1]);
+ const min=Number(m[2]);
+ if(m[3]==='p'&&h<12)h+=12;
+ if(m[3]==='a'&&h===12)h=0;
+ if(h>23||min>59)return '';
+ return String(h).padStart(2,'0')+':'+String(min).padStart(2,'0');
+}
+
+// La columna "FECHA Y HORA" viene escrita de muchas formas:
+// celda de fecha, "10-10-2026", "10/10/2026",
+// "2026-10-10", "11-10-2026 a las 7:00 am", "11/10/026".
+// Se interpreta como día/mes/año (El Salvador).
+function fechaReporteria(crudo,texto) {
+ const dos=n=>String(n).padStart(2,'0');
+
+ if(crudo instanceof Date&&!isNaN(crudo)) {
+  const d=new Date(crudo.getTime()+30000);
+  const h=d.getHours()||d.getMinutes()
+   ?dos(d.getHours())+':'+dos(d.getMinutes()):'';
+  return {fecha:d.getFullYear()+'-'+dos(d.getMonth()+1)+'-'+dos(d.getDate()),hora:h};
+ }
+
+ if(typeof crudo==='number'&&crudo>30000&&crudo<80000) {
+  const ms=Math.round((crudo-25569)*86400000);
+  const d=new Date(ms);
+  const h=d.getUTCHours()||d.getUTCMinutes()
+   ?dos(d.getUTCHours())+':'+dos(d.getUTCMinutes()):'';
+  return {fecha:d.getUTCFullYear()+'-'+dos(d.getUTCMonth()+1)+'-'+dos(d.getUTCDate()),hora:h};
+ }
+
+ const t=String(texto??crudo??'').trim();
+ const hora=horaReporteria(t.replace(/^\S+/,''));
+ let a,m,d,x;
+
+ if((x=t.match(/(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/))) {
+  [a,m,d]=[x[1],x[2],x[3]];
+ } else if((x=t.match(/(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})/))) {
+  [d,m,a]=[x[1],x[2],x[3]];
+  a=Number(a);
+  if(a<100)a+=2000;
+  else if(a<1000)a=2000+(a%100);
+ } else {
+  return {fecha:'',hora};
+ }
+
+ a=Number(a);m=Number(m);d=Number(d);
+ if(m<1||m>12||d<1||d>31)return {fecha:'',hora};
+ return {fecha:a+'-'+dos(m)+'-'+dos(d),hora};
 }
 
 async function importarPacientes(origen) {
@@ -2588,9 +2753,14 @@ async function importarPacientes(origen) {
    carga=r.carga;
   }
 
+  const porDia=Object.keys(r.fechas||{}).sort().map(f=>
+   fechaLarga(f)+': '+r.fechas[f].total+
+   (r.fechas[f].aumento?' ('+r.fechas[f].aumento+' aumento 10%)':''));
+
   progreso.textContent='Base de pacientes cargada: '+
    r.total+' pacientes · DUI inválidos: '+
-   r.invalidos+'. Ya está disponible para los técnicos.';
+   r.invalidos+'.'+(porDia.length?' Por día → '+porDia.join(' · ')+'.':'')+
+   ' Ya está disponible para los técnicos.';
   MOV.barra(barra.firstElementChild,1);
 
   aviso(
