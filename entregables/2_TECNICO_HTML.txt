@@ -108,9 +108,6 @@
   <i data-ico="buscar"></i>Buscar paciente
  </button>
 
- <button class="nav" data-page="actualizacion">
-  <i data-ico="subir"></i>Actualizar agenda
- </button>
 
  <div class="side-bottom">
   TECNOLOGÍA<br>AL SERVICIO<br>DE TU SALUD
@@ -211,18 +208,6 @@
 
  <!-- SOLICITUD DE SOBRECUPO -->
  <section class="page hidden" id="solicitud">
-  <div class="notice warning hidden" id="agendaAlert">
-   <strong>Actualización de agenda requerida</strong>
-   <p id="agendaAlertText">
-    Supervisión solicitó actualizar la agenda hospitalaria.
-   </p>
-   <div class="buttons">
-    <button class="btn primary" id="btnGoUpload" type="button">
-     Actualizar agenda
-    </button>
-   </div>
-  </div>
-
   <div class="panel glass">
    <h2><span data-ico="agregar"></span> Solicitud de sobrecupo</h2>
    <p class="desc">
@@ -411,47 +396,6 @@
   </div>
  </section>
 
- <!-- ACTUALIZAR AGENDA -->
- <section class="page hidden" id="actualizacion">
-  <div class="panel glass">
-   <h2><span data-ico="calendario"></span> Agenda del día (Reporte de Citas)</h2>
-   <p class="desc">Se comparte con todos los técnicos y supervisión.</p>
-
-   <div class="guia">
-    <div class="guia-ico" data-ico="calendario"></div>
-    <div>
-     <b>¿Qué archivo va aquí?</b>
-     <p>El <b>Reporte de Citas</b> que se descarga <b>cada día</b> del
-      sistema hospitalario. Ejemplo de nombre:
-      <code>Reporte_Citas_2026-10-10_02-28-19.xlsx</code></p>
-     <ul>
-      <li>Trae columnas como <b>Fecha/Hora, Paciente, Documento,
-       Especialidad y Estado Cita</b>.</li>
-      <li>Alimenta <b>Consultas del día</b> y la <b>asistencia</b>.
-       Cada carga reemplaza la anterior.</li>
-      <li><b>No</b> es la base de pacientes de Reportería: esa la carga
-       supervisión.</li>
-     </ul>
-    </div>
-   </div>
-
-   <div class="notice">
-    <strong>Estado de la agenda</strong>
-    <p id="uploadStatus">Sin información.</p>
-   </div>
-
-   <div class="dropzone" id="excelZone" role="button" tabindex="0">
-    <strong>Arrastra aquí el archivo Excel</strong>
-    <small>O haz clic para seleccionarlo. También puedes
-     pegarlo con Ctrl+V.</small>
-    <small>Formatos .xlsx, .xls y .csv · Celdas copiadas de Excel</small>
-   </div>
-
-   <input id="excelFile" type="file" class="hidden"
-    accept=".xlsx,.xls,.csv">
-  </div>
- </section>
-
  <div class="bottom">
   <span class="small muted" id="status">Sistema UGM</span>
   <button id="btnRefresh" class="btn" type="button">
@@ -521,7 +465,7 @@ const TITULOS={
  solicitud:['Solicitud de sobrecupo','Sábado y domingo · solicitudes médicas con ticket'],
  missolicitudes:['Mis solicitudes','Seguimiento de tus solicitudes'],
  buscar:['Buscar paciente','Base de pacientes'],
- actualizacion:['Actualizar agenda','Agenda hospitalaria compartida']
+
 };
 
 function page(n) {
@@ -608,20 +552,6 @@ function dibujar() {
  pintarConsultas(false);
  pintarMias();
 
- const a=d.agenda||{};
-
- $('uploadStatus').textContent=a.fecha
-  ?'Última carga: '+a.archivo+' · Responsable: '+a.usuario+
-   ' · Antigüedad: '+a.minutos+' minutos.'
-  :'Todavía no se ha importado una agenda.';
-
- $('agendaAlert').classList.toggle('hidden',!a.extraordinaria);
-
- $('agendaAlertText').textContent=a.extraordinaria
-  ?'Supervisión solicitó una actualización extraordinaria '+
-   'de la agenda.'
-  :'Para sobrecupos de sábado y domingo la agenda debe '+
-   'haberse cargado en los últimos 30 minutos.';
 }
 
 /* =====================================================
@@ -645,8 +575,9 @@ function pintarIndicadores() {
  contarNumero('kPend',pend);
 
  $('kAvance').textContent=Math.round(avance*100)+'% registrado';
- $('kFecha').textContent=T.fecha===(T.datos||{}).hoy
-  ?'Hoy':T.fecha;
+ const ag=(T.datos||{}).agenda||{};
+ $('kFecha').textContent=(T.fecha===(T.datos||{}).hoy?'Hoy':T.fecha)+
+  (ag.fecha?' · agenda '+horaCorta(ag.fecha):'');
 
  MOV.anillo($('ringAvance'),avance);
 }
@@ -820,8 +751,8 @@ function pintarConsultas(animar) {
   cont.innerHTML=`<div class="empty">
    <span class="ico">${icono('calendario')}</span>
    <b>No hay citas para esta fecha</b>
-   Carga la agenda del día en "Actualizar agenda" o elige
-   otra fecha.</div>`;
+   Supervisión aún no ha cargado la agenda de esta fecha.
+   Elige otra fecha o consulta con supervisión.</div>`;
   $('cPie').textContent='';
   if(animar)MOV.escalonar(cont.children);
   return;
@@ -1733,24 +1664,8 @@ function iniciar() {
  montarBuscador();
  montarTickets();
 
- $('btnGoUpload').addEventListener('click',()=>page('actualizacion'));
-
- // Agenda
- const recargar=async r=>{
-  T.cupos={};
-  await refrescar();
- };
-
- montarZona($('excelZone'),$('excelFile'),
-  f=>importarAgendaArchivo(f,recargar));
-
  document.addEventListener('paste',ev=>{
   if(!UGM.token)return;
-
-  if(T.pagina==='actualizacion') {
-   pegarComoTabla(ev,f=>importarAgendaArchivo(f,recargar));
-   return;
-  }
 
   if(T.pagina==='solicitud') {
    const img=imagenPegada(ev);

@@ -53,7 +53,7 @@ CLAVES (sin espacios)
 ==========================================================
  ¿QUÉ ARCHIVO SE CARGA EN CADA LUGAR?
 ==========================================================
- AGENDA DEL DÍA  (técnicos y supervisión)
+ AGENDA DEL DÍA  (solo supervisión)
    -> El "Reporte de Citas" que se descarga CADA DÍA del
       sistema hospitalario (Reporte_Citas_AAAA-MM-DD....xlsx).
    -> Alimenta Consultas del día y la asistencia.
@@ -88,7 +88,8 @@ TÉCNICOS
    * Para el MISMO DÍA (hoy): no se agenda, salvo que el
      médico lo exija (misma alerta y solicitud médica).
    * Fechas bloqueadas de diciembre y enero: nunca.
- - Mis solicitudes, Buscar paciente, Actualizar agenda.
+ - Mis solicitudes y Buscar paciente.
+ - Los técnicos NO cargan la agenda: solo la consultan.
 
 SUPERVISIÓN
  - Centro de control en vivo: técnicos en línea, gráficas
