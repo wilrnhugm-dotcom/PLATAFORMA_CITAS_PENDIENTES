@@ -332,9 +332,10 @@
    <div class="toolbar">
     <div>
      <h2>Reporte de asistencia</h2>
-     <p class="desc" style="margin:0">Separado por origen y por
-      especialidad. El Excel incluye un resumen y una gráfica en
-      cada hoja.</p>
+     <p class="desc" style="margin:0">Hojas del Excel: <b>Agendados</b>
+      (agenda del sistema), <b>Adicionales Reportería</b> (no estaban en
+      la agenda + Aumento 10%) y <b>Sobrecupos técnicos</b>, con resumen
+      y gráficas.</p>
     </div>
     <button class="btn primary" id="btnReporte" type="button">
      <i data-ico="descargar"></i> Descargar reporte Excel
@@ -1613,33 +1614,60 @@ function pintarAsistencia(animar) {
 
 /* ---------- Origen: agenda del sistema vs. sobrecupos ---------- */
 
+// Orden de las hojas del reporte del día.
+const ORDEN_GRUPOS=['AGENDA','ADICIONAL','SOBRECUPO'];
+
 const GRUPOS={
  AGENDA:{
   nombre:'Pacientes agendados',
   corto:'Agendado',
   hoja:'Agendados',
-  detalle:'Pacientes que ya estaban agendados para la fecha (base de Reportería y agenda del sistema). El "Aumento 10%" se indica en la columna Tipo.'
+  color:'FF0A9FD0',
+  detalle:'Pacientes que ya tenían su cita en la agenda del sistema hospitalario (Reporte de Citas).'
+ },
+ ADICIONAL:{
+  nombre:'Pacientes adicionales (Reportería)',
+  corto:'Adicional Reportería',
+  hoja:'Adicionales Reportería',
+  color:'FFE0A526',
+  detalle:'Pacientes enviados por Reportería que no estaban en la agenda del sistema, más los del "Aumento 10%".'
  },
  SOBRECUPO:{
-  nombre:'Pacientes adicionales (sobrecupo)',
-  corto:'Adicional (sobrecupo)',
-  hoja:'Adicionales sobrecupo',
-  detalle:'Pacientes adicionales agendados como sobrecupo por los técnicos en la plataforma.'
+  nombre:'Sobrecupos de técnicos',
+  corto:'Sobrecupo técnico',
+  hoja:'Sobrecupos técnicos',
+  color:'FF8E5BD8',
+  detalle:'Pacientes registrados como sobrecupo por los técnicos en la plataforma (con ticket).'
  }
 };
 
 // Tipo de cita para pantallas y reportes.
 function tipoCita(c) {
- if(grupoReporte(c)==='SOBRECUPO')return 'Sobrecupo';
+ if(grupoReporte(c)==='SOBRECUPO')return 'Sobrecupo técnico';
  if(c.aumento)return 'Aumento 10%';
- if(c.origen==='REPORTERIA')return 'Reportería';
+ if(c.origen==='REPORTERIA')return 'Reportería (no estaba en agenda)';
  return 'Agenda del sistema';
 }
 
-// Un sobrecupo que luego aparece en el reporte del
-// sistema sigue contando como sobrecupo.
+// 1) Sobrecupo registrado por un técnico -> SOBRECUPO
+//    (aunque el paciente también esté en la agenda).
+// 2) Enviado por Reportería sin estar en la agenda, o del
+//    "Aumento 10%" -> ADICIONAL.
+// 3) El resto (agenda del sistema) -> AGENDA.
 function grupoReporte(c) {
- return c.origen==='SOBRECUPO'||c.sobrecupo?'SOBRECUPO':'AGENDA';
+ if(c.origen==='SOBRECUPO'||c.sobrecupo)return 'SOBRECUPO';
+ if(c.origen==='REPORTERIA'||c.aumento)return 'ADICIONAL';
+ return 'AGENDA';
+}
+
+function filasGrupos(lista) {
+ return [
+  ...ORDEN_GRUPOS.map(g=>[GRUPOS[g].hoja,
+   conteo(lista.filter(c=>grupoReporte(c)===g))]),
+  ['   · adicionales del aumento 10%',
+   conteo(lista.filter(c=>grupoReporte(c)==='ADICIONAL'&&c.aumento))],
+  ['TOTAL',conteo(lista)]
+ ];
 }
 
 function conteo(lista) {
@@ -1665,12 +1693,7 @@ function porEspecialidad(lista) {
 
 function pintarOrigen() {
  const lista=V.datos.consultas||[];
- const filas=[
-  ['Agendados',conteo(lista.filter(c=>grupoReporte(c)==='AGENDA'))],
-  ['   · de ellos, aumento 10%',conteo(lista.filter(c=>grupoReporte(c)==='AGENDA'&&c.aumento))],
-  ['Adicionales (sobrecupo)',conteo(lista.filter(c=>grupoReporte(c)==='SOBRECUPO'))],
-  ['TOTAL',conteo(lista)]
- ];
+ const filas=filasGrupos(lista);
 
  if(!cambio('origen',filas))return;
 
@@ -1711,7 +1734,7 @@ function pintarDetalle(animar) {
    <td><b>${esc(c.paciente)}</b></td>
    <td>${esc(c.documento)}</td>
    <td>${esc(c.especialidad)}</td>
-   <td>${esc(GRUPOS[grupoReporte(c)].corto)}${c.aumento&&grupoReporte(c)==='AGENDA'
+   <td>${esc(GRUPOS[grupoReporte(c)].corto)}${c.aumento&&grupoReporte(c)==='ADICIONAL'
     ?' <span class="tag aumento">Aumento 10%</span>':''}</td>
    <td style="color:${c.asistencia==='ASISTIO'?'var(--green)':
     c.asistencia==='NO_ASISTIO'?'var(--red)':'var(--yellow)'}">
@@ -1906,8 +1929,7 @@ function bloqueResumen(ws,filaInicio,t) {
 function hojaGrupo(wb,grupo,lista,d) {
  const G=GRUPOS[grupo];
  const t=conteo(lista);
- const ws=wb.addWorksheet(G.hoja,{properties:{tabColor:{argb:
-  grupo==='AGENDA'?'FF0A9FD0':'FF8E5BD8'}}});
+ const ws=wb.addWorksheet(G.hoja,{properties:{tabColor:{argb:G.color}}});
 
  ws.columns=[{width:30},{width:46},{width:16},{width:16},
   {width:16},{width:24},{width:10},{width:18},{width:10}];
@@ -1955,7 +1977,7 @@ function hojaGrupo(wb,grupo,lista,d) {
    c.hora?horaCorta(c.hora):'',
    c.sobrecupo?textoEstado(c.sobrecupo):(c.estadoCita||''),
    tipoCita(c),c.horaCita||''];
-  if(c.aumento&&grupoReporte(c)==='AGENDA') {
+  if(c.aumento&&grupoReporte(c)==='ADICIONAL') {
    r.getCell(8).font={bold:true,color:{argb:'FFB7791F'}};
   }
   const a=r.getCell(4);
@@ -1986,12 +2008,7 @@ function hojaResumen(wb,d,lista) {
  ws.getCell('A2').font={bold:true};
  ws.getCell('A3').font={color:{argb:'FF58768A'}};
 
- const grupos=[
-  ['Agendados',conteo(lista.filter(c=>grupoReporte(c)==='AGENDA'))],
-  ['   · de ellos, aumento 10%',conteo(lista.filter(c=>grupoReporte(c)==='AGENDA'&&c.aumento))],
-  ['Adicionales (sobrecupo)',conteo(lista.filter(c=>grupoReporte(c)==='SOBRECUPO'))],
-  ['TOTAL',conteo(lista)]
- ];
+ const grupos=filasGrupos(lista);
 
  const cab=ws.getRow(5);
  cab.values=['Origen','Citas','Asistieron','No asistieron','Sin marcar','% asistencia'];
@@ -2010,17 +2027,18 @@ function hojaResumen(wb,d,lista) {
   }
  });
 
- const total=grupos[2][1];
+ const total=grupos.find(([n])=>n==='TOTAL')[1];
+ const base=6+grupos.length+1;
  const dona=wb.addImage({base64:graficaDona(total,'Asistencia total del día'),
   extension:'png'});
- ws.addImage(dona,{tl:{col:0,row:9.4},ext:{width:560,height:300}});
+ ws.addImage(dona,{tl:{col:0,row:base+.4},ext:{width:560,height:300}});
 
- const comp=graficaBarras(grupos.slice(0,2).map(([n,t])=>
-  Object.assign({especialidad:n},t)),'Agenda del sistema vs. sobrecupos');
+ const comp=graficaBarras(grupos.slice(0,ORDEN_GRUPOS.length).map(([n,t])=>
+  Object.assign({especialidad:n},t)),'Agendados, adicionales y sobrecupos');
  const compId=wb.addImage({base64:comp.url,extension:'png'});
- ws.addImage(compId,{tl:{col:0,row:25.4},ext:{width:760,height:comp.alto}});
+ ws.addImage(compId,{tl:{col:0,row:base+16.4},ext:{width:760,height:comp.alto}});
 
- const inicio=26+Math.ceil(comp.alto/20)+2;
+ const inicio=base+17+Math.ceil(comp.alto/20)+2;
  ws.getRow(inicio).values=['POR ESPECIALIDAD (TODOS LOS ORIGENES)'];
  ws.getRow(inicio).font={bold:true,size:13,color:{argb:'FF10456B'}};
 
@@ -2056,8 +2074,8 @@ async function descargarReporte() {
   wb.created=new Date();
 
   hojaResumen(wb,d,lista);
-  hojaGrupo(wb,'AGENDA',lista.filter(c=>grupoReporte(c)==='AGENDA'),d);
-  hojaGrupo(wb,'SOBRECUPO',lista.filter(c=>grupoReporte(c)==='SOBRECUPO'),d);
+  ORDEN_GRUPOS.forEach(g=>
+   hojaGrupo(wb,g,lista.filter(c=>grupoReporte(c)===g),d));
 
   const buffer=await wb.xlsx.writeBuffer();
   const blob=new Blob([buffer],{type:
@@ -2132,14 +2150,11 @@ function descargarReporteSimple() {
 
  XLSX.utils.book_append_sheet(wb,
   hoja(resumen,[34,10,12,14,12,14]),'Resumen');
- // Igual que el reporte completo: agendados y adicionales
- // en hojas separadas.
- XLSX.utils.book_append_sheet(wb,
-  hoja([cab,...d.consultas.filter(c=>grupoReporte(c)==='AGENDA').map(fila)],anchos),
-  'Agendados');
- XLSX.utils.book_append_sheet(wb,
-  hoja([cab,...d.consultas.filter(c=>grupoReporte(c)==='SOBRECUPO').map(fila)],anchos),
-  'Adicionales sobrecupo');
+ // Igual que el reporte completo: agendados, adicionales
+ // de Reportería y sobrecupos de técnicos en hojas aparte.
+ ORDEN_GRUPOS.forEach(g=>XLSX.utils.book_append_sheet(wb,
+  hoja([cab,...d.consultas.filter(c=>grupoReporte(c)===g).map(fila)],anchos),
+  GRUPOS[g].hoja));
  XLSX.utils.book_append_sheet(wb,
   hoja([cab,...d.consultas.filter(c=>c.asistencia==='ASISTIO').map(fila)],anchos),
   'Asistieron');
