@@ -1,0 +1,1911 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<base target="_top">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UGM | Supervisión</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<?!= include('Estilos'); ?>
+</head>
+<body>
+
+<div class="bg-orbs" aria-hidden="true">
+ <span class="orb o1"></span>
+ <span class="orb o2"></span>
+ <span class="orb o3"></span>
+</div>
+
+<!-- ACCESO -->
+<div id="login">
+ <section class="login-card glass">
+  <span class="shine" aria-hidden="true"></span>
+  <div class="brand-row">
+   <div class="brand-logo" role="img"
+    aria-label="Red Nacional de Hospitales · Nuevo Hospital Rosales"></div>
+   <div class="brand-escudo" role="img"
+    aria-label="Escudo de El Salvador"></div>
+  </div>
+
+  <h1>Centro de control UGM</h1>
+  <p>Supervisión en tiempo real de sobrecupos, asistencia y personal.</p>
+  <span class="login-badge">● PLATAFORMA DE SUPERVISIÓN</span>
+
+  <form id="loginForm" autocomplete="off" style="margin-top:22px">
+   <div class="field">
+    <label>Nombre del supervisor</label>
+    <input id="loginName" required
+     autocomplete="off" placeholder="Nombres y apellidos">
+   </div>
+
+   <div class="field">
+    <label>Clave de acceso</label>
+    <input id="loginPass" type="password" required
+     autocomplete="new-password" placeholder="Clave de acceso">
+   </div>
+
+   <button id="btnLogin" class="btn primary"
+    type="submit" style="width:100%">
+    Ingresar al centro de control
+   </button>
+  </form>
+ </section>
+</div>
+
+<!-- SISTEMA -->
+<div id="app" class="hidden">
+
+<header class="top">
+ <div class="brand-logo" role="img"
+  aria-label="Red Nacional de Hospitales · Nuevo Hospital Rosales"></div>
+
+ <div class="unit">
+  UNIDAD DE GESTIÓN MÉDICA · SUPERVISIÓN
+ </div>
+
+ <div class="top-actions">
+  <span class="live" id="liveBadge">EN VIVO</span>
+
+  <div class="brand-escudo" role="img"
+   aria-label="Escudo de El Salvador"></div>
+
+  <button id="themeToggle" class="theme-btn"
+   type="button" aria-label="Cambiar tema">☀</button>
+
+  <div class="profile">
+   <strong id="who"></strong>
+   <small id="clock"></small>
+   <small>
+    <span id="sync">● Conectado</span> ·
+    <a href="#" id="btnSalir">Salir</a>
+   </small>
+  </div>
+ </div>
+</header>
+
+<div class="layout">
+
+<aside class="sidebar glass has-ink">
+ <span class="nav-ink" id="navInk"></span>
+
+ <button class="nav active" data-page="control">
+  <i>◎</i>Centro de control
+ </button>
+ <button class="nav" data-page="solicitudes">
+  <i>♧</i>Solicitudes
+  <span class="badge hidden" id="badgePend"></span>
+ </button>
+ <button class="nav" data-page="asistencia">
+  <i>✓</i>Asistencia
+ </button>
+ <button class="nav" data-page="personal">
+  <i>◷</i>Personal en línea
+  <span class="badge hidden" id="badgeOnline"
+   style="background:var(--green);color:#03261a"></span>
+ </button>
+ <button class="nav" data-page="cupos">
+  <i>▦</i>Disponibilidad
+ </button>
+ <button class="nav" data-page="basepacientes">
+  <i>⛁</i>Base de pacientes
+ </button>
+ <button class="nav" data-page="actualizacion">
+  <i>↥</i>Agenda
+ </button>
+ <button class="nav" data-page="auditoria">
+  <i>☷</i>Auditoría
+ </button>
+
+ <div class="side-bottom">
+  TECNOLOGÍA<br>AL SERVICIO<br>DE TU SALUD
+ </div>
+</aside>
+
+<main class="main glass">
+
+ <div class="crumb">
+  Inicio › Supervisión › <span id="crumbPage">Centro de control</span>
+ </div>
+
+ <div class="heading">
+  <div class="symbol">◎</div>
+  <div>
+   <h1 id="title">Centro de control</h1>
+   <small id="subtitle">Operación en tiempo real</small>
+  </div>
+  <div class="controls">
+   <div>
+    <label for="fecha">Fecha de operación</label>
+    <input id="fecha" type="date">
+   </div>
+  </div>
+ </div>
+
+ <div class="notice danger hidden" id="blockedNotice">
+  <strong>Fecha no disponible</strong>
+  <p>Esta fecha está bloqueada: no se permiten nuevas
+   programaciones ni asignación de cupos.</p>
+ </div>
+
+ <div class="notice warning hidden" id="agendaAlert">
+  <strong>Agenda desactualizada</strong>
+  <p id="agendaAlertText"></p>
+ </div>
+
+ <!-- CENTRO DE CONTROL -->
+ <section class="page" id="control">
+  <div class="kpis supervisor-kpis">
+   <div class="kpi glass verde">
+    <div class="kpi-icon">◷</div>
+    <div>
+     <strong id="kOnline">0</strong>
+     <b>Técnicos en línea</b>
+     <small id="kOnlineSub">Conectados ahora</small>
+    </div>
+   </div>
+   <div class="kpi glass amarillo">
+    <div class="kpi-icon">♧</div>
+    <div>
+     <strong id="kPend">0</strong>
+     <b>Solicitudes por gestionar</b>
+     <small id="kPendSub">0 solicitudes médicas</small>
+    </div>
+   </div>
+   <div class="kpi glass">
+    <div class="kpi-icon">▦</div>
+    <div>
+     <strong id="kDisp">0</strong>
+     <b>Sobrecupos disponibles</b>
+     <small id="kDispSub">de 0 autorizados</small>
+    </div>
+   </div>
+   <div class="kpi glass">
+    <svg class="ring" viewBox="0 0 50 50">
+     <circle class="bg" cx="25" cy="25" r="21"/>
+     <circle class="fg" id="ringAsis" cx="25" cy="25" r="21"
+      transform="rotate(-90 25 25)"/>
+    </svg>
+    <div>
+     <strong id="kAsis">0</strong>
+     <b>% asistencia</b>
+     <small id="kAsisSub">0 de 0 marcados</small>
+    </div>
+   </div>
+  </div>
+
+  <div class="dash">
+   <div class="card glass span-8">
+    <div class="card-head">
+     <div>
+      <h3>Sobrecupos por especialidad</h3>
+      <p class="sub" id="cuposSub">Ocupados frente a autorizados</p>
+     </div>
+     <div class="legend-inline">
+      <span><i style="background:#13c9f5"></i>Ocupados</span>
+      <span><i style="background:rgba(19,201,245,.3)"></i>Autorizados</span>
+     </div>
+    </div>
+    <div class="bars" id="chartCupos"></div>
+   </div>
+
+   <div class="card glass span-4">
+    <div class="card-head">
+     <div>
+      <h3>Asistencia del día</h3>
+      <p class="sub" id="asisSub">Citas de la fecha</p>
+     </div>
+    </div>
+    <div class="donut-wrap" id="chartAsis"></div>
+   </div>
+
+   <div class="card glass span-4">
+    <div class="card-head">
+     <div>
+      <h3>Estado de solicitudes</h3>
+      <p class="sub">Todas las solicitudes</p>
+     </div>
+    </div>
+    <div class="donut-wrap" id="chartEstados"></div>
+   </div>
+
+   <div class="card glass span-8">
+    <div class="card-head">
+     <div>
+      <h3>Actividad de hoy por hora</h3>
+      <p class="sub">Acciones registradas en la plataforma</p>
+     </div>
+     <span class="live">EN VIVO</span>
+    </div>
+    <div class="hours" id="chartHoras"></div>
+    <div class="hours-axis">
+     <span>00</span><span>06</span><span>12</span><span>18</span><span>23</span>
+    </div>
+   </div>
+
+   <div class="card glass span-6">
+    <div class="card-head">
+     <div>
+      <h3>Personal conectado</h3>
+      <p class="sub">Qué está haciendo cada técnico</p>
+     </div>
+     <span class="live">EN VIVO</span>
+    </div>
+    <div class="online" id="onlineMini"></div>
+   </div>
+
+   <div class="card glass span-6">
+    <div class="card-head">
+     <div>
+      <h3>Actividad en tiempo real</h3>
+      <p class="sub">Últimas acciones del equipo</p>
+     </div>
+     <span class="live">EN VIVO</span>
+    </div>
+    <div class="feed" id="feedMini"></div>
+   </div>
+  </div>
+ </section>
+
+ <!-- SOLICITUDES -->
+ <section class="page hidden" id="solicitudes">
+  <div class="panel glass">
+   <h2>Gestión de solicitudes</h2>
+   <p class="desc">Revisa el ticket, aprueba, observa o rechaza.
+    Las solicitudes médicas (entre semana) requieren ticket
+    sellado y firmado.</p>
+   <div class="chips" id="solChips"></div>
+   <div class="field" style="max-width:360px">
+    <input id="solBuscar" autocomplete="off"
+     placeholder="Buscar por paciente, DUI, referencia o técnico">
+   </div>
+   <div class="tablebox">
+    <table>
+     <thead>
+      <tr>
+       <th>Referencia</th>
+       <th>Paciente</th>
+       <th>Especialidad</th>
+       <th>Fecha</th>
+       <th>Tipo</th>
+       <th>Técnico</th>
+       <th>Registro</th>
+       <th>Estado</th>
+      </tr>
+     </thead>
+     <tbody id="solRows"></tbody>
+    </table>
+   </div>
+  </div>
+ </section>
+
+ <!-- ASISTENCIA -->
+ <section class="page hidden" id="asistencia">
+  <div class="kpis supervisor-kpis">
+   <div class="kpi glass"><div class="kpi-icon">☰</div><div>
+    <strong id="aCitas">0</strong><b>Citas</b><small>De la fecha</small></div></div>
+   <div class="kpi glass verde"><div class="kpi-icon">✓</div><div>
+    <strong id="aSi">0</strong><b>Asistieron</b><small id="aSiPct">0%</small></div></div>
+   <div class="kpi glass rojo"><div class="kpi-icon">✕</div><div>
+    <strong id="aNo">0</strong><b>No asistieron</b><small id="aNoPct">0%</small></div></div>
+   <div class="kpi glass amarillo"><div class="kpi-icon">◷</div><div>
+    <strong id="aSin">0</strong><b>Sin marcar</b><small>Pendientes de registro</small></div></div>
+  </div>
+
+  <div class="panel glass">
+   <div class="toolbar">
+    <div>
+     <h2>Reporte de asistencia</h2>
+     <p class="desc" style="margin:0">Resumen por especialidad
+      para el reporte de fin de día.</p>
+    </div>
+    <button class="btn primary" id="btnReporte" type="button">
+     ⤓ Descargar reporte Excel
+    </button>
+   </div>
+   <div class="tablebox">
+    <table>
+     <thead>
+      <tr>
+       <th>Especialidad</th>
+       <th>Citas</th>
+       <th>Asistieron</th>
+       <th>No asistieron</th>
+       <th>Sin marcar</th>
+       <th>% asistencia</th>
+       <th>Avance</th>
+      </tr>
+     </thead>
+     <tbody id="asisRows"></tbody>
+    </table>
+   </div>
+  </div>
+
+  <div class="panel glass">
+   <div class="filters">
+    <div class="field">
+     <label>Especialidad</label>
+     <select id="detEsp"><option value="">Todas</option></select>
+    </div>
+    <div class="field">
+     <label>Buscar</label>
+     <input id="detBuscar" autocomplete="off"
+      placeholder="Paciente o documento">
+    </div>
+    <div class="seg" id="detFiltro">
+     <button class="on" data-f="todos" type="button">Todos</button>
+     <button data-f="ASISTIO" type="button">Asistió</button>
+     <button data-f="NO_ASISTIO" type="button">No asistió</button>
+     <button data-f="" type="button">Sin marcar</button>
+    </div>
+   </div>
+   <div class="tablebox">
+    <table>
+     <thead>
+      <tr>
+       <th>Paciente</th>
+       <th>Documento</th>
+       <th>Especialidad</th>
+       <th>Origen</th>
+       <th>Asistencia</th>
+       <th>Marcado por</th>
+       <th>Hora</th>
+      </tr>
+     </thead>
+     <tbody id="detRows"></tbody>
+    </table>
+   </div>
+  </div>
+ </section>
+
+ <!-- PERSONAL -->
+ <section class="page hidden" id="personal">
+  <div class="panel glass">
+   <div class="toolbar">
+    <div>
+     <h2>Personal en línea</h2>
+     <p class="desc" style="margin:0">Sesiones abiertas y la
+      actividad actual de cada usuario. Puedes cerrar una
+      sesión de forma remota.</p>
+    </div>
+    <span class="live">EN VIVO</span>
+   </div>
+   <div class="online" id="onlineFull" style="max-height:none"></div>
+  </div>
+ </section>
+
+ <!-- DISPONIBILIDAD -->
+ <section class="page hidden" id="cupos">
+  <div class="panel glass">
+   <h2>Disponibilidad por especialidad</h2>
+   <p class="desc">Citas activas únicas, sobrecupos generados,
+    ocupados y disponibles para la fecha de operación.</p>
+   <div class="tablebox">
+    <table>
+     <thead>
+      <tr>
+       <th>Especialidad</th>
+       <th>Activas</th>
+       <th>Pendientes</th>
+       <th>Límite</th>
+       <th>Generados</th>
+       <th>Ocupados</th>
+       <th>Disponibles</th>
+       <th>Estado</th>
+      </tr>
+     </thead>
+     <tbody id="cuposRows"></tbody>
+    </table>
+   </div>
+  </div>
+ </section>
+
+ <!-- BASE DE PACIENTES -->
+ <section class="page hidden" id="basepacientes">
+  <div class="panel glass">
+   <h2><span>⛁</span> Base de pacientes</h2>
+   <p class="desc">Al terminar la carga, la base queda disponible
+    en el buscador de todos los técnicos en menos de 10 segundos.
+    Columnas obligatorias: nombre y DUI. Opcionales: expediente
+    y especialidad. Cada carga reemplaza la anterior.</p>
+
+   <div class="status-grid">
+    <div class="status-item"><small>Pacientes</small>
+     <strong id="pacTotal">0</strong></div>
+    <div class="status-item"><small>DUI inválidos</small>
+     <strong id="pacInv">0</strong></div>
+    <div class="status-item"><small>Última carga</small>
+     <strong id="pacFecha">Sin datos</strong></div>
+   </div>
+
+   <div class="notice">
+    <strong>Estado de la base</strong>
+    <p id="patientsStatus">Sin información.</p>
+   </div>
+
+   <div class="dropzone" id="patientsZone" role="button" tabindex="0">
+    <strong>Arrastra aquí la base de pacientes</strong>
+    <small>O haz clic para adjuntar el archivo. También puedes
+     pegarlo con Ctrl+V.</small>
+    <small>Formatos .xlsx, .xls y .csv · Celdas copiadas de Excel</small>
+   </div>
+
+   <input id="patientsFile" type="file" class="hidden"
+    accept=".xlsx,.xls,.csv,.txt">
+
+   <div class="bar hidden" id="patientsBar"><span></span></div>
+   <div class="progress hidden" id="patientsProgress"></div>
+  </div>
+ </section>
+
+ <!-- AGENDA -->
+ <section class="page hidden" id="actualizacion">
+  <div class="panel glass">
+   <h2>Agenda hospitalaria</h2>
+   <p class="desc">La última carga válida se comparte con todos
+    los técnicos conectados.</p>
+
+   <div class="notice">
+    <strong>Estado de la agenda</strong>
+    <p id="uploadStatus">Sin información.</p>
+   </div>
+
+   <div class="dropzone" id="excelZone" role="button" tabindex="0">
+    <strong>Arrastra aquí el archivo Excel</strong>
+    <small>O haz clic para seleccionarlo. También puedes pegarlo
+     con Ctrl+V.</small>
+    <small>Formatos .xlsx, .xls y .csv</small>
+   </div>
+
+   <input id="excelFile" type="file" class="hidden"
+    accept=".xlsx,.xls,.csv">
+
+   <div class="buttons">
+    <button class="btn danger" id="btnUrgent" type="button">
+     Solicitar actualización extraordinaria a los técnicos
+    </button>
+   </div>
+  </div>
+ </section>
+
+ <!-- AUDITORÍA -->
+ <section class="page hidden" id="auditoria">
+  <div class="panel glass">
+   <h2>Historial de operaciones</h2>
+   <p class="desc">Últimas 80 acciones registradas.</p>
+   <div class="feed" id="feedFull" style="max-height:none"></div>
+  </div>
+ </section>
+
+ <div class="bottom">
+  <span class="small muted" id="status">Sistema UGM</span>
+  <button id="btnRefresh" class="btn" type="button">
+   ↻ Actualizar ahora
+  </button>
+ </div>
+</main>
+</div>
+</div>
+
+<div id="modal" class="overlay hidden">
+ <div class="modal glass wide" id="modalContent"></div>
+</div>
+
+<div id="errorOverlay" class="error-overlay hidden"
+ role="alertdialog" aria-modal="true" aria-labelledby="errorTitle">
+ <div class="error-panel">
+  <div class="error-symbol">⚠</div>
+  <h2 id="errorTitle">AVISO</h2>
+  <p id="errorText"></p>
+  <button id="btnCloseError" class="btn primary" type="button">
+   Entendido
+  </button>
+ </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<?!= include('Comun'); ?>
+
+<script>
+'use strict';
+
+/* =====================================================
+   UGM 2026 · PLATAFORMA DE SUPERVISIÓN
+   ===================================================== */
+
+const V={
+ pagina:'control',
+ fecha:'',
+ datos:null,
+ consultando:false,
+ timer:null,
+ filtroSol:'abiertas',
+ detFiltro:'todos',
+ feedVistos:new Set(),
+ firmas:{}
+};
+
+// Compatibilidad con la carga de base y comprobantes.
+const S={
+ get token(){return UGM.token;},
+ cargandoPacientes:false,
+ archivo:null,
+ previewURL:null
+};
+
+function puedeGestionar() {
+ return UGM.perfil==='SUPERVISOR';
+}
+
+const TITULOS={
+ control:['Centro de control','Operación en tiempo real'],
+ solicitudes:['Solicitudes','Revisión y aprobación de sobrecupos'],
+ asistencia:['Asistencia','Reporte de asistieron y no asistieron'],
+ personal:['Personal en línea','Sesiones y actividad del equipo'],
+ cupos:['Disponibilidad','Cupos por especialidad'],
+ basepacientes:['Base de pacientes','Carga para el buscador de técnicos'],
+ actualizacion:['Agenda','Agenda hospitalaria compartida'],
+ auditoria:['Auditoría','Historial de operaciones']
+};
+
+function page(n) {
+ if(!TITULOS[n])return;
+
+ const cambio=V.pagina!==n;
+ const antes=V.pagina;
+ V.pagina=n;
+
+ mostrarPagina(n,TITULOS[n][0],!cambio);
+ $('subtitle').textContent=TITULOS[n][1];
+
+ if(cambio) {
+  V.firmas={};
+  if(n==='asistencia'&&antes!=='asistencia') {
+   refrescar(true);
+  } else {
+   dibujar(true);
+  }
+ }
+}
+
+/* =====================================================
+   SINCRONIZACIÓN
+   ===================================================== */
+
+async function refrescar(forzar) {
+ if(!UGM.token||UGM.importando)return;
+ if(V.consultando&&!forzar)return;
+
+ V.consultando=true;
+
+ const gen=UGM.generacion;
+ const fecha=V.fecha;
+
+ try {
+  const d=await api('tableroSupervisor',UGM.token,fecha,{
+   detalle:V.pagina==='asistencia',
+   actividad:'Supervisión · '+TITULOS[V.pagina][0]
+  });
+
+  if(gen!==UGM.generacion||fecha!==V.fecha)return;
+
+  V.datos=d;
+  dibujar(false);
+
+  $('sync').textContent='● Sincronizado';
+  $('sync').style.color='var(--green)';
+  $('status').textContent='Última sincronización: '+
+   new Date().toLocaleTimeString('es-SV');
+
+ }catch(e) {
+  if(sesionTerminada(e,limpiarTodo))return;
+  if(gen!==UGM.generacion)return;
+
+  $('sync').textContent='● Error';
+  $('sync').style.color='var(--red)';
+  $('status').textContent=e.message;
+
+ }finally {
+  if(gen===UGM.generacion)V.consultando=false;
+ }
+}
+
+// Solo redibuja lo que cambió, para que las gráficas
+// no "salten" en cada sincronización.
+function cambio(clave,valor) {
+ const firma=JSON.stringify(valor);
+ if(V.firmas[clave]===firma)return false;
+ V.firmas[clave]=firma;
+ return true;
+}
+
+function dibujar(animar) {
+ const d=V.datos;
+ if(!d)return;
+
+ const a=d.agenda||{};
+
+ $('blockedNotice').classList.toggle('hidden',!d.bloqueada);
+ $('agendaAlert').classList.toggle('hidden',!a.alerta);
+ $('agendaAlertText').textContent=a.fecha
+  ?'Última carga hace '+a.minutos+' minutos ('+a.archivo+
+   '). Los técnicos necesitan una carga de los últimos '+
+   '30 minutos para registrar sobrecupos de fin de semana.'
+  :'Todavía no se ha importado la agenda hospitalaria.';
+
+ pintarKpis();
+ pintarBadges();
+
+ if(V.pagina==='control') {
+  pintarCupos(animar);
+  pintarAsistenciaDonut();
+  pintarEstados();
+  pintarHoras();
+  pintarPersonal($('onlineMini'),6);
+  pintarFeed($('feedMini'),12);
+ }
+
+ if(V.pagina==='solicitudes')pintarSolicitudes(animar);
+ if(V.pagina==='asistencia')pintarAsistencia(animar);
+ if(V.pagina==='personal')pintarPersonal($('onlineFull'),200);
+ if(V.pagina==='cupos')pintarTablaCupos();
+ if(V.pagina==='auditoria')pintarFeed($('feedFull'),80);
+ if(V.pagina==='basepacientes')pintarBase();
+ if(V.pagina==='actualizacion')pintarAgenda();
+}
+
+/* =====================================================
+   INDICADORES
+   ===================================================== */
+
+function totalesCupos() {
+ return (V.datos.cupos||[]).reduce((t,r)=>{
+  t.generados+=Number(r.generados)||0;
+  t.ocupados+=Number(r.ocupados)||0;
+  t.disponibles+=Number(r.disponibles)||0;
+  return t;
+ },{generados:0,ocupados:0,disponibles:0});
+}
+
+function pintarKpis() {
+ const d=V.datos;
+ const enLinea=(d.personal||[]).filter(p=>p.enLinea);
+ const tecnicos=enLinea.filter(p=>p.Perfil!=='SUPERVISOR');
+ const t=totalesCupos();
+ const a=d.asistencia.total;
+ const marcados=a.asistio+a.noAsistio;
+
+ contarNumero('kOnline',tecnicos.length);
+ $('kOnlineSub').textContent=enLinea.length+' sesiones activas';
+
+ contarNumero('kPend',d.pendientes);
+ $('kPendSub').textContent=d.medicasPendientes+
+  ' solicitud(es) médica(s)';
+
+ contarNumero('kDisp',t.disponibles);
+ $('kDispSub').textContent='de '+t.generados+' autorizados · '+
+  t.ocupados+' ocupados';
+
+ const pct=marcados?Math.round(a.asistio/marcados*100):0;
+ contarNumero('kAsis',pct);
+ $('kAsisSub').textContent=marcados+' de '+a.citas+' marcados';
+ MOV.anillo($('ringAsis'),a.citas?marcados/a.citas:0);
+}
+
+function pintarBadges() {
+ const d=V.datos;
+ const online=(d.personal||[]).filter(p=>p.enLinea).length;
+
+ $('badgePend').textContent=d.pendientes;
+ $('badgePend').classList.toggle('hidden',!d.pendientes);
+ $('badgeOnline').textContent=online;
+ $('badgeOnline').classList.toggle('hidden',!online);
+}
+
+/* =====================================================
+   GRÁFICAS
+   ===================================================== */
+
+function color(nombre) {
+ return getComputedStyle(document.body)
+  .getPropertyValue(nombre).trim()||'#13c9f5';
+}
+
+function pintarCupos(animar) {
+ const habilitadas=(V.datos.cupos||[]).filter(r=>r.habilitada).length;
+
+ const filas=(V.datos.cupos||[])
+  .filter(r=>r.generados||r.ocupados)
+  .sort((a,b)=>b.generados-a.generados||
+   b.ocupados-a.ocupados);
+
+ const cont=$('chartCupos');
+
+ $('cuposSub').textContent=V.datos.bloqueada
+  ?'Fecha bloqueada: sin cupos'
+  :V.datos.dia==='SEMANA'
+   ?'Entre semana no hay sobrecupos (solo solicitudes médicas)'
+   :'Ocupados frente a autorizados · '+V.fecha;
+
+ if(!cambio('cupos',filas)&&!animar)return;
+
+ if(!filas.length) {
+  cont.innerHTML='<div class="empty"><span class="ico">▦</span>'+
+   '<b>Sin sobrecupos generados para esta fecha</b>'+
+   (habilitadas
+    ?habilitadas+' especialidades habilitadas: se genera 1 '+
+     'sobrecupo por cada 10 pacientes activos.'
+    :'Los sobrecupos se calculan para sábado y domingo.')+
+   '</div>';
+  return;
+ }
+
+ const max=Math.max(1,...filas.map(r=>Math.max(r.generados,r.ocupados)));
+
+ const previas={};
+ cont.querySelectorAll('.bar-row').forEach(el=>{
+  previas[el.dataset.e]=true;
+ });
+
+ cont.innerHTML=filas.map(r=>`
+  <div class="bar-row" data-e="${esc(r.especialidad)}"
+   title="${esc(r.especialidad)}: ${r.ocupados} ocupados de ${r.generados} autorizados · ${r.activas} pacientes activos">
+   <span class="lbl">${esc(r.especialidad)}</span>
+   <div class="track">
+    <span class="gen" data-v="${r.generados/max}"></span>
+    <span class="${r.ocupados>=r.generados&&r.generados?'full':'occ'}"
+     data-v="${Math.min(r.ocupados,Math.max(r.generados,r.ocupados))/max}"></span>
+   </div>
+   <span class="val">${r.ocupados}/${r.generados}</span>
+  </div>`).join('');
+
+ cont.querySelectorAll('.track span').forEach((s,i)=>{
+  MOV.escalaX(s,Number(s.dataset.v),Math.floor(i/2)*.04);
+ });
+}
+
+function donut(cont,segmentos,centro,etiqueta) {
+ const total=segmentos.reduce((t,s)=>t+s.valor,0);
+ const r=15.915;
+
+ let acumulado=0;
+
+ const circulos=segmentos.map(s=>{
+  const pct=total?s.valor/total*100:0;
+  const html=`<circle r="${r}" cx="21" cy="21"
+   stroke="${s.color}" stroke-dasharray="0 100"
+   stroke-dashoffset="${-acumulado}" data-p="${pct}"></circle>`;
+  acumulado+=pct;
+  return html;
+ }).join('');
+
+ cont.innerHTML=`
+  <div class="donut">
+   <svg viewBox="0 0 42 42">
+    <circle class="base" r="${r}" cx="21" cy="21"></circle>
+    ${circulos}
+   </svg>
+   <div class="centro"><div>
+    <strong data-n="${centro}">0</strong>
+    <small>${esc(etiqueta)}</small>
+   </div></div>
+  </div>
+  <div class="legend">
+   ${segmentos.map(s=>`<span><i style="background:${s.color}"></i>
+    ${esc(s.etiqueta)}<b>${s.valor}</b></span>`).join('')}
+  </div>`;
+
+ cont.querySelectorAll('circle[data-p]').forEach((c,i)=>{
+  const p=Number(c.dataset.p);
+  if(!MOV.ok) {
+   c.setAttribute('stroke-dasharray',p+' '+(100-p));
+   return;
+  }
+  gsap.to(c,{attr:{'stroke-dasharray':p+' '+(100-p)},
+   duration:1,ease:'power3.out',delay:i*.12});
+ });
+
+ const n=cont.querySelector('strong[data-n]');
+ MOV.numero(n,Number(centro)||0);
+}
+
+function pintarAsistenciaDonut() {
+ const a=V.datos.asistencia.total;
+ $('asisSub').textContent=a.citas+' citas · '+V.fecha;
+
+ if(!cambio('asis',a))return;
+
+ if(!a.citas) {
+  $('chartAsis').innerHTML='<div class="empty"><span class="ico">✓</span>'+
+   '<b>Sin citas</b>No hay agenda para esta fecha.</div>';
+  return;
+ }
+
+ donut($('chartAsis'),[
+  {etiqueta:'Asistieron',valor:a.asistio,color:color('--green')},
+  {etiqueta:'No asistieron',valor:a.noAsistio,color:color('--red')},
+  {etiqueta:'Sin marcar',valor:a.sinMarcar,color:color('--yellow')}
+ ],a.citas,'CITAS');
+}
+
+function pintarEstados() {
+ const e=V.datos.estados||{};
+ const n=k=>Number(e[k])||0;
+
+ const segmentos=[
+  {etiqueta:'Pendientes',valor:n('PENDIENTE'),color:color('--yellow')},
+  {etiqueta:'En gestión',valor:n('EN GESTION'),color:color('--cyan')},
+  {etiqueta:'Observadas',valor:n('OBSERVADO'),color:'#ffa45c'},
+  {etiqueta:'Registradas',valor:n('REGISTRADO'),color:color('--green')},
+  {etiqueta:'Rechazadas/anuladas',
+   valor:n('RECHAZADO')+n('ANULADO'),color:color('--red')}
+ ];
+
+ if(!cambio('estados',segmentos))return;
+
+ const total=segmentos.reduce((t,s)=>t+s.valor,0);
+
+ if(!total) {
+  $('chartEstados').innerHTML='<div class="empty"><span class="ico">♧</span>'+
+   '<b>Sin solicitudes</b>Aún no hay registros.</div>';
+  return;
+ }
+
+ donut($('chartEstados'),segmentos,total,'TOTAL');
+}
+
+function pintarHoras() {
+ const h=V.datos.horas||[];
+ if(!cambio('horas',h))return;
+
+ const max=Math.max(1,...h);
+ const cont=$('chartHoras');
+
+ if(cont.children.length!==24) {
+  cont.innerHTML=h.map((v,i)=>
+   `<span title="${String(i).padStart(2,'0')}:00 · ${v} acciones"></span>`
+  ).join('');
+ }
+
+ Array.from(cont.children).forEach((s,i)=>{
+  s.title=String(i).padStart(2,'0')+':00 · '+h[i]+' acciones';
+  s.classList.toggle('vacio',!h[i]);
+  MOV.escalaY(s,h[i]?Math.max(.04,h[i]/max):.03,i*.015);
+ });
+}
+
+/* =====================================================
+   PERSONAL Y ACTIVIDAD
+   ===================================================== */
+
+function pintarPersonal(cont,limite) {
+ const lista=(V.datos.personal||[]).slice(0,limite);
+ const clave='personal'+cont.id;
+
+ const resumen=lista.map(p=>[p.Sesion,p.Actividad,p.enLinea,
+  Math.round(p.segundos/30)]);
+
+ if(!cambio(clave,resumen))return;
+
+ const previas=new Set(Array.from(cont.querySelectorAll('.user'))
+  .map(el=>el.dataset.s));
+
+ if(!lista.length) {
+  cont.innerHTML='<div class="empty"><span class="ico">◷</span>'+
+   '<b>Nadie conectado</b>Las sesiones aparecerán aquí.</div>';
+  return;
+ }
+
+ const propia=p=>p.Nombre===UGM.nombre&&p.Perfil===UGM.perfil;
+
+ cont.innerHTML=lista.map(p=>`
+  <div class="user" data-s="${esc(p.Sesion)}">
+   <div class="avatar">${esc(iniciales(p.Nombre))}
+    <span class="dot${p.enLinea?' on':''}"></span></div>
+   <div style="min-width:0">
+    <b>${esc(p.Nombre)} <span class="muted small">· ${esc(ROLES[p.Perfil]||p.Perfil)}</span></b>
+    <small class="act">${esc(p.Actividad||'—')}</small>
+    <small>${p.enLinea?'En línea':'Inactivo'} · ${hace(p.segundos)}
+     · ingresó ${esc(fechaHora(p.Ingreso))}</small>
+   </div>
+   ${limite>6&&!propia(p)
+    ?`<button class="btn mini danger" type="button"
+      data-cerrar="${esc(p.Sesion)}" data-n="${esc(p.Nombre)}">Cerrar sesión</button>`
+    :`<span class="small muted">${p.enLinea?'●':'○'}</span>`}
+  </div>`).join('');
+
+ cont.querySelectorAll('.user').forEach(el=>{
+  if(!previas.has(el.dataset.s)&&previas.size)MOV.nuevo(el);
+ });
+
+ if(!previas.size)MOV.escalonar(cont.children,10);
+}
+
+const ICONOS={
+ INICIO_SESION:['⇢','ok','inició sesión'],
+ CIERRE_SESION:['⇠','','cerró sesión'],
+ SESION_CERRADA_SUPERVISOR:['⏻','no','cerró una sesión remota'],
+ SOBRECUPO_GUARDADO:['✚','','registró un sobrecupo'],
+ SOLICITUD_MEDICA:['⚕','warn','envió una solicitud médica'],
+ ASISTENCIA_ASISTIO:['✓','ok','marcó asistencia'],
+ ASISTENCIA_NO_ASISTIO:['✕','no','marcó inasistencia'],
+ ASISTENCIA_BORRADA:['↺','','quitó una marca de asistencia'],
+ AGENDA_IMPORTADA:['▦','','actualizó la agenda'],
+ PACIENTES_IMPORTADOS:['⛁','','cargó la base de pacientes'],
+ CAMBIO_ESTADO:['⇄','','cambió el estado de una solicitud'],
+ COMPROBANTE_ADJUNTADO:['⎙','','adjuntó un comprobante'],
+ ALERTA_AGENDA:['⚠','warn','pidió actualizar la agenda']
+};
+
+function pintarFeed(cont,limite) {
+ const lista=(V.datos.auditoria||[]).slice(0,limite);
+ const clave='feed'+cont.id;
+ const ids=lista.map(r=>r.FechaHora+r.Accion+r.Referencia);
+
+ if(!cambio(clave,ids))return;
+
+ const primera=!cont.children.length||
+  cont.querySelector('.empty');
+
+ if(!lista.length) {
+  cont.innerHTML='<div class="empty"><span class="ico">☷</span>'+
+   '<b>Sin actividad</b></div>';
+  return;
+ }
+
+ cont.innerHTML=lista.map((r,i)=>{
+  const [ico,tipo,texto]=ICONOS[r.Accion]||['•','',r.Accion];
+  return `<div class="feed-item" data-id="${esc(ids[i])}">
+   <span class="feed-ico ${tipo}">${ico}</span>
+   <div style="min-width:0">
+    <b>${esc(r.Usuario)} <span class="muted">${esc(texto)}</span></b>
+    <small>${esc([
+     /^[0-9a-f-]{36}$/i.test(r.Referencia)?'':r.Referencia,
+     r.Detalle
+    ].filter(Boolean).join(' · '))}</small>
+   </div>
+   <small>${esc(fechaHora(r.FechaHora))}</small>
+  </div>`;
+ }).join('');
+
+ cont.querySelectorAll('.feed-item').forEach(el=>{
+  if(primera)return;
+  if(!V.feedVistos.has(el.dataset.id))MOV.nuevo(el);
+ });
+
+ if(primera)MOV.escalonar(cont.children,12);
+
+ ids.forEach(id=>V.feedVistos.add(id));
+}
+
+async function cerrarSesion(sesion,nombre) {
+ if(!confirm('¿Cerrar la sesión de '+nombre+'?'))return;
+
+ try {
+  await api('cerrarSesionRemota',UGM.token,sesion);
+  aviso('Sesión de '+nombre+' cerrada.');
+  V.firmas={};
+  await refrescar(true);
+ }catch(e) {
+  if(sesionTerminada(e,limpiarTodo))return;
+  aviso(e.message);
+ }
+}
+
+/* =====================================================
+   SOLICITUDES
+   ===================================================== */
+
+const FILTROS_SOL=[
+ ['abiertas','Por gestionar',r=>['PENDIENTE','EN GESTION','OBSERVADO']
+  .includes(normTexto(r.Estado))],
+ ['medicas','Médicas',r=>r.Tipo==='MEDICO'],
+ ['REGISTRADO','Registradas',r=>normTexto(r.Estado)==='REGISTRADO'],
+ ['RECHAZADO','Rechazadas',r=>normTexto(r.Estado)==='RECHAZADO'],
+ ['ANULADO','Anuladas',r=>normTexto(r.Estado)==='ANULADO'],
+ ['todas','Todas',()=>true]
+];
+
+function pintarSolicitudes(animar) {
+ const lista=V.datos.solicitudes||[];
+
+ $('solChips').innerHTML=FILTROS_SOL.map(([k,t,f])=>
+  `<button class="chip-btn${V.filtroSol===k?' on':''}" type="button"
+    data-f="${k}">${t}<b>${lista.filter(f).length}</b></button>`
+ ).join('');
+
+ const filtro=FILTROS_SOL.find(f=>f[0]===V.filtroSol)[2];
+ const q=normTexto($('solBuscar').value);
+
+ const filas=lista.filter(filtro).filter(r=>
+  !q||normTexto([r.ID,r.Nombres,r.Documento,r.RegistradoPor,
+   r.Especialidad].join(' ')).includes(q)
+ );
+
+ if(!cambio('sol',[V.filtroSol,q,filas.map(r=>r.ID+r.Estado)])&&!animar)return;
+
+ $('solRows').innerHTML=filas.map(r=>`
+  <tr data-id="${esc(r.ID)}">
+   <td>${esc(r.ID)}</td>
+   <td><b>${esc(r.Nombres)}</b><br><span class="muted">${esc(r.Documento)}</span></td>
+   <td>${esc(r.Especialidad)}</td>
+   <td>${esc(r.FechaSobrecupo)}</td>
+   <td>${r.Tipo==='MEDICO'
+    ?'<span class="tag medica">Médica</span>'
+    :'<span class="tag sobrecupo">Fin de semana</span>'}</td>
+   <td>${esc(r.RegistradoPor)}</td>
+   <td>${esc(fechaHora(r.FechaRegistro))}</td>
+   <td>${etiquetaEstado(r.Estado)}</td>
+  </tr>`).join('')||
+  '<tr><td colspan="8">No hay solicitudes en este filtro.</td></tr>';
+
+ MOV.escalonar($('solRows').children,12);
+}
+
+function cerrarModal() {
+ limpiarArchivo();
+ $('modal').classList.add('hidden');
+ $('modalContent').innerHTML='';
+}
+
+async function cargarTicket(id,cual,figura) {
+ try {
+  const r=await api('verTicket',UGM.token,id,cual);
+
+  if(r.vacio) {
+   figura.innerHTML='<span class="muted">Sin archivo</span>'+
+    '<figcaption>'+(cual==='reverso'?'Reverso':'Frente')+'</figcaption>';
+   return;
+  }
+
+  const url='data:'+r.mime+';base64,'+r.base64;
+  const pie='<figcaption>'+(cual==='reverso'
+   ?'Reverso sellado y firmado':'Frente del ticket')+'</figcaption>';
+
+  figura.innerHTML=r.mime.startsWith('image/')
+   ?'<img alt="Ticket" src="'+url+'">'+pie
+   :'<a href="'+url+'" download="'+esc(r.nombre)+
+    '">⎙ Descargar PDF</a>'+pie;
+
+  const img=figura.querySelector('img');
+
+  if(img) {
+   img.addEventListener('click',()=>{
+    const z=document.createElement('div');
+    z.className='zoom';
+    z.innerHTML='<img alt="Ticket" src="'+url+'">';
+    z.addEventListener('click',()=>z.remove());
+    document.body.appendChild(z);
+    if(MOV.ok)gsap.from(z.firstChild,{scale:.85,opacity:0,duration:.3});
+   });
+   MOV.pulso(img);
+  }
+
+ }catch(e) {
+  figura.innerHTML='<span class="muted">No se pudo cargar: '+
+   esc(e.message)+'</span>';
+ }
+}
+
+function abrirSolicitud(id) {
+ const r=(V.datos.solicitudes||[]).find(x=>x.ID===id);
+ if(!r)return;
+
+ limpiarArchivo();
+
+ const cerrado=['REGISTRADO','RECHAZADO','ANULADO']
+  .includes(normTexto(r.Estado));
+
+ const tieneTicket=r.TicketFrente||r.TicketReverso||r.ComprobanteID;
+
+ let html=`
+  <div class="toolbar">
+   <h2 style="margin:0">Solicitud ${esc(r.ID)}</h2>
+   ${etiquetaEstado(r.Estado)}
+  </div>
+  <div class="detalle-grid">
+   <p><b>Paciente:</b> ${esc(r.Nombres)}</p>
+   <p><b>DUI:</b> ${esc(r.Documento)}</p>
+   <p><b>Especialidad:</b> ${esc(r.Especialidad)}</p>
+   <p><b>Fecha:</b> ${esc(r.FechaSobrecupo)}</p>
+   <p><b>Tipo:</b> ${r.Tipo==='MEDICO'?'Solicitud médica':'Fin de semana'}</p>
+   <p><b>A solicitud de:</b> ${esc(r.SolicitadoPor)}</p>
+   <p><b>Registró:</b> ${esc(r.RegistradoPor)}</p>
+   <p><b>Registro:</b> ${esc(fechaHora(r.FechaRegistro))}</p>
+   ${r.GestionadoPor?`<p><b>Gestionó:</b> ${esc(r.GestionadoPor)}</p>`:''}
+   ${r.Observacion?`<p><b>Observación:</b> ${esc(r.Observacion)}</p>`:''}
+  </div>
+  ${tieneTicket?`<div class="ticket-view">
+   <figure id="fig1"><span class="muted">Cargando ticket...</span></figure>
+   <figure id="fig2"><span class="muted">Cargando reverso...</span></figure>
+  </div>`:`<p class="desc" style="margin-top:14px">Sin ticket adjunto.</p>`}`;
+
+ if(!cerrado) {
+  html+=`
+   <div class="form-grid" style="margin-top:10px">
+    <div class="field">
+     <label>Nuevo estado</label>
+     <select id="newState">
+      <option value="EN GESTION">En gestión</option>
+      <option value="OBSERVADO">Observado</option>
+      <option value="REGISTRADO">Registrado / Aprobado</option>
+      <option value="RECHAZADO">Rechazado</option>
+      <option value="ANULADO">Anulado</option>
+     </select>
+    </div>
+    <div class="field">
+     <label>Observación</label>
+     <input id="obs" maxlength="500" autocomplete="off">
+    </div>
+   </div>
+   ${tieneTicket?'':`
+   <label>Comprobante (requerido para registrar)</label>
+   <div class="dropzone" id="dropzone" role="button" tabindex="0">
+    <strong>Arrastra o pega una imagen aquí</strong>
+    <small>JPG, PNG, WEBP o PDF · Máximo 5 MB</small>
+   </div>
+   <input id="fileInput" type="file" class="hidden"
+    accept="image/jpeg,image/png,image/webp,application/pdf">
+   <div id="filePreview" class="preview-file hidden"></div>`}
+   <div class="buttons" style="margin-top:14px">
+    <button id="btnSaveState" class="btn primary" type="button">
+     Guardar gestión</button>
+    <button id="btnClose" class="btn" type="button">Cerrar</button>
+   </div>`;
+ } else {
+  html+=`<div class="buttons"><button id="btnClose" class="btn"
+   type="button">Cerrar</button></div>`;
+ }
+
+ $('modalContent').innerHTML=html;
+ $('modal').classList.remove('hidden');
+ MOV.modal();
+
+ $('btnClose').onclick=cerrarModal;
+
+ if(tieneTicket) {
+  cargarTicket(id,'frente',$('fig1'));
+  cargarTicket(id,'reverso',$('fig2'));
+ }
+
+ if(!cerrado) {
+  if(!tieneTicket)montarComprobante();
+  $('btnSaveState').onclick=()=>gestionar(id);
+ }
+}
+
+async function gestionar(id) {
+ const boton=$('btnSaveState');
+ boton.disabled=true;
+ boton.textContent='Guardando...';
+
+ try {
+  const estado=$('newState').value;
+  const r=(V.datos.solicitudes||[]).find(x=>x.ID===id);
+  const tiene=r&&(r.TicketFrente||r.ComprobanteID);
+
+  if(estado==='REGISTRADO'&&!S.archivo&&!tiene) {
+   throw Error('Adjunta un comprobante antes de registrar.');
+  }
+
+  if(S.archivo) {
+   const f=await prepararArchivo(S.archivo);
+   const ok=await api('adjuntarComprobante',UGM.token,id,
+    f.nombre,f.mime,f.base64);
+   if(!ok||!ok.ok)throw Error('No se confirmó el comprobante.');
+  }
+
+  const res=await api('cambiarEstado',UGM.token,id,estado,
+   $('obs').value);
+
+  if(!res||!res.ok)throw Error('No se confirmó el cambio.');
+
+  cerrarModal();
+  MOV.exito();
+  aviso('Solicitud '+id+': '+textoEstado(estado)+'.');
+  V.firmas={};
+  await refrescar(true);
+
+ }catch(e) {
+  if(sesionTerminada(e,limpiarTodo))return;
+  aviso(e.message);
+  boton.disabled=false;
+  boton.textContent='Guardar gestión';
+ }
+}
+
+/* =====================================================
+   ASISTENCIA Y REPORTE
+   ===================================================== */
+
+function pintarAsistencia(animar) {
+ const a=V.datos.asistencia;
+ const t=a.total;
+ const marcados=t.asistio+t.noAsistio;
+
+ contarNumero('aCitas',t.citas);
+ contarNumero('aSi',t.asistio);
+ contarNumero('aNo',t.noAsistio);
+ contarNumero('aSin',t.sinMarcar);
+ $('aSiPct').textContent=(marcados?Math.round(t.asistio/marcados*100):0)+
+  '% de los marcados';
+ $('aNoPct').textContent=(marcados?Math.round(t.noAsistio/marcados*100):0)+
+  '% de los marcados';
+
+ if(cambio('asisRows',a.especialidades)||animar) {
+  $('asisRows').innerHTML=a.especialidades.map(e=>{
+   const m=e.asistio+e.noAsistio;
+   const pct=m?Math.round(e.asistio/m*100):0;
+   const avance=e.citas?m/e.citas:0;
+   return `<tr>
+    <td><b>${esc(e.especialidad)}</b></td>
+    <td>${e.citas}</td>
+    <td style="color:var(--green)">${e.asistio}</td>
+    <td style="color:var(--red)">${e.noAsistio}</td>
+    <td style="color:var(--yellow)">${e.sinMarcar}</td>
+    <td>${m?pct+'%':'—'}</td>
+    <td><div class="mini-track"><span data-v="${avance}"
+     style="transform:scaleX(0)"></span></div></td>
+   </tr>`;
+  }).join('')||'<tr><td colspan="7">Sin citas para esta fecha.</td></tr>';
+
+  $('asisRows').querySelectorAll('.mini-track span').forEach((s,i)=>{
+   MOV.escalaX(s,Number(s.dataset.v),i*.03);
+  });
+
+  const actual=$('detEsp').value;
+  $('detEsp').innerHTML='<option value="">Todas</option>'+
+   a.especialidades.map(e=>`<option value="${esc(e.especialidad)}">`+
+    `${esc(e.especialidad)}</option>`).join('');
+  $('detEsp').value=actual;
+ }
+
+ pintarDetalle(animar);
+}
+
+function detalleFiltrado() {
+ const esp=$('detEsp').value;
+ const q=normTexto($('detBuscar').value);
+
+ return (V.datos.consultas||[]).filter(c=>
+  (!esp||c.especialidad===esp)&&
+  (V.detFiltro==='todos'||c.asistencia===V.detFiltro)&&
+  (!q||normTexto(c.paciente+' '+c.documento).includes(q))
+ );
+}
+
+function textoAsistencia(v) {
+ return v==='ASISTIO'?'Asistió':v==='NO_ASISTIO'?'No asistió':'Sin marcar';
+}
+
+function pintarDetalle(animar) {
+ const filas=detalleFiltrado();
+
+ if(!cambio('det',[$('detEsp').value,$('detBuscar').value,V.detFiltro,
+   filas.map(c=>c.clave+c.asistencia)])&&!animar)return;
+
+ $('detRows').innerHTML=filas.slice(0,500).map(c=>`
+  <tr>
+   <td><b>${esc(c.paciente)}</b></td>
+   <td>${esc(c.documento)}</td>
+   <td>${esc(c.especialidad)}</td>
+   <td>${c.origen==='SOBRECUPO'?'Sobrecupo':'Agenda'}</td>
+   <td style="color:${c.asistencia==='ASISTIO'?'var(--green)':
+    c.asistencia==='NO_ASISTIO'?'var(--red)':'var(--yellow)'}">
+    <b>${textoAsistencia(c.asistencia)}</b></td>
+   <td>${esc(c.marcadoPor)||'—'}</td>
+   <td>${c.hora?esc(horaCorta(c.hora)):'—'}</td>
+  </tr>`).join('')||
+  '<tr><td colspan="7">Sin registros en este filtro.</td></tr>';
+}
+
+function descargarReporte() {
+ const d=V.datos;
+
+ if(!d||!d.consultas) {
+  aviso('Espera a que cargue el detalle de asistencia.');
+  return;
+ }
+
+ if(!window.XLSX) {
+  aviso('No se pudo cargar el generador de Excel.');
+  return;
+ }
+
+ const a=d.asistencia;
+ const pct=(si,no)=>si+no?Math.round(si/(si+no)*100)+'%':'—';
+
+ const resumen=[
+  ['REPORTE DE ASISTENCIA · UGM · NUEVO HOSPITAL ROSALES'],
+  ['Fecha de consulta',d.fecha],
+  ['Generado',new Date().toLocaleString('es-SV')],
+  ['Generado por',UGM.nombre],
+  [],
+  ['Especialidad','Citas','Asistieron','No asistieron',
+   'Sin marcar','% asistencia'],
+  ...a.especialidades.map(e=>[e.especialidad,e.citas,e.asistio,
+   e.noAsistio,e.sinMarcar,pct(e.asistio,e.noAsistio)]),
+  ['TOTAL',a.total.citas,a.total.asistio,a.total.noAsistio,
+   a.total.sinMarcar,pct(a.total.asistio,a.total.noAsistio)]
+ ];
+
+ const fila=c=>[c.especialidad,c.paciente,c.documento,
+  c.origen==='SOBRECUPO'?'Sobrecupo':'Agenda',
+  textoAsistencia(c.asistencia),c.marcadoPor,
+  c.hora?horaCorta(c.hora):''];
+
+ const cab=['Especialidad','Paciente','Documento','Origen',
+  'Asistencia','Marcado por','Hora'];
+
+ const hoja=(filas,anchos)=>{
+  const h=XLSX.utils.aoa_to_sheet(filas);
+  h['!cols']=anchos.map(w=>({wch:w}));
+  return h;
+ };
+
+ const anchos=[30,38,16,12,14,26,8];
+ const wb=XLSX.utils.book_new();
+
+ XLSX.utils.book_append_sheet(wb,
+  hoja(resumen,[34,10,12,14,12,14]),'Resumen');
+ XLSX.utils.book_append_sheet(wb,
+  hoja([cab,...d.consultas.filter(c=>c.asistencia==='ASISTIO').map(fila)],anchos),
+  'Asistieron');
+ XLSX.utils.book_append_sheet(wb,
+  hoja([cab,...d.consultas.filter(c=>c.asistencia==='NO_ASISTIO').map(fila)],anchos),
+  'No asistieron');
+ XLSX.utils.book_append_sheet(wb,
+  hoja([cab,...d.consultas.filter(c=>!c.asistencia).map(fila)],anchos),
+  'Sin marcar');
+ XLSX.utils.book_append_sheet(wb,
+  hoja([cab,...d.consultas.map(fila)],anchos),'Detalle completo');
+
+ try {
+  XLSX.writeFile(wb,'Reporte_Asistencia_'+d.fecha+'.xlsx');
+  MOV.exito();
+  aviso('Reporte descargado.');
+ }catch(e) {
+  aviso('No se pudo descargar: '+e.message);
+ }
+}
+
+/* =====================================================
+   DISPONIBILIDAD, BASE Y AGENDA
+   ===================================================== */
+
+function pintarTablaCupos() {
+ const lista=V.datos.cupos||[];
+ if(!cambio('tablaCupos',lista))return;
+
+ $('cuposRows').innerHTML=lista.map(r=>`
+  <tr>
+   <td>${esc(r.especialidad)}</td>
+   <td>${r.activas}</td>
+   <td>${r.pendientes}</td>
+   <td>${r.limite==null?'N/A':r.limite}</td>
+   <td>${r.generados}</td>
+   <td>${r.ocupados}</td>
+   <td style="color:${r.disponibles>0?'var(--green)':'var(--red)'}">
+    <b>${r.disponibles}</b></td>
+   <td>${r.bloqueada?'<span style="color:var(--red)">No disponible</span>':
+    !r.habilitada?'No habilitado':
+    r.incidencia?'Excede capacidad':
+    r.disponibles>0?'Disponible':'Agotado'}</td>
+  </tr>`).join('')||
+  `<tr><td colspan="8">${V.datos.bloqueada
+   ?'Fecha no disponible.'
+   :'Sin sobrecupos para esta fecha (solo sábado y domingo).'}</td></tr>`;
+
+ MOV.escalonar($('cuposRows').children,14);
+}
+
+function pintarBase() {
+ const pac=V.datos.pacientes||{};
+
+ $('patientsStatus').textContent=pac.fecha
+  ?'Archivo: '+pac.archivo+' · Responsable: '+pac.usuario+
+   ' · '+new Date(pac.fecha).toLocaleString('es-SV')+
+   (pac.conEspecialidad?' · Incluye especialidad.':
+    ' · Especialidad: se toma de la agenda.')
+  :'Todavía no se ha cargado la base de pacientes.';
+
+ $('pacTotal').textContent=pac.total||0;
+ $('pacInv').textContent=pac.invalidos||0;
+ $('pacFecha').textContent=pac.fecha
+  ?new Date(pac.fecha).toLocaleDateString('es-SV'):'Sin datos';
+}
+
+function pintarAgenda() {
+ const a=V.datos.agenda||{};
+
+ $('uploadStatus').textContent=a.fecha
+  ?'Última carga: '+a.archivo+' · Responsable: '+a.usuario+
+   ' · Antigüedad: '+a.minutos+' minutos.'+
+   (a.extraordinaria?' · Actualización extraordinaria solicitada.':'')
+  :'Todavía no se ha importado una agenda.';
+}
+
+async function alertaExtraordinaria() {
+ try {
+  await api('solicitarActualizacionGlobal',UGM.token);
+  aviso('Se pidió a los técnicos actualizar la agenda.');
+  await refrescar(true);
+ }catch(e) {
+  aviso(e.message);
+ }
+}
+
+/* =====================================================
+   INICIO
+   ===================================================== */
+
+function limpiarTodo() {
+ if(V.timer)clearInterval(V.timer);
+ V.timer=null;
+ V.datos=null;
+ V.firmas={};
+ V.feedVistos=new Set();
+ cerrarModal();
+}
+
+async function alEntrar() {
+ V.fecha=hoy();
+ $('fecha').value=V.fecha;
+
+ page('control');
+ MOV.entrada();
+ requestAnimationFrame(()=>MOV.tinta(
+  document.querySelector('.nav.active')
+ ));
+
+ await refrescar(true);
+
+ if(V.timer)clearInterval(V.timer);
+ V.timer=setInterval(()=>refrescar(false),8000);
+
+ aviso('Bienvenido al centro de control, '+UGM.nombre+'.');
+}
+
+function iniciar() {
+ montarComun();
+ montarAcceso('supervisor',alEntrar,limpiarTodo);
+
+ document.querySelectorAll('.nav').forEach(b=>{
+  b.addEventListener('click',()=>page(b.dataset.page));
+ });
+
+ $('fecha').addEventListener('change',()=>{
+  if(!$('fecha').value)return;
+  V.fecha=$('fecha').value;
+  V.firmas={};
+  refrescar(true);
+ });
+
+ $('solChips').addEventListener('click',ev=>{
+  const b=ev.target.closest('.chip-btn');
+  if(!b)return;
+  V.filtroSol=b.dataset.f;
+  pintarSolicitudes(true);
+ });
+
+ $('solBuscar').addEventListener('input',()=>pintarSolicitudes(false));
+
+ $('solRows').addEventListener('click',ev=>{
+  const tr=ev.target.closest('tr[data-id]');
+  if(tr)abrirSolicitud(tr.dataset.id);
+ });
+
+ $('detEsp').addEventListener('change',()=>pintarDetalle(true));
+ $('detBuscar').addEventListener('input',()=>pintarDetalle(false));
+ $('detFiltro').addEventListener('click',ev=>{
+  const b=ev.target.closest('button');
+  if(!b)return;
+  V.detFiltro=b.dataset.f;
+  $('detFiltro').querySelectorAll('button').forEach(x=>
+   x.classList.toggle('on',x===b));
+  pintarDetalle(true);
+ });
+
+ $('btnReporte').addEventListener('click',descargarReporte);
+
+ document.addEventListener('click',ev=>{
+  const b=ev.target.closest('[data-cerrar]');
+  if(b)cerrarSesion(b.dataset.cerrar,b.dataset.n);
+ });
+
+ $('modal').addEventListener('click',ev=>{
+  if(ev.target===$('modal'))cerrarModal();
+ });
+
+ const recargar=async()=>{
+  V.firmas={};
+  await refrescar(true);
+ };
+
+ montarZona($('excelZone'),$('excelFile'),
+  f=>importarAgendaArchivo(f,recargar));
+
+ montarZona($('patientsZone'),$('patientsFile'),importarPacientes);
+
+ $('btnUrgent').addEventListener('click',alertaExtraordinaria);
+
+ document.addEventListener('paste',ev=>{
+  if(!UGM.token)return;
+
+  if(!$('modal').classList.contains('hidden')) {
+   const img=imagenPegada(ev);
+   if(img&&$('dropzone')) {
+    ev.preventDefault();
+    elegirArchivo(img);
+   }
+   return;
+  }
+
+  if(V.pagina==='actualizacion') {
+   pegarComoTabla(ev,f=>importarAgendaArchivo(f,recargar));
+  } else if(V.pagina==='basepacientes') {
+   pegarComoTabla(ev,importarPacientes);
+  }
+ });
+
+ $('btnRefresh').addEventListener('click',()=>{
+  V.firmas={};
+  refrescar(true);
+ });
+}
+
+if(document.readyState==='loading') {
+ document.addEventListener('DOMContentLoaded',iniciar);
+} else {
+ iniciar();
+}
+
+/* =====================================================
+   CARGA DE BASE DE PACIENTES Y COMPROBANTES
+   ===================================================== */
+
+const ALIAS_PACIENTES={
+ completo:[
+  'NOMBRECOMPLETO','NOMBREDELPACIENTE',
+  'NOMBREPACIENTE','PACIENTE',
+  'NOMBREYAPELLIDO','NOMBREYAPELLIDOS',
+  'NOMBRESYAPELLIDOS'
+ ],
+ nombres:[
+  'NOMBRE','NOMBRES','PRIMERNOMBRE',
+  'SEGUNDONOMBRE','TERCERNOMBRE'
+ ],
+ apellidos:[
+  'APELLIDO','APELLIDOS','PRIMERAPELLIDO',
+  'SEGUNDOAPELLIDO','APELLIDOCASADA',
+  'APELLIDODECASADA'
+ ],
+ documento:[
+  'DUI','NUMERODUI','NODUI','NUMDUI',
+  'NUMERODEDUI','DOCUMENTO','NUMERODOCUMENTO',
+  'NODOCUMENTO','NUMERODEDOCUMENTO',
+  'DOCUMENTOIDENTIDAD','DOCUMENTODEIDENTIDAD',
+  'DOCUMENTODUI'
+ ],
+ expediente:[
+  'EXPEDIENTE','NUMEROEXPEDIENTE',
+  'NOEXPEDIENTE','NUMERODEEXPEDIENTE'
+ ],
+ especialidad:[
+  'ESPECIALIDAD','ESPECIALIDADES',
+  'SERVICIO','NOMBREESPECIALIDAD'
+ ]
+};
+
+function encabezadosPacientes(fila) {
+ const nombres=fila.map(nombreColumna);
+ const uno=lista=>nombres.findIndex(
+  c=>lista.includes(c)
+ );
+ const todos=lista=>nombres
+  .map((c,i)=>lista.includes(c)?i:-1)
+  .filter(i=>i>=0);
+
+ const completo=uno(ALIAS_PACIENTES.completo);
+
+ const partes=completo>=0
+  ?[completo]
+  :[
+   ...todos(ALIAS_PACIENTES.nombres),
+   ...todos(ALIAS_PACIENTES.apellidos)
+  ].sort((a,b)=>a-b);
+
+ const documento=uno(ALIAS_PACIENTES.documento);
+
+ if(!partes.length||documento<0)return null;
+
+ return {
+  partes,
+  documento,
+  expediente:uno(ALIAS_PACIENTES.expediente),
+  especialidad:uno(ALIAS_PACIENTES.especialidad)
+ };
+}
+
+async function procesarPacientes(origen) {
+ const libro=await leerLibro(origen);
+
+ let mejor=null;
+
+ for(const nombre of libro.SheetNames) {
+  const matriz=XLSX.utils.sheet_to_json(
+   libro.Sheets[nombre],{
+    header:1,
+    defval:'',
+    raw:false,
+    blankrows:false
+   }
+  );
+
+  for(let i=0;i<Math.min(25,matriz.length);i++) {
+   const campos=encabezadosPacientes(matriz[i]);
+
+   if(campos&&(!mejor||
+      matriz.length-i>mejor.matriz.length-mejor.inicio)) {
+    mejor={matriz,inicio:i+1,campos};
+    break;
+   }
+  }
+ }
+
+ if(!mejor) {
+  throw Error(
+   'No encontré las columnas de Nombre y DUI '+
+   'en la base de pacientes.'
+  );
+ }
+
+ const {matriz,inicio,campos}=mejor;
+ const registros=[];
+
+ for(let i=inicio;i<matriz.length;i++) {
+  const fila=matriz[i]||[];
+
+  const nombre=campos.partes
+   .map(c=>String(fila[c]??'').trim())
+   .filter(Boolean).join(' ');
+
+  if(!nombre)continue;
+
+  registros.push({
+   nombre,
+   documento:String(fila[campos.documento]??''),
+   expediente:campos.expediente>=0
+    ?String(fila[campos.expediente]??''):'',
+   especialidad:campos.especialidad>=0
+    ?String(fila[campos.especialidad]??''):''
+  });
+ }
+
+ return registros;
+}
+
+async function importarPacientes(origen) {
+ if(!origen||S.cargandoPacientes)return;
+
+ if(!puedeGestionar()) {
+  aviso('Solo el supervisor puede cargar la base.');
+  return;
+ }
+
+ S.cargandoPacientes=true;
+
+ const progreso=$('patientsProgress');
+ const barra=$('patientsBar');
+ progreso.classList.remove('hidden');
+ barra.classList.remove('hidden');
+ MOV.barra(barra.firstElementChild,0);
+ progreso.textContent='Leyendo base de pacientes...';
+
+ try {
+  const registros=await procesarPacientes(origen);
+
+  if(!registros.length) {
+   throw Error('El archivo no contiene pacientes.');
+  }
+
+  if(registros.length>250000) {
+   throw Error(
+    'La base supera 250000 pacientes permitidos.'
+   );
+  }
+
+  const LOTE=4000;
+  const partes=Math.ceil(registros.length/LOTE);
+  let carga='';
+  let r=null;
+
+  for(let i=0;i<partes;i++) {
+   progreso.textContent='Cargando base de pacientes: '+
+    Math.round(i/partes*100)+'% ('+
+    registros.length+' registros)';
+   MOV.barra(barra.firstElementChild,
+    Math.max(.04,i/partes));
+
+   r=await api(
+    'cargarPacientes',
+    S.token,
+    carga,
+    registros.slice(i*LOTE,(i+1)*LOTE),
+    i,
+    partes,
+    origen.name
+   );
+
+   if(!r||!r.ok) {
+    throw Error(
+     'El servidor no confirmó la carga de pacientes.'
+    );
+   }
+
+   carga=r.carga;
+  }
+
+  progreso.textContent='Base de pacientes cargada: '+
+   r.total+' pacientes · DUI inválidos: '+
+   r.invalidos+'. Ya está disponible para los técnicos.';
+  MOV.barra(barra.firstElementChild,1);
+
+  aviso(
+   'Base de pacientes actualizada: '+r.total+
+   ' pacientes. DUI inválidos: '+r.invalidos+'.'
+  );
+
+  V.firmas={};
+  await refrescar(true);
+
+ }catch(e) {
+  progreso.textContent='No se pudo cargar la base.';
+  mostrarError(e);
+
+ }finally {
+  S.cargandoPacientes=false;
+  $('patientsFile').value='';
+ }
+}
+
+function limpiarArchivo() {
+ if(S.previewURL) {
+  URL.revokeObjectURL(S.previewURL);
+  S.previewURL=null;
+ }
+
+ S.archivo=null;
+}
+
+function elegirArchivo(archivo) {
+ if(!archivo)return;
+
+ const permitidos=[
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'application/pdf'
+ ];
+
+ if(!permitidos.includes(archivo.type)) {
+  aviso('Selecciona JPG, PNG, WEBP o PDF.');
+  return;
+ }
+
+ if(archivo.size===0 ||
+    archivo.size>5*1024*1024) {
+  aviso('El archivo debe ser menor de 5 MB.');
+  return;
+ }
+
+ limpiarArchivo();
+
+ S.archivo=archivo;
+
+ const cont=$('filePreview');
+
+ if(!cont)return;
+
+ cont.classList.remove('hidden');
+ cont.innerHTML='';
+
+ const titulo=document.createElement('p');
+ titulo.textContent=archivo.name;
+ cont.appendChild(titulo);
+
+ if(archivo.type.startsWith('image/')) {
+  S.previewURL=URL.createObjectURL(archivo);
+
+  const imagen=document.createElement('img');
+
+  imagen.src=S.previewURL;
+  imagen.alt='Comprobante seleccionado';
+
+  cont.appendChild(imagen);
+
+ }else {
+  const texto=document.createElement('div');
+
+  texto.className='pdf-preview';
+  texto.textContent='PDF: '+archivo.name;
+
+  cont.appendChild(texto);
+ }
+
+ const quitar=document.createElement('button');
+
+ quitar.type='button';
+ quitar.className='btn';
+ quitar.textContent='Quitar comprobante';
+
+ quitar.onclick=()=>{
+  limpiarArchivo();
+  cont.innerHTML='';
+  cont.classList.add('hidden');
+  $('fileInput').value='';
+ };
+
+ cont.appendChild(quitar);
+}
+
+function montarComprobante() {
+ const zona=$('dropzone');
+ const input=$('fileInput');
+
+ zona.addEventListener('click',()=>{
+  input.click();
+ });
+
+ zona.addEventListener('keydown',ev=>{
+  if(ev.key==='Enter'||ev.key===' ') {
+   ev.preventDefault();
+   input.click();
+  }
+ });
+
+ input.addEventListener('change',ev=>{
+  elegirArchivo(ev.target.files[0]);
+ });
+
+ zona.addEventListener('dragover',ev=>{
+  ev.preventDefault();
+  zona.classList.add('dragging');
+ });
+
+ zona.addEventListener('dragleave',()=>{
+  zona.classList.remove('dragging');
+ });
+
+ zona.addEventListener('drop',ev=>{
+  ev.preventDefault();
+  zona.classList.remove('dragging');
+  elegirArchivo(ev.dataTransfer.files[0]);
+ });
+}
+
+</script>
+
+</body>
+</html>

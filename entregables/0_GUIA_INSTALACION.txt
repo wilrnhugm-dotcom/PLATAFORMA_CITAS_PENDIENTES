@@ -1,107 +1,93 @@
 ==========================================================
- UGM 2026 - INSTALACIÓN DE LA PLATAFORMA NUEVA
+ UGM 2026 · DOS PLATAFORMAS (TÉCNICOS Y SUPERVISIÓN)
  Nuevo Hospital Rosales · Unidad de Gestión Médica
 ==========================================================
 
-Todo se hace con la cuenta que será DUEÑA de la plataforma
-(por ejemplo wil.rnh.ugm@gmail.com). La plataforma anterior
-y su base NO se tocan.
+ARCHIVOS (5) - los nombres deben ser EXACTOS
+----------------------------------------------------------
+ 1_CODIGO_GS.txt       ->  Código.gs     (Script)
+ 2_TECNICO_HTML.txt    ->  Tecnico       (HTML)
+ 3_SUPERVISOR_HTML.txt ->  Supervisor    (HTML)
+ 4_ESTILOS_HTML.txt    ->  Estilos       (HTML)
+ 5_COMUN_HTML.txt      ->  Comun         (HTML)
 
-----------------------------------------------------------
-PASO 1 · Crear la base de datos (hoja de cálculo)
-----------------------------------------------------------
-1. Entrar a https://sheets.new
-2. Ponerle nombre arriba a la izquierda, por ejemplo:
-   UGM 2026 - Base de sobrecupos
+ Sin tildes ni ".html" en los nombres: Tecnico, Supervisor,
+ Estilos, Comun. El archivo "Index" ya no se usa: bórralo.
 
+CLAVES (sin espacios)
 ----------------------------------------------------------
-PASO 2 · Crear el proyecto dentro de esa hoja
-----------------------------------------------------------
-1. En la hoja: menú Extensiones > Apps Script.
-2. Se abre el editor con un archivo "Código.gs".
-   Borrar todo su contenido y pegar COMPLETO el archivo
-   1_CODIGO_GS.txt
-3. Botón "+" (junto a Archivos) > HTML.
-   Nombre: Index   (I mayúscula, sin ".html")
-   Borrar su contenido y pegar COMPLETO 2_INDEX_HTML.txt
-4. Guardar (Ctrl+S). Opcional: renombrar el proyecto
-   arriba como "UGM 2026".
+ Técnicos:     UGM2026
+ Supervisión:  SUP1
+ Técnico autorizado: HNRUGM$ (entra a ambas)
 
-----------------------------------------------------------
-PASO 3 · Instalar (una sola vez)
-----------------------------------------------------------
-1. En la barra superior del editor, en el selector de
-   funciones, elegir:  instalarUGM
-2. Pulsar  ▶ Ejecutar
-3. Google pide permisos:
-   Revisar permisos > elegir la cuenta >
-   "Configuración avanzada" > "Ir a UGM 2026 (no seguro)"
-   > Permitir.
-   (Es normal: el script es propio, no está publicado.)
-4. En el Registro de ejecución debe aparecer:
-   "Plataforma instalada. Base de datos: ..."
-5. Volver a la hoja: ya tiene las pestañas SOBRECUPOS,
-   DISPONIBILIDAD (con los cupos por especialidad),
-   AUDITORIA, PERSONAL y AGENDA_EXCEL.
+==========================================================
+ ACTUALIZAR EL PROYECTO QUE YA INSTALASTE
+ (hoja "Citas Sábado y Domingo")
+==========================================================
+1. Abre la hoja > Extensiones > Apps Script.
+2. Código.gs: Ctrl+A, borrar, pegar 1_CODIGO_GS.txt.
+3. Archivo "Index": tres puntos > Eliminar.
+4. "+" > HTML > nombre  Tecnico     > pegar 2_TECNICO_HTML.txt
+   "+" > HTML > nombre  Supervisor  > pegar 3_SUPERVISOR_HTML.txt
+   "+" > HTML > nombre  Estilos     > pegar 4_ESTILOS_HTML.txt
+   "+" > HTML > nombre  Comun       > pegar 5_COMUN_HTML.txt
+5. Guardar todo (Ctrl+S).
+6. Elegir la función  instalarUGM  > ▶ Ejecutar.
+   Agrega la hoja ASISTENCIA y las columnas nuevas de
+   SOBRECUPOS (Tipo, TicketFrente, TicketReverso).
+   NO borra datos. Si pide permisos (Google Drive para
+   guardar los tickets): Permitir.
+7. Implementar > Gestionar implementaciones > ✏️ Editar >
+   Versión: Nueva versión > Implementar.
+   (Así la URL no cambia.)
 
-   Comprobación opcional: elegir  diagnosticoUGM  y
-   Ejecutar. Debe decir  "Base: OK".
+==========================================================
+ ENLACES
+==========================================================
+ Técnicos:     URL/exec            (o URL/exec?vista=tecnico)
+ Supervisión:  URL/exec?vista=supervisor
 
-----------------------------------------------------------
-PASO 4 · Publicar la aplicación web
-----------------------------------------------------------
-1. Botón azul  Implementar > Nueva implementación
-2. Engranaje (Seleccionar tipo) > Aplicación web
-3. Descripción: UGM 2026 v1
-4. Ejecutar como:  Yo (tu correo)        <-- IMPORTANTE
-5. Quién tiene acceso: según la política del hospital
-   ("Cualquier persona con una cuenta de Google" o
-   "Cualquier persona").
-6. Implementar > copiar la URL que termina en /exec
+ Cada enlace abre SU plataforma. Con la clave equivocada
+ el sistema indica qué enlace usar.
 
-----------------------------------------------------------
-PASO 5 · Enlaces para cada plataforma
-----------------------------------------------------------
-Agregar al final de la URL copiada:
+==========================================================
+ QUÉ HACE CADA PLATAFORMA
+==========================================================
+TÉCNICOS
+ - Consultas del día: pestañas por especialidad, buscador
+   por nombre/DUI y botones Asistió / No asistió.
+ - Solicitud de sobrecupo: sábado y domingo según cupos.
+   Otro día solo como "Solicitud médica" con ticket
+   (frente + reverso sellado y firmado). Fechas bloqueadas
+   de diciembre y enero: nunca.
+ - Mis solicitudes, Buscar paciente, Actualizar agenda.
 
-  Técnicos:     URL/exec?vista=tecnico
-                Clave: UGM 2026
+SUPERVISIÓN
+ - Centro de control en vivo: técnicos en línea, gráficas
+   de cupos, asistencia, estados y actividad por hora.
+ - Solicitudes: ver tickets, aprobar, observar, rechazar.
+ - Asistencia: resumen por especialidad y botón
+   "Descargar reporte Excel" para el reporte del día.
+ - Personal en línea: qué hace cada técnico y cerrar
+   sesiones de forma remota.
+ - Disponibilidad, Base de pacientes, Agenda, Auditoría.
 
-  Supervisión:  URL/exec?vista=supervisor
-                Clave: SUP 1
+==========================================================
+ INSTALACIÓN DESDE CERO (otra hoja nueva)
+==========================================================
+ sheets.new > Extensiones > Apps Script > crear los 5
+ archivos como arriba > ejecutar instalarUGM > Implementar
+ > Nueva implementación > Aplicación web > Ejecutar como
+ "Yo" > copiar URL.
 
-  (Técnico autorizado HNRUGM$ entra por cualquiera.)
-
-----------------------------------------------------------
-PASO 6 · Primer uso (supervisor)
-----------------------------------------------------------
-1. Entrar por el enlace de supervisión.
-2. Menú "Base de pacientes": arrastrar, adjuntar o pegar
-   la base de Marcela (columnas de nombre y DUI;
-   expediente y especialidad opcionales).
-3. Menú "Actualizar agenda": cargar el Excel de la agenda.
-4. Los técnicos ya pueden buscar pacientes en
-   "Buscar paciente" y registrar sobrecupos.
-
-----------------------------------------------------------
-CUANDO SE HAGAN CAMBIOS AL CÓDIGO
-----------------------------------------------------------
-Pegar el código nuevo, guardar y luego:
-Implementar > Gestionar implementaciones > ✏️ Editar >
-Versión: Nueva versión > Implementar.
-(Así la URL y los enlaces NO cambian.)
-
-NO usar "Nueva implementación" para actualizar: crea una
-URL distinta.
-
-----------------------------------------------------------
-SI ALGO FALLA
-----------------------------------------------------------
-- "Clave incorrecta": revisar mayúsculas y el espacio
-  (SUP 1 · UGM 2026).
-- "No cuentas con el permiso...": la implementación no
-  está en "Ejecutar como: Yo", o el proyecto no es el de
-  esta hoja. Ejecutar diagnosticoUGM y revisar.
-- "Esta es la plataforma de técnicos/supervisión": se usó
-  el enlace equivocado para esa clave.
+==========================================================
+ SI ALGO FALLA
+==========================================================
+ - Pantalla en blanco o "No se encontró el archivo HTML":
+   revisar que los nombres sean exactos (Tecnico,
+   Supervisor, Estilos, Comun).
+ - "Clave incorrecta": UGM2026 / SUP1, sin espacios.
+ - "No cuentas con el permiso...": Ejecutar como "Yo" y
+   ejecutar diagnosticoUGM para revisar.
+ - Cambios que no se ven: falta publicar "Nueva versión".
 ==========================================================

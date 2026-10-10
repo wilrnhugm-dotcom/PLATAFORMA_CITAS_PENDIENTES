@@ -1,0 +1,2037 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<base target="_top">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UGM | Técnicos</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<?!= include('Estilos'); ?>
+</head>
+<body>
+
+<div class="bg-orbs" aria-hidden="true">
+ <span class="orb o1"></span>
+ <span class="orb o2"></span>
+ <span class="orb o3"></span>
+</div>
+
+<!-- ACCESO -->
+<div id="login">
+ <section class="login-card glass">
+  <span class="shine" aria-hidden="true"></span>
+  <div class="brand-row">
+   <div class="brand-logo" role="img"
+    aria-label="Red Nacional de Hospitales · Nuevo Hospital Rosales"></div>
+   <div class="brand-escudo" role="img"
+    aria-label="Escudo de El Salvador"></div>
+  </div>
+
+  <h1>Unidad de Gestión Médica</h1>
+  <p>Consultas, asistencia y solicitudes de sobrecupo.</p>
+  <span class="login-badge">● PLATAFORMA DE TÉCNICOS</span>
+
+  <form id="loginForm" autocomplete="off" style="margin-top:22px">
+   <div class="field">
+    <label>Nombre del colaborador</label>
+    <input id="loginName" required
+     autocomplete="off" placeholder="Nombres y apellidos">
+   </div>
+
+   <div class="field">
+    <label>Clave de acceso</label>
+    <input id="loginPass" type="password" required
+     autocomplete="new-password"
+     placeholder="Clave de acceso">
+   </div>
+
+   <button id="btnLogin" class="btn primary"
+    type="submit" style="width:100%">
+    Ingresar al sistema
+   </button>
+  </form>
+ </section>
+</div>
+
+<!-- SISTEMA -->
+<div id="app" class="hidden">
+
+<header class="top">
+ <div class="brand-logo" role="img"
+  aria-label="Red Nacional de Hospitales · Nuevo Hospital Rosales"></div>
+
+ <div class="unit">
+  UNIDAD DE GESTIÓN MÉDICA · TÉCNICOS
+ </div>
+
+ <div class="top-actions">
+  <div class="brand-escudo" role="img"
+   aria-label="Escudo de El Salvador"></div>
+
+  <button id="themeToggle" class="theme-btn"
+   type="button" aria-label="Cambiar tema">☀</button>
+
+  <div class="profile">
+   <strong id="who"></strong>
+   <small id="clock"></small>
+   <small>
+    <span id="sync">● Conectado</span> ·
+    <a href="#" id="btnSalir">Salir</a>
+   </small>
+  </div>
+ </div>
+</header>
+
+<div class="layout">
+
+<aside class="sidebar glass has-ink">
+ <span class="nav-ink" id="navInk"></span>
+
+ <button class="nav active" data-page="consultas">
+  <i>☰</i>Consultas del día
+ </button>
+
+ <button class="nav" data-page="solicitud">
+  <i>✚</i>Solicitud de sobrecupo
+ </button>
+
+ <button class="nav" data-page="missolicitudes">
+  <i>♧</i>Mis solicitudes
+  <span class="badge hidden" id="badgeMias"></span>
+ </button>
+
+ <button class="nav" data-page="buscar">
+  <i>⚲</i>Buscar paciente
+ </button>
+
+ <button class="nav" data-page="actualizacion">
+  <i>↥</i>Actualizar agenda
+ </button>
+
+ <div class="side-bottom">
+  TECNOLOGÍA<br>AL SERVICIO<br>DE TU SALUD
+ </div>
+</aside>
+
+<main class="main glass">
+
+ <div class="crumb">
+  Inicio › Técnicos › <span id="crumbPage">Consultas del día</span>
+ </div>
+
+ <div class="heading">
+  <div class="symbol">♙</div>
+  <div>
+   <h1 id="title">Consultas del día</h1>
+   <small id="subtitle">Asistencia de pacientes por especialidad</small>
+  </div>
+
+  <div class="hospital">
+   Nuevo Hospital Rosales
+   <small>Unidad de Gestión Médica</small>
+  </div>
+ </div>
+
+ <!-- INDICADORES -->
+ <div class="kpis supervisor-kpis" id="kpiContainer">
+  <div class="kpi glass">
+   <div class="kpi-icon">☰</div>
+   <div>
+    <strong id="kCitas">0</strong>
+    <b>Citas del día</b>
+    <small id="kFecha">Agenda cargada</small>
+   </div>
+  </div>
+
+  <div class="kpi glass verde">
+   <div class="kpi-icon">✓</div>
+   <div>
+    <strong id="kSi">0</strong>
+    <b>Asistieron</b>
+    <small>Pacientes presentes</small>
+   </div>
+  </div>
+
+  <div class="kpi glass rojo">
+   <div class="kpi-icon">✕</div>
+   <div>
+    <strong id="kNo">0</strong>
+    <b>No asistieron</b>
+    <small>Ausencias marcadas</small>
+   </div>
+  </div>
+
+  <div class="kpi glass amarillo">
+   <svg class="ring" viewBox="0 0 50 50">
+    <circle class="bg" cx="25" cy="25" r="21"/>
+    <circle class="fg" id="ringAvance" cx="25" cy="25" r="21"
+     transform="rotate(-90 25 25)"/>
+   </svg>
+   <div>
+    <strong id="kPend">0</strong>
+    <b>Por marcar</b>
+    <small id="kAvance">0% registrado</small>
+   </div>
+  </div>
+ </div>
+
+ <!-- CONSULTAS -->
+ <section class="page" id="consultas">
+  <div class="panel glass">
+   <div class="filters">
+    <div class="field">
+     <label>Fecha de consulta</label>
+     <input id="cFecha" type="date">
+    </div>
+    <div class="field">
+     <label>Buscar paciente</label>
+     <input id="cBuscar" autocomplete="off"
+      placeholder="Nombre, DUI o expediente">
+    </div>
+    <div class="seg" id="cFiltro">
+     <button class="on" data-f="todos" type="button">Todos</button>
+     <button data-f="pendientes" type="button">Por marcar</button>
+     <button data-f="ASISTIO" type="button">Asistió</button>
+     <button data-f="NO_ASISTIO" type="button">No asistió</button>
+    </div>
+   </div>
+
+   <div class="tabs" id="cTabs">
+    <span class="tab-ink"></span>
+   </div>
+
+   <div class="citas" id="cLista"></div>
+   <div class="lista-pie" id="cPie"></div>
+  </div>
+ </section>
+
+ <!-- SOLICITUD DE SOBRECUPO -->
+ <section class="page hidden" id="solicitud">
+  <div class="notice warning hidden" id="agendaAlert">
+   <strong>Actualización de agenda requerida</strong>
+   <p id="agendaAlertText">
+    Para sobrecupos de sábado y domingo la agenda debe
+    haberse cargado en los últimos 30 minutos.
+   </p>
+   <div class="buttons">
+    <button class="btn primary" id="btnGoUpload" type="button">
+     Actualizar agenda
+    </button>
+   </div>
+  </div>
+
+  <div class="panel glass">
+   <h2><span>✚</span> Solicitud de sobrecupo</h2>
+   <p class="desc">
+    Sobrecupos únicamente <b>sábado y domingo</b>. Otro día
+    solo con <b>solicitud médica</b>: adjunta el ticket de
+    la consulta (frente) y el reverso sellado y firmado por
+    el médico.
+   </p>
+
+   <div class="cupo-box" id="cupoBox">
+    <div class="num" id="cupoNum">—</div>
+    <p id="cupoTexto">Selecciona especialidad y fecha
+     para ver los cupos disponibles.</p>
+   </div>
+
+   <form id="formRequest" autocomplete="off">
+    <div class="form-grid">
+
+     <div class="field full">
+      <label>Especialidad <span class="required">*</span></label>
+      <select id="esp" required>
+       <option value="">Seleccione especialidad</option>
+      </select>
+     </div>
+
+     <div class="field full">
+      <label>Nombres <span class="required">*</span></label>
+      <div class="search-box">
+       <input id="patientName" required maxlength="150"
+        autocomplete="off" role="combobox"
+        aria-autocomplete="list" aria-controls="patientResults"
+        aria-expanded="false"
+        placeholder="Buscar paciente por nombre o DUI">
+       <div id="patientResults" class="search-results hidden"
+        role="listbox"></div>
+      </div>
+      <div class="dui-helper" id="patientHelper">
+       Escribe al menos 3 letras para buscar en la base de pacientes.
+      </div>
+     </div>
+
+     <div class="field">
+      <label>DUI <span class="required">*</span></label>
+      <input id="doc" type="text" inputmode="numeric" required
+       maxlength="10" autocomplete="off"
+       pattern="[0-9]{8}-[0-9]" placeholder="00000000-0">
+      <div class="dui-helper" id="docHelper">
+       El guion se agrega automáticamente.
+      </div>
+     </div>
+
+     <div class="field">
+      <label>Fecha del sobrecupo <span class="required">*</span></label>
+      <input id="date" type="date" required autocomplete="off">
+      <div class="dui-helper" id="dateHelper">Fechas no disponibles:</div>
+      <div class="blocked-list" id="blockedList"></div>
+     </div>
+
+     <div class="field full">
+      <label>A solicitud de (médico) <span class="required">*</span></label>
+      <input id="requestedBy" required maxlength="100"
+       autocomplete="off" placeholder="Nombre del médico solicitante">
+     </div>
+
+     <div class="field full hidden" id="medicoWrap">
+      <label class="switch" for="medico">
+       <input type="checkbox" id="medico">
+       <span class="knob"></span>
+       <span class="txt">Solicitud médica (día entre semana)
+        <small>Confirmo que el médico solicitó este sobrecupo
+         y adjunto el ticket sellado y firmado.</small></span>
+      </label>
+     </div>
+
+     <div class="field full">
+      <label class="req-label" id="ticketLabel">Ticket de la consulta
+       <span class="required">*</span>
+       <span class="muted small" id="ticketOpc">(opcional en fin de semana)</span>
+      </label>
+      <div class="tickets">
+       <div class="ticket" id="tFrente" role="button" tabindex="0">
+        <span class="ico">▤</span>
+        <strong>Frente del ticket</strong>
+        <small>Arrastra, pega (Ctrl+V) o haz clic</small>
+        <small>JPG, PNG, WEBP o PDF · máx. 5 MB</small>
+       </div>
+       <div class="ticket" id="tReverso" role="button" tabindex="0">
+        <span class="ico">✍</span>
+        <strong>Reverso sellado y firmado</strong>
+        <small>Sello y firma del médico visibles</small>
+        <small>JPG, PNG, WEBP o PDF · máx. 5 MB</small>
+       </div>
+      </div>
+      <input id="fFrente" type="file" class="hidden"
+       accept="image/jpeg,image/png,image/webp,application/pdf">
+      <input id="fReverso" type="file" class="hidden"
+       accept="image/jpeg,image/png,image/webp,application/pdf">
+     </div>
+    </div>
+
+    <div class="form-actions">
+     <button id="btnLimpiar" class="btn" type="button">Limpiar</button>
+     <button id="btnRequest" class="btn primary" type="submit">
+      ✚ Enviar solicitud
+     </button>
+    </div>
+   </form>
+  </div>
+ </section>
+
+ <!-- MIS SOLICITUDES -->
+ <section class="page hidden" id="missolicitudes">
+  <div class="panel glass">
+   <h2>Mis solicitudes</h2>
+   <p class="desc">Estado de las solicitudes que registraste.
+    Se actualiza automáticamente.</p>
+   <div class="tablebox">
+    <table>
+     <thead>
+      <tr>
+       <th>Referencia</th>
+       <th>Paciente</th>
+       <th>Especialidad</th>
+       <th>Fecha</th>
+       <th>Tipo</th>
+       <th>Estado</th>
+       <th>Observación</th>
+      </tr>
+     </thead>
+     <tbody id="misRows"></tbody>
+    </table>
+   </div>
+  </div>
+ </section>
+
+ <!-- BUSCAR PACIENTE -->
+ <section class="page hidden" id="buscar">
+  <div class="panel glass">
+   <h2><span>⚲</span> Buscar paciente</h2>
+   <p class="desc">Busca en la base de pacientes por nombre, DUI o
+    expediente y filtra por especialidad.</p>
+   <div class="search-grid">
+    <div class="field">
+     <label>Nombre, DUI o expediente</label>
+     <input id="qPaciente" autocomplete="off"
+      placeholder="Ej.: María Pérez · 01234567-8">
+    </div>
+    <div class="field">
+     <label>Especialidad</label>
+     <select id="qEspecialidad">
+      <option value="">Todas las especialidades</option>
+     </select>
+    </div>
+   </div>
+   <div class="search-meta">
+    <span id="baseInfo">Base de pacientes: sin datos.</span>
+    <span id="qCount"></span>
+   </div>
+   <div class="tablebox">
+    <table>
+     <thead>
+      <tr>
+       <th>Paciente</th>
+       <th>DUI</th>
+       <th>Expediente</th>
+       <th>Especialidad</th>
+       <th></th>
+      </tr>
+     </thead>
+     <tbody id="qRows"></tbody>
+    </table>
+   </div>
+  </div>
+ </section>
+
+ <!-- ACTUALIZAR AGENDA -->
+ <section class="page hidden" id="actualizacion">
+  <div class="panel glass">
+   <h2>Actualización de agenda hospitalaria</h2>
+   <p class="desc">Importa el Excel exportado del sistema
+    hospitalario. Se comparte con todos los técnicos y
+    supervisión.</p>
+
+   <div class="notice">
+    <strong>Estado de la agenda</strong>
+    <p id="uploadStatus">Sin información.</p>
+   </div>
+
+   <div class="dropzone" id="excelZone" role="button" tabindex="0">
+    <strong>Arrastra aquí el archivo Excel</strong>
+    <small>O haz clic para seleccionarlo. También puedes
+     pegarlo con Ctrl+V.</small>
+    <small>Formatos .xlsx, .xls y .csv · Celdas copiadas de Excel</small>
+   </div>
+
+   <input id="excelFile" type="file" class="hidden"
+    accept=".xlsx,.xls,.csv">
+  </div>
+ </section>
+
+ <div class="bottom">
+  <span class="small muted" id="status">Sistema UGM</span>
+  <button id="btnRefresh" class="btn" type="button">
+   ↻ Actualizar ahora
+  </button>
+ </div>
+</main>
+</div>
+</div>
+
+<div id="modal" class="overlay hidden">
+ <div class="modal glass" id="modalContent"></div>
+</div>
+
+<div id="errorOverlay" class="error-overlay hidden"
+ role="alertdialog" aria-modal="true" aria-labelledby="errorTitle">
+ <div class="error-panel">
+  <div class="error-symbol">⚠</div>
+  <h2 id="errorTitle">AVISO</h2>
+  <p id="errorText"></p>
+  <button id="btnCloseError" class="btn primary" type="button">
+   Entendido
+  </button>
+ </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<?!= include('Comun'); ?>
+
+<script>
+'use strict';
+
+/* =====================================================
+   UGM 2026 · PLATAFORMA DE TÉCNICOS
+   ===================================================== */
+
+const T={
+ pagina:'consultas',
+ fecha:'',
+ datos:null,
+ tab:'',
+ filtro:'todos',
+ consultando:false,
+ timer:null,
+ guardando:false,
+ firma:'',
+ tickets:{frente:null,reverso:null},
+ urls:{frente:null,reverso:null},
+ cupos:{},
+ cuposTimer:null
+};
+
+// Compatibilidad con el buscador de pacientes.
+const S={
+ get token(){return UGM.token;},
+ get generacion(){return UGM.generacion;},
+ get pagina(){return T.pagina;},
+ datos:{},
+ paciente:null,
+ qResultados:[],
+ guardando:false
+};
+
+const TITULOS={
+ consultas:['Consultas del día','Asistencia de pacientes por especialidad'],
+ solicitud:['Solicitud de sobrecupo','Sábado y domingo · solicitudes médicas con ticket'],
+ missolicitudes:['Mis solicitudes','Seguimiento de tus solicitudes'],
+ buscar:['Buscar paciente','Base de pacientes'],
+ actualizacion:['Actualizar agenda','Agenda hospitalaria compartida']
+};
+
+function page(n) {
+ if(!TITULOS[n])return;
+
+ const cambio=T.pagina!==n;
+ T.pagina=n;
+
+ mostrarPagina(n,TITULOS[n][0],!cambio);
+ $('subtitle').textContent=TITULOS[n][1];
+
+ if(n==='buscar') {
+  pintarBusqueda();
+  setTimeout(()=>$('qPaciente').focus(),60);
+ }
+
+ if(n==='consultas') {
+  requestAnimationFrame(()=>marcarPestana(true));
+ }
+
+ if(n==='solicitud')actualizarCupos();
+}
+
+function actividadActual() {
+ if(T.pagina==='consultas') {
+  return 'Consultas · '+(T.tab||'Todas las especialidades');
+ }
+ if(T.pagina==='solicitud') {
+  const p=$('patientName').value.trim();
+  return 'Solicitud de sobrecupo'+(p?' · '+p:'');
+ }
+ return TITULOS[T.pagina][0];
+}
+
+/* =====================================================
+   SINCRONIZACIÓN
+   ===================================================== */
+
+async function refrescar() {
+ if(!UGM.token||T.consultando||UGM.importando)return;
+
+ T.consultando=true;
+
+ const gen=UGM.generacion;
+ const fecha=T.fecha;
+
+ try {
+  const d=await api(
+   'tableroTecnico',UGM.token,fecha,actividadActual()
+  );
+
+  if(gen!==UGM.generacion||fecha!==T.fecha)return;
+
+  T.datos=d;
+  S.datos=d;
+
+  dibujar();
+  revisarBase();
+
+  $('sync').textContent='● Sincronizado';
+  $('sync').style.color='var(--green)';
+  $('status').textContent='Última sincronización: '+
+   new Date().toLocaleTimeString('es-SV');
+
+ }catch(e) {
+  if(sesionTerminada(e,limpiarTodo))return;
+  if(gen!==UGM.generacion)return;
+
+  $('sync').textContent='● Error';
+  $('sync').style.color='var(--red)';
+  $('status').textContent=e.message;
+
+ }finally {
+  if(gen===UGM.generacion)T.consultando=false;
+ }
+}
+
+function dibujar() {
+ const d=T.datos;
+ if(!d)return;
+
+ pintarIndicadores();
+ pintarPestanas();
+ pintarConsultas(false);
+ pintarMias();
+
+ const a=d.agenda||{};
+
+ $('uploadStatus').textContent=a.fecha
+  ?'Última carga: '+a.archivo+' · Responsable: '+a.usuario+
+   ' · Antigüedad: '+a.minutos+' minutos.'
+  :'Todavía no se ha importado una agenda.';
+
+ $('agendaAlert').classList.toggle('hidden',Boolean(a.vigente));
+
+ $('agendaAlertText').textContent=a.extraordinaria
+  ?'Supervisión solicitó una actualización extraordinaria '+
+   'de la agenda.'
+  :'Para sobrecupos de sábado y domingo la agenda debe '+
+   'haberse cargado en los últimos 30 minutos.';
+}
+
+/* =====================================================
+   CONSULTAS POR ESPECIALIDAD Y ASISTENCIA
+   ===================================================== */
+
+function consultas() {
+ return (T.datos&&T.datos.consultas)||[];
+}
+
+function pintarIndicadores() {
+ const lista=consultas();
+ const si=lista.filter(c=>c.asistencia==='ASISTIO').length;
+ const no=lista.filter(c=>c.asistencia==='NO_ASISTIO').length;
+ const pend=lista.length-si-no;
+ const avance=lista.length?(si+no)/lista.length:0;
+
+ contarNumero('kCitas',lista.length);
+ contarNumero('kSi',si);
+ contarNumero('kNo',no);
+ contarNumero('kPend',pend);
+
+ $('kAvance').textContent=Math.round(avance*100)+'% registrado';
+ $('kFecha').textContent=T.fecha===(T.datos||{}).hoy
+  ?'Hoy':T.fecha;
+
+ MOV.anillo($('ringAvance'),avance);
+}
+
+function pintarPestanas() {
+ const grupos={};
+
+ consultas().forEach(c=>{
+  const g=grupos[c.especialidad]||
+   (grupos[c.especialidad]={total:0,pend:0});
+  g.total++;
+  if(!c.asistencia)g.pend++;
+ });
+
+ const nombres=Object.keys(grupos)
+  .sort((a,b)=>grupos[b].total-grupos[a].total||
+   a.localeCompare(b));
+
+ if(T.tab&&!grupos[T.tab])T.tab='';
+
+ const firma=nombres.map(n=>n+grupos[n].total+'/'+grupos[n].pend)
+  .join('|')+'#'+T.tab;
+
+ if(firma===T.firmaTabs)return;
+
+ const nueva=!T.firmaTabs||
+  T.firmaTabs.split('#')[0].replace(/\d+\/\d+/g,'')!==
+  firma.split('#')[0].replace(/\d+\/\d+/g,'');
+
+ T.firmaTabs=firma;
+
+ const cont=$('cTabs');
+ const ink=cont.querySelector('.tab-ink');
+
+ cont.innerHTML='';
+ cont.appendChild(ink);
+
+ const crear=(valor,texto,cuenta,pend)=>{
+  const b=document.createElement('button');
+  b.type='button';
+  b.className='tab'+(valor===T.tab?' active':'');
+  b.dataset.tab=valor;
+  b.title=pend?pend+' por marcar':'Todo marcado';
+  b.innerHTML=esc(texto)+' <b>'+cuenta+'</b>';
+  cont.appendChild(b);
+ };
+
+ crear('','Todas',consultas().length,
+  consultas().filter(c=>!c.asistencia).length);
+
+ nombres.forEach(n=>crear(n,n,grupos[n].total,grupos[n].pend));
+
+ requestAnimationFrame(()=>marcarPestana(true));
+
+ if(nueva)MOV.escalonar(cont.querySelectorAll('.tab'),20);
+}
+
+function marcarPestana(inmediato) {
+ const cont=$('cTabs');
+ const activa=cont.querySelector('.tab.active');
+ MOV.pestana(cont,activa,inmediato);
+}
+
+function elegirPestana(valor) {
+ T.tab=valor;
+
+ $('cTabs').querySelectorAll('.tab').forEach(b=>{
+  b.classList.toggle('active',b.dataset.tab===valor);
+ });
+
+ T.firmaTabs=(T.firmaTabs||'').split('#')[0]+'#'+valor;
+
+ const activa=$('cTabs').querySelector('.tab.active');
+ if(activa)activa.scrollIntoView({block:'nearest',inline:'nearest',behavior:'smooth'});
+
+ marcarPestana(false);
+ pintarConsultas(true);
+}
+
+function filtrarConsultas() {
+ const texto=$('cBuscar').value.trim();
+ const q=normTexto(texto);
+ const palabras=q.split(' ').filter(Boolean);
+ const digitos=texto.replace(/\D/g,'');
+ const numerico=/^[\d\s-]+$/.test(texto)&&digitos.length>=3;
+
+ return consultas().filter(c=>{
+  if(T.tab&&c.especialidad!==T.tab)return false;
+
+  if(T.filtro==='pendientes'&&c.asistencia)return false;
+  if(['ASISTIO','NO_ASISTIO'].includes(T.filtro)&&
+     c.asistencia!==T.filtro)return false;
+
+  if(!texto)return true;
+
+  if(numerico) {
+   return String(c.documento).replace(/\D/g,'')
+    .includes(digitos);
+  }
+
+  const b=normTexto(c.paciente+' '+c.documento);
+  return palabras.every(p=>b.includes(p));
+ });
+}
+
+function etiquetaCita(c) {
+ if(c.estadoCita==='SOBRECUPO') {
+  return '<span class="tag sobrecupo">Sobrecupo · '+
+   esc(textoEstado(c.sobrecupo))+'</span>';
+ }
+
+ const tag=c.estadoCita==='ACTIVA'
+  ?'<span class="tag activa">Cita activa</span>'
+  :c.estadoCita==='PENDIENTE'
+   ?'<span class="tag pendiente">Cita pendiente</span>'
+   :'<span class="tag">Registrada</span>';
+
+ return tag+(c.sobrecupo
+  ?' <span class="tag sobrecupo">Sobrecupo · '+
+    esc(textoEstado(c.sobrecupo))+'</span>':'');
+}
+
+function htmlCita(c,texto) {
+ const futura=T.datos&&T.fecha>T.datos.hoy;
+ const clase=c.asistencia==='ASISTIO'?' ok':
+  c.asistencia==='NO_ASISTIO'?' no':'';
+
+ return `
+  <div class="cita${clase}" data-k="${esc(c.clave)}">
+   <div class="avatar">${esc(iniciales(c.paciente))}</div>
+   <div class="info" style="min-width:0">
+    <h4>${resaltar(c.paciente||'Sin nombre',texto)}</h4>
+    <div class="meta">
+     <span>${c.documento?'Doc. '+esc(c.documento):'Sin documento'}</span>
+     ${etiquetaCita(c)}
+     ${T.tab?'':'<span>· '+esc(c.especialidad)+'</span>'}
+    </div>
+   </div>
+   <div class="asis-wrap">
+    <div class="asis">
+     <button type="button" class="si${c.asistencia==='ASISTIO'?' on':''}"
+      data-a="ASISTIO" ${futura?'disabled':''}
+      title="${futura?'Se marca el día de la cita':'Marcar asistencia'}">✓ Asistió</button>
+     <button type="button" class="no${c.asistencia==='NO_ASISTIO'?' on':''}"
+      data-a="NO_ASISTIO" ${futura?'disabled':''}
+      title="${futura?'Se marca el día de la cita':'Marcar inasistencia'}">✕ No asistió</button>
+    </div>
+    <div class="marcado">${c.marcadoPor
+     ?'Marcado por '+esc(c.marcadoPor)+' · '+esc(horaCorta(c.hora))
+     :futura?'Disponible el día de la cita':'Sin marcar'}</div>
+   </div>
+  </div>`;
+}
+
+function pintarConsultas(animar) {
+ const lista=filtrarConsultas();
+ const texto=$('cBuscar').value.trim();
+ const visibles=lista.slice(0,300);
+
+ const firma=T.fecha+'|'+T.tab+'|'+T.filtro+'|'+texto+'|'+
+  visibles.map(c=>c.clave+c.asistencia+c.marcadoPor+c.sobrecupo)
+   .join(',');
+
+ if(!animar&&firma===T.firma)return;
+
+ T.firma=firma;
+
+ const cont=$('cLista');
+
+ if(!consultas().length) {
+  cont.innerHTML=`<div class="empty">
+   <span class="ico">☰</span>
+   <b>No hay citas para esta fecha</b>
+   Carga la agenda del día en "Actualizar agenda" o elige
+   otra fecha.</div>`;
+  $('cPie').textContent='';
+  if(animar)MOV.escalonar(cont.children);
+  return;
+ }
+
+ if(!lista.length) {
+  cont.innerHTML=`<div class="empty">
+   <span class="ico">⚲</span>
+   <b>Sin coincidencias</b>
+   Prueba con otro nombre, DUI o filtro.</div>`;
+  $('cPie').textContent='';
+  return;
+ }
+
+ cont.innerHTML=visibles.map(c=>htmlCita(c,texto)).join('');
+
+ $('cPie').textContent=lista.length>300
+  ?'Mostrando 300 de '+lista.length+'. Usa el buscador para encontrar al paciente.'
+  :lista.length+' paciente(s)';
+
+ if(animar)MOV.escalonar(cont.querySelectorAll('.cita'),14);
+}
+
+async function marcar(clave,valor,boton) {
+ const c=consultas().find(x=>x.clave===clave);
+
+ if(!c||c._ocupado)return;
+
+ // Pulsar el estado ya marcado lo quita.
+ const nuevo=c.asistencia===valor?'':valor;
+ const anterior={
+  asistencia:c.asistencia,
+  marcadoPor:c.marcadoPor,
+  hora:c.hora
+ };
+
+ c._ocupado=true;
+ c.asistencia=nuevo;
+ c.marcadoPor=nuevo?UGM.nombre:'';
+ c.hora=nuevo?new Date().toISOString():'';
+
+ actualizarFila(c,boton);
+
+ try {
+  const r=await api('marcarAsistencia',UGM.token,{
+   fecha:T.fecha,
+   especialidad:c.especialidad,
+   documento:c.documento,
+   paciente:c.paciente,
+   origen:c.origen,
+   referencia:c.referencia,
+   asistencia:nuevo
+  });
+
+  c.marcadoPor=r.marcadoPor;
+  c.hora=r.hora;
+
+  aviso(nuevo
+   ?(nuevo==='ASISTIO'?'✓ Asistencia':'✕ Inasistencia')+
+    ' registrada: '+c.paciente
+   :'Marca eliminada: '+c.paciente);
+
+ }catch(e) {
+  if(sesionTerminada(e,limpiarTodo))return;
+  Object.assign(c,anterior);
+  aviso('No se guardó: '+e.message);
+
+ }finally {
+  c._ocupado=false;
+  actualizarFila(c);
+ }
+}
+
+function actualizarFila(c,boton) {
+ const fila=$('cLista').querySelector(
+  '.cita[data-k="'+CSS.escape(c.clave)+'"]'
+ );
+
+ pintarIndicadores();
+ T.firmaTabs='';
+ pintarPestanas();
+
+ if(!fila)return;
+
+ // Si el filtro ya no incluye la fila, se redibuja.
+ if(T.filtro!=='todos') {
+  T.firma='';
+  pintarConsultas(false);
+  return;
+ }
+
+ const tmp=document.createElement('div');
+ tmp.innerHTML=htmlCita(c,$('cBuscar').value.trim());
+ const nueva=tmp.firstElementChild;
+ fila.replaceWith(nueva);
+
+ if(boton) {
+  MOV.marca(nueva,nueva.querySelector(
+   'button[data-a="'+boton.dataset.a+'"]'
+  ));
+ }
+}
+
+/* =====================================================
+   MIS SOLICITUDES
+   ===================================================== */
+
+function pintarMias() {
+ const lista=(T.datos&&T.datos.solicitudes)||[];
+
+ const abiertas=lista.filter(r=>
+  ['PENDIENTE','EN GESTION','OBSERVADO']
+   .includes(normTexto(r.Estado))
+ ).length;
+
+ $('badgeMias').textContent=abiertas;
+ $('badgeMias').classList.toggle('hidden',!abiertas);
+
+ const html=lista.map(r=>`
+  <tr>
+   <td>${esc(r.ID)}</td>
+   <td>${esc(r.Nombres)}</td>
+   <td>${esc(r.Especialidad)}</td>
+   <td>${esc(r.FechaSobrecupo)}</td>
+   <td>${r.Tipo==='MEDICO'
+    ?'<span class="tag medica">Médica</span>'
+    :'<span class="tag sobrecupo">Fin de semana</span>'}</td>
+   <td>${etiquetaEstado(r.Estado)}</td>
+   <td>${esc(r.Observacion)||'—'}</td>
+  </tr>`).join('')||
+  '<tr><td colspan="7">Aún no has registrado solicitudes.</td></tr>';
+
+ if($('misRows').innerHTML!==html)$('misRows').innerHTML=html;
+}
+
+/* =====================================================
+   SOLICITUD DE SOBRECUPO
+   ===================================================== */
+
+function esFinDeSemana(f) {
+ return ['SABADO','DOMINGO'].includes(diaSemana(f));
+}
+
+function revisarFecha() {
+ const f=$('date').value;
+ const bloqueada=fechaBloqueada(f);
+ const pasada=f&&T.datos&&f<T.datos.hoy;
+ const entreSemana=f&&!esFinDeSemana(f);
+
+ $('date').classList.toggle('blocked',bloqueada||pasada);
+
+ ayuda('dateHelper',
+  bloqueada?'No disponible: fecha bloqueada para '+
+   'programaciones y cupos.':
+  pasada?'No se pueden solicitar fechas pasadas.':
+  entreSemana?'Día entre semana: solo con solicitud médica '+
+   'y ticket sellado y firmado.':
+  f?'Sábado o domingo: sujeto a cupos disponibles.':
+  'Fechas no disponibles:',
+  bloqueada||pasada?'bad':entreSemana?'':f?'ok':'');
+
+ $('blockedList').innerHTML=FECHAS_BLOQUEADAS.map(x=>{
+  const [y,m,d]=x.split('-');
+  return `<span class="blocked-chip${x===f?' current':''}"
+   title="No disponible">${d}/${m}/${y}</span>`;
+ }).join('');
+
+ const mostrarMedico=Boolean(entreSemana&&!bloqueada);
+ const wrap=$('medicoWrap');
+
+ if(mostrarMedico&&wrap.classList.contains('hidden')) {
+  wrap.classList.remove('hidden');
+  MOV.pulso(wrap);
+ } else if(!mostrarMedico) {
+  wrap.classList.add('hidden');
+  $('medico').checked=false;
+ }
+
+ $('ticketLabel').classList.toggle('on',mostrarMedico);
+ $('ticketOpc').classList.toggle('hidden',mostrarMedico);
+
+ if(!S.guardando) {
+  $('btnRequest').disabled=Boolean(bloqueada||pasada||
+   (mostrarMedico&&!$('medico').checked));
+ }
+
+ actualizarCupos();
+}
+
+function actualizarCupos() {
+ clearTimeout(T.cuposTimer);
+ T.cuposTimer=setTimeout(pintarCupos,150);
+}
+
+async function pintarCupos() {
+ const f=$('date').value;
+ const esp=$('esp').value;
+ const box=$('cupoBox');
+
+ const poner=(num,html,clase)=>{
+  box.className='cupo-box'+(clase?' '+clase:'');
+  if($('cupoNum').textContent!==String(num)) {
+   $('cupoNum').textContent=num;
+   MOV.pulso($('cupoNum'));
+  }
+  $('cupoTexto').innerHTML=html;
+ };
+
+ if(!f||!esp) {
+  poner('—','Selecciona especialidad y fecha para ver '+
+   'los cupos disponibles.');
+  return;
+ }
+
+ if(fechaBloqueada(f)) {
+  poner('✕','<b>Fecha no disponible.</b> No se permiten '+
+   'nuevas programaciones ni cupos.','sin');
+  return;
+ }
+
+ if(!esFinDeSemana(f)) {
+  poner('⚕','<b>Solicitud médica.</b> Fuera de fin de semana '+
+   'no se calculan cupos: requiere ticket sellado y '+
+   'firmado y la aprobación de supervisión.','medico');
+  return;
+ }
+
+ const cache=T.cupos[f];
+
+ if(!cache||Date.now()-cache.t>10000) {
+  poner('…','Consultando cupos...');
+
+  try {
+   const r=await api('consultarCupos',UGM.token,f);
+   T.cupos[f]={t:Date.now(),r};
+  }catch(e) {
+   poner('!','No se pudo consultar: '+esc(e.message),'sin');
+   return;
+  }
+
+  if($('date').value!==f||$('esp').value!==esp)return;
+ }
+
+ const r=T.cupos[f].r;
+ const fila=(r.lista||[]).find(x=>
+  normTexto(x.especialidad)===normTexto(esp)
+ );
+
+ if(!fila||!fila.habilitada) {
+  poner('0','<b>'+esc(esp)+'</b> no tiene sobrecupos '+
+   'habilitados ese día.','sin');
+  return;
+ }
+
+ poner(fila.disponibles,
+  '<b>Cupos disponibles</b> de '+fila.generados+
+  ' autorizados · '+fila.activas+' pacientes activos · '+
+  fila.ocupados+' ocupados'+
+  (r.agenda&&!r.agenda.vigente
+   ?'<br><span style="color:var(--yellow)">Actualiza la agenda '+
+    'antes de enviar (vigencia 30 min).</span>':''),
+  fila.disponibles>0?'':'sin');
+}
+
+/* ---------- Tickets ---------- */
+
+function pintarTicket(cual) {
+ const zona=cual==='frente'?$('tFrente'):$('tReverso');
+ const archivo=T.tickets[cual];
+
+ if(T.urls[cual]) {
+  URL.revokeObjectURL(T.urls[cual]);
+  T.urls[cual]=null;
+ }
+
+ if(!archivo) {
+  zona.classList.remove('listo');
+  zona.innerHTML=cual==='frente'
+   ?'<span class="ico">▤</span><strong>Frente del ticket</strong>'+
+    '<small>Arrastra, pega (Ctrl+V) o haz clic</small>'+
+    '<small>JPG, PNG, WEBP o PDF · máx. 5 MB</small>'
+   :'<span class="ico">✍</span><strong>Reverso sellado y firmado</strong>'+
+    '<small>Sello y firma del médico visibles</small>'+
+    '<small>JPG, PNG, WEBP o PDF · máx. 5 MB</small>';
+  return;
+ }
+
+ zona.classList.add('listo');
+
+ let vista;
+
+ if(archivo.type.startsWith('image/')) {
+  T.urls[cual]=URL.createObjectURL(archivo);
+  vista='<img alt="Ticket" src="'+T.urls[cual]+'">';
+ } else {
+  vista='<span class="ico">⎙</span><strong>PDF</strong>';
+ }
+
+ zona.innerHTML=vista+'<small>'+esc(archivo.name)+'</small>'+
+  '<button type="button" class="quitar" title="Quitar">✕</button>';
+
+ zona.querySelector('.quitar').onclick=ev=>{
+  ev.stopPropagation();
+  T.tickets[cual]=null;
+  pintarTicket(cual);
+ };
+
+ MOV.pulso(zona);
+}
+
+function elegirTicket(cual,archivo) {
+ if(!archivo)return;
+
+ const permitidos=[
+  'image/png','image/jpeg','image/webp','application/pdf'
+ ];
+
+ if(!permitidos.includes(archivo.type)) {
+  aviso('Selecciona JPG, PNG, WEBP o PDF.');
+  return;
+ }
+
+ if(archivo.size>15*1024*1024) {
+  aviso('El archivo es demasiado grande.');
+  return;
+ }
+
+ T.tickets[cual]=archivo;
+ pintarTicket(cual);
+}
+
+function montarTickets() {
+ montarZona($('tFrente'),$('fFrente'),
+  f=>elegirTicket('frente',f));
+ montarZona($('tReverso'),$('fReverso'),
+  f=>elegirTicket('reverso',f));
+
+ ['tFrente','tReverso'].forEach(id=>{
+  ['mouseenter','focus'].forEach(t=>{
+   $(id).addEventListener(t,()=>{
+    T.zonaTicket=id==='tFrente'?'frente':'reverso';
+   });
+  });
+ });
+}
+
+function limpiarFormulario() {
+ $('formRequest').reset();
+
+ ['esp','patientName','doc','date','requestedBy']
+  .forEach(id=>{$(id).value='';});
+
+ S.paciente=null;
+ T.tickets={frente:null,reverso:null};
+ pintarTicket('frente');
+ pintarTicket('reverso');
+ cerrarResultados();
+
+ ayuda('patientHelper',
+  'Escribe al menos 3 letras para buscar en la base de pacientes.');
+
+ revisarDUI();
+ revisarFecha();
+}
+
+async function enviar(ev) {
+ ev.preventDefault();
+
+ if(S.guardando)return;
+
+ const datos={
+  especialidad:$('esp').value,
+  nombres:$('patientName').value.trim(),
+  documento:$('doc').value.trim(),
+  fecha:$('date').value,
+  solicitadoPor:$('requestedBy').value.trim(),
+  tipo:$('medico').checked?'MEDICO':'FIN_DE_SEMANA'
+ };
+
+ if(!/^[0-9]{8}-[0-9]$/.test(datos.documento)) {
+  mostrarError('DUI_INVALIDO|El DUI debe contener exactamente '+
+   'nueve dígitos en formato 00000000-0.');
+  return;
+ }
+
+ if(fechaBloqueada(datos.fecha)) {
+  mostrarError('FECHA_NO_DISPONIBLE|La fecha '+datos.fecha+
+   ' no está disponible.');
+  return;
+ }
+
+ const entreSemana=!esFinDeSemana(datos.fecha);
+
+ if(entreSemana&&!$('medico').checked) {
+  mostrarError('DIA_NO_HABILITADO|Los sobrecupos son solo '+
+   'sábado y domingo. Para otro día marca "Solicitud médica".');
+  return;
+ }
+
+ if(entreSemana&&(!T.tickets.frente||!T.tickets.reverso)) {
+  mostrarError('TICKET_REQUERIDO|Adjunta el ticket de la '+
+   'consulta: frente y reverso sellado y firmado por el médico.');
+  return;
+ }
+
+ const boton=$('btnRequest');
+
+ S.guardando=true;
+ boton.disabled=true;
+ boton.textContent='Preparando ticket...';
+
+ try {
+  const archivos={
+   frente:await prepararArchivo(T.tickets.frente),
+   reverso:await prepararArchivo(T.tickets.reverso)
+  };
+
+  boton.textContent='Enviando solicitud...';
+
+  const r=await api('crearSolicitud',UGM.token,datos,archivos);
+
+  if(!r||!r.ok||!r.id) {
+   throw Error('No se confirmó el registro.');
+  }
+
+  MOV.exito();
+  aviso('Solicitud enviada. Referencia: '+r.id+
+   (r.medico?' · Pendiente de aprobación de supervisión.':''));
+
+  T.cupos={};
+  limpiarFormulario();
+  await refrescar();
+
+ }catch(e) {
+  if(sesionTerminada(e,limpiarTodo))return;
+  mostrarError(e);
+
+ }finally {
+  S.guardando=false;
+  boton.disabled=false;
+  boton.textContent='✚ Enviar solicitud';
+  revisarFecha();
+ }
+}
+
+/* =====================================================
+   INICIO
+   ===================================================== */
+
+function limpiarTodo() {
+ if(T.timer)clearInterval(T.timer);
+ T.timer=null;
+ T.datos=null;
+ T.firma='';
+ T.firmaTabs='';
+ T.tab='';
+ S.datos={};
+ reiniciarBase();
+ limpiarFormulario();
+ $('cLista').innerHTML='';
+ $('qPaciente').value='';
+ $('qRows').innerHTML='';
+}
+
+async function alEntrar() {
+ T.fecha=hoy();
+ $('cFecha').value=T.fecha;
+ limpiarFormulario();
+
+ page('consultas');
+ MOV.entrada();
+ requestAnimationFrame(()=>MOV.tinta(
+  document.querySelector('.nav.active')
+ ));
+
+ await refrescar();
+
+ if(T.timer)clearInterval(T.timer);
+ T.timer=setInterval(refrescar,10000);
+
+ aviso('Bienvenido, '+UGM.nombre+'.');
+}
+
+function iniciar() {
+ montarComun();
+ montarAcceso('tecnico',alEntrar,limpiarTodo);
+
+ document.querySelectorAll('.nav').forEach(b=>{
+  b.addEventListener('click',()=>page(b.dataset.page));
+ });
+
+ // Consultas
+ $('cFecha').addEventListener('change',()=>{
+  if(!$('cFecha').value)return;
+  T.fecha=$('cFecha').value;
+  T.datos=null;
+  T.firma='';
+  T.firmaTabs='';
+  $('cLista').innerHTML='<div class="empty"><span class="ico">↻</span>'+
+   '<b>Cargando citas...</b></div>';
+  T.consultando=false;
+  refrescar().then(()=>pintarConsultas(true));
+ });
+
+ let espera=null;
+
+ $('cBuscar').addEventListener('input',()=>{
+  clearTimeout(espera);
+  espera=setTimeout(()=>pintarConsultas(true),90);
+ });
+
+ $('cFiltro').addEventListener('click',ev=>{
+  const b=ev.target.closest('button');
+  if(!b)return;
+  T.filtro=b.dataset.f;
+  $('cFiltro').querySelectorAll('button').forEach(x=>{
+   x.classList.toggle('on',x===b);
+  });
+  pintarConsultas(true);
+ });
+
+ $('cTabs').addEventListener('click',ev=>{
+  const b=ev.target.closest('.tab');
+  if(b)elegirPestana(b.dataset.tab);
+ });
+
+ $('cLista').addEventListener('click',ev=>{
+  const b=ev.target.closest('button[data-a]');
+  if(!b||b.disabled)return;
+  const fila=b.closest('.cita');
+  marcar(fila.dataset.k,b.dataset.a,b);
+ });
+
+ // Solicitud
+ $('esp').innerHTML='<option value="">Seleccione especialidad</option>'+
+  ESPECIALIDADES.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`)
+   .join('');
+
+ $('qEspecialidad').innerHTML=
+  '<option value="">Todas las especialidades</option>'+
+  ESPECIALIDADES.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`)
+   .join('');
+
+ $('formRequest').addEventListener('submit',enviar);
+ $('btnLimpiar').addEventListener('click',limpiarFormulario);
+ $('esp').addEventListener('change',actualizarCupos);
+ $('date').addEventListener('change',revisarFecha);
+ $('medico').addEventListener('change',revisarFecha);
+
+ $('doc').addEventListener('input',()=>{
+  $('doc').value=formatearDUI($('doc').value);
+  revisarDUI();
+ });
+
+ montarBuscador();
+ montarTickets();
+
+ $('btnGoUpload').addEventListener('click',()=>page('actualizacion'));
+
+ // Agenda
+ const recargar=async r=>{
+  T.cupos={};
+  await refrescar();
+ };
+
+ montarZona($('excelZone'),$('excelFile'),
+  f=>importarAgendaArchivo(f,recargar));
+
+ document.addEventListener('paste',ev=>{
+  if(!UGM.token)return;
+
+  if(T.pagina==='actualizacion') {
+   pegarComoTabla(ev,f=>importarAgendaArchivo(f,recargar));
+   return;
+  }
+
+  if(T.pagina==='solicitud') {
+   const img=imagenPegada(ev);
+   if(!img)return;
+   ev.preventDefault();
+   const cual=T.zonaTicket||(!T.tickets.frente?'frente':'reverso');
+   elegirTicket(cual,img);
+  }
+ });
+
+ $('btnRefresh').addEventListener('click',()=>{
+  T.cupos={};
+  refrescar();
+ });
+
+ limpiarFormulario();
+}
+
+if(document.readyState==='loading') {
+ document.addEventListener('DOMContentLoaded',iniciar);
+} else {
+ iniciar();
+}
+
+/* =====================================================
+   BASE DE PACIENTES Y BUSCADOR
+   ===================================================== */
+
+const P={
+ version:'',lista:[],listo:false,
+ cargando:false,progreso:0,error:'',
+ agendaVersion:'',agenda:null,
+ cargandoAgenda:false
+};
+
+function reiniciarBase() {
+ Object.assign(P,{
+  version:'',lista:[],listo:false,
+  cargando:false,progreso:0,error:'',
+  agendaVersion:'',agenda:null,
+  cargandoAgenda:false
+ });
+}
+
+function crearRegistro(f) {
+ const [nombre,dui,original,expediente,esp]=f;
+ const od=String(original||'')
+  .replace(/\.0+$/,'').replace(/\D/g,'');
+
+ const sb=String(esp||'').split(' | ')
+  .map(x=>x.trim()).filter(Boolean);
+
+ return {
+  n:nombre,
+  d:dui,
+  o:original,
+  e:expediente,
+  b:normTexto(nombre),
+  dd:String(dui||'').replace(/\D/g,''),
+  od,
+  ex:alfaNum(expediente),
+  sb,
+  s:sb,
+  sn:sb.map(normTexto)
+ };
+}
+
+function aplicarAgenda() {
+ const a=P.agenda;
+
+ P.lista.forEach(r=>{
+  if(!a){
+   r.s=r.sb;
+  } else {
+   const set=new Set(r.sb);
+   [
+    a.porDoc.get(r.d),
+    a.porDoc.get(r.ex),
+    a.porDoc.get(r.od),
+    a.porNombre.get(r.b)
+   ].forEach(x=>{
+    if(x)x.forEach(e=>set.add(e));
+   });
+   r.s=[...set];
+  }
+  r.sn=r.s.map(normTexto);
+ });
+}
+
+function revisarBase() {
+ const info=S.datos.pacientes||{};
+
+ if(info.version&&info.version!==P.version&&
+    !P.cargando) {
+  descargarBase();
+ }
+
+ if(!info.version&&P.version) {
+  const agenda=P.agenda;
+  const agendaVersion=P.agendaVersion;
+  reiniciarBase();
+  P.agenda=agenda;
+  P.agendaVersion=agendaVersion;
+ }
+
+ const ag=(S.datos.agenda||{}).cargaID||'';
+
+ if(ag!==P.agendaVersion&&!P.cargandoAgenda) {
+  cargarMapaAgenda(ag);
+ }
+
+ pintarEstadoBase();
+}
+
+async function descargarBase() {
+ P.cargando=true;
+ P.progreso=0;
+ P.error='';
+ pintarEstadoBase();
+
+ const gen=S.generacion;
+ const token=S.token;
+
+ try {
+  let version='';
+  let desde=0;
+  let filas=[];
+  let reintentos=0;
+
+  for(;;) {
+   const r=await api(
+    'descargarPacientes',token,version,desde
+   );
+
+   if(gen!==S.generacion)return;
+
+   if(r.cambio) {
+    if(++reintentos>3)throw Error(
+     'La base cambió durante la descarga.'
+    );
+    version='';
+    desde=0;
+    filas=[];
+    continue;
+   }
+
+   version=r.version;
+
+   if(!version)break;
+
+   for(const f of r.filas)filas.push(f);
+
+   desde+=r.filas.length;
+   P.progreso=r.total
+    ?Math.round(desde/r.total*100):100;
+   pintarEstadoBase();
+
+   if(r.fin||!r.filas.length)break;
+  }
+
+  P.lista=filas.map(crearRegistro);
+  P.version=version;
+  P.listo=Boolean(version);
+  aplicarAgenda();
+
+  if(S.pagina==='buscar')pintarBusqueda();
+
+ }catch(e) {
+  if(gen===S.generacion)P.error=e.message;
+
+ }finally {
+  if(gen===S.generacion) {
+   P.cargando=false;
+   pintarEstadoBase();
+  }
+ }
+}
+
+async function cargarMapaAgenda(version) {
+ P.cargandoAgenda=true;
+
+ const gen=S.generacion;
+
+ try {
+  const r=await api('mapaAgendaPacientes',S.token);
+
+  if(gen!==S.generacion)return;
+
+  const porDoc=new Map();
+  const porNombre=new Map();
+
+  const agregar=(mapa,clave,esp)=>{
+   if(!clave)return;
+   if(!mapa.has(clave))mapa.set(clave,new Set());
+   mapa.get(clave).add(esp);
+  };
+
+  (r.filas||[]).forEach(([dui,alfa,nombre,esp])=>{
+   agregar(porDoc,dui,esp);
+   agregar(porDoc,alfa,esp);
+   agregar(porNombre,nombre,esp);
+  });
+
+  P.agenda={porDoc,porNombre};
+  aplicarAgenda();
+
+  if(S.pagina==='buscar')pintarBusqueda();
+
+ }catch(e) {
+  console.error(e);
+
+ }finally {
+  if(gen===S.generacion) {
+   // Se marca aunque falle, para no reintentar
+   // cada 10 segundos.
+   P.agendaVersion=version;
+   P.cargandoAgenda=false;
+  }
+ }
+}
+
+function pintarEstadoBase() {
+ const info=S.datos.pacientes||{};
+ let texto;
+
+ if(P.cargando) {
+  texto='Cargando base de pacientes... '+
+   P.progreso+'%';
+ } else if(P.listo) {
+  texto='Base de pacientes: <b>'+P.lista.length+
+   '</b> registros · búsqueda instantánea';
+ } else if(P.error) {
+  texto='No se pudo descargar la base: '+
+   esc(P.error);
+ } else if(!info.version) {
+  texto='El supervisor aún no ha cargado la base '+
+   'de pacientes.';
+ } else {
+  texto='Preparando base de pacientes...';
+ }
+
+ $('baseInfo').innerHTML=texto;
+}
+
+function buscarLocal(texto,especialidad,limite,estricto) {
+ const t=String(texto||'').trim();
+ const q=normTexto(t);
+ const compacto=t.replace(/[\s-]/g,'');
+ const digitos=t.replace(/\D/g,'');
+ const numerico=/^\d+$/.test(compacto)&&
+  digitos.length>=3;
+ const esp=especialidad?normTexto(especialidad):'';
+ const palabras=numerico
+  ?[]:q.split(' ').filter(Boolean);
+
+ if(!numerico&&q.replace(/ /g,'').length<2&&
+    !(esp&&estricto)) {
+  return [];
+ }
+
+ const encontrados=[];
+
+ for(const r of P.lista) {
+  if(esp&&estricto&&!r.sn.includes(esp))continue;
+
+  let ok;
+
+  if(numerico) {
+   ok=r.dd.startsWith(digitos)||
+    r.od.startsWith(digitos)||
+    r.ex.includes(digitos);
+  } else if(palabras.length) {
+   ok=palabras.every(x=>r.b.includes(x))||
+    (palabras.length===1&&
+     r.ex.includes(palabras[0]));
+  } else {
+   ok=true;
+  }
+
+  if(!ok)continue;
+
+  encontrados.push(r);
+
+  if(encontrados.length>=2000)break;
+ }
+
+ const primera=palabras[0]||'';
+
+ const puntaje=r=>
+  (primera&&!r.b.startsWith(primera)?2:0)+
+  (esp&&!estricto&&!r.sn.includes(esp)?1:0);
+
+ return encontrados
+  .map(r=>({r,p:puntaje(r)}))
+  .sort((a,b)=>a.p-b.p)
+  .slice(0,limite)
+  .map(x=>x.r);
+}
+
+function vistaPaciente(r) {
+ return {
+  nombre:r.n,
+  documento:r.d,
+  valido:Boolean(r.d),
+  ajustado:Boolean(r.d)&&r.od.length===8,
+  original:r.o,
+  expediente:r.e,
+  especialidades:r.s
+ };
+}
+
+function pintarBusqueda() {
+ pintarEstadoBase();
+
+ const texto=$('qPaciente').value;
+ const esp=$('qEspecialidad').value;
+ const tbody=$('qRows');
+
+ if(!P.listo) {
+  S.qResultados=[];
+  $('qCount').textContent='';
+  tbody.innerHTML=`<tr><td colspan="5">${
+   P.cargando
+    ?'Cargando base de pacientes, un momento...'
+    :'La base de pacientes no está disponible.'
+  }</td></tr>`;
+  return;
+ }
+
+ if(!texto.trim()&&!esp) {
+  S.qResultados=[];
+  $('qCount').textContent='';
+  tbody.innerHTML='<tr><td colspan="5">'+
+   'Escribe un nombre, DUI o expediente, o elige '+
+   'una especialidad.</td></tr>';
+  return;
+ }
+
+ const lista=buscarLocal(texto,esp,100,true)
+  .map(vistaPaciente);
+
+ S.qResultados=lista;
+
+ $('qCount').innerHTML=lista.length
+  ?'<b>'+lista.length+(lista.length===100?'+':'')+
+   '</b> resultado(s)'
+  :'';
+
+ if(!lista.length) {
+  tbody.innerHTML=`<tr><td colspan="5">${
+   esp&&!P.lista.some(r=>r.s.length)
+    ?'La base y la agenda no tienen especialidades '+
+     'asociadas a los pacientes.'
+    :'Sin coincidencias.'
+  }</td></tr>`;
+  MOV.filas(tbody);
+  return;
+ }
+
+ tbody.innerHTML=lista.map((p,i)=>`
+  <tr data-i="${i}">
+   <td>${resaltar(p.nombre,texto)}</td>
+   <td class="${p.valido?'':'bad'}">${
+    p.valido?esc(p.documento)
+     :'Inválido ('+esc(p.original||'vacío')+')'
+   }</td>
+   <td>${esc(p.expediente)||'—'}</td>
+   <td>${p.especialidades.length
+    ?p.especialidades.map(e=>
+      `<span class="chip">${esc(e)}</span>`).join('')
+    :'<span class="muted">—</span>'}</td>
+   <td><button class="btn mini primary" type="button"
+    data-i="${i}">Registrar</button></td>
+  </tr>
+ `).join('');
+
+ MOV.filas(tbody);
+}
+
+function usarPaciente(p) {
+ const espFiltro=$('qEspecialidad').value;
+ const candidatas=p.especialidades
+  .map(especialidadCatalogo).filter(Boolean);
+
+ const especialidad=espFiltro||
+  (candidatas.length===1?candidatas[0]:'');
+
+ page('solicitud');
+
+ aplicarPaciente(p);
+
+ if(especialidad)$('esp').value=especialidad;
+
+ MOV.pulso($('formRequest'));
+
+ setTimeout(()=>{
+  (especialidad?$('date'):$('esp')).focus();
+ },80);
+}
+
+const B={timer:null,seq:0,resultados:[],indice:-1};
+
+function cerrarResultados() {
+ clearTimeout(B.timer);
+ B.seq++;
+ B.resultados=[];
+ B.indice=-1;
+ $('patientResults').classList.add('hidden');
+ $('patientResults').innerHTML='';
+ $('patientName').setAttribute('aria-expanded','false');
+}
+
+function cerrarResultados() {
+ clearTimeout(B.timer);
+ B.seq++;
+ B.resultados=[];
+ B.indice=-1;
+ $('patientResults').classList.add('hidden');
+ $('patientResults').innerHTML='';
+ $('patientName').setAttribute('aria-expanded','false');
+}
+
+function mostrarResultados(html) {
+ const caja=$('patientResults');
+ const estabaOculta=caja.classList.contains('hidden');
+
+ caja.innerHTML=html;
+ caja.classList.remove('hidden');
+ $('patientName').setAttribute('aria-expanded','true');
+
+ if(estabaOculta)MOV.lista(caja);
+}
+
+function dibujarResultados(r,consulta) {
+ B.resultados=(r&&r.resultados)||[];
+ B.indice=B.resultados.length?0:-1;
+
+ if(!B.resultados.length) {
+  mostrarResultados(`<div class="search-empty">${
+   r&&r.sinBase
+    ?'La base de pacientes aún no está cargada.'
+    :'Sin coincidencias en la base de pacientes.'
+  }</div>`);
+  return;
+ }
+
+ mostrarResultados(B.resultados.map((p,i)=>`
+  <div class="search-item${i===B.indice?' active':''}"
+   role="option" data-i="${i}">
+   <b>${resaltar(p.nombre,consulta||'')}</b>
+   <small class="${p.valido?'':'bad'}">${
+    p.valido
+     ?'DUI '+esc(p.documento)
+     :'DUI inválido en la base: '+
+      esc(p.original||'vacío')
+   }${p.expediente
+     ?' · Exp. '+esc(p.expediente):''}${
+    (p.especialidades||[]).length
+     ?' · '+esc(p.especialidades.join(', ')):''
+   }</small>
+  </div>
+ `).join(''));
+}
+
+function marcarResultado() {
+ document.querySelectorAll(
+  '#patientResults .search-item'
+ ).forEach((el,i)=>{
+  el.classList.toggle('active',i===B.indice);
+  if(i===B.indice)el.scrollIntoView({block:'nearest'});
+ });
+}
+
+async function buscarPaciente(texto) {
+ // Base en memoria: resultado inmediato.
+ if(P.listo) {
+  B.seq++;
+  dibujarResultados({
+   resultados:buscarLocal(
+    texto,$('esp').value,20,false
+   ).map(vistaPaciente)
+  },texto);
+  return;
+ }
+
+ // Mientras descarga, se consulta al servidor.
+ const seq=++B.seq;
+
+ mostrarResultados(
+  '<div class="search-empty">Buscando...</div>'
+ );
+
+ try {
+  const r=await api(
+   'buscarPacientes',S.token,texto
+  );
+
+  if(seq!==B.seq||!S.token)return;
+
+  dibujarResultados(r,texto);
+
+ }catch(e) {
+  if(seq!==B.seq)return;
+
+  mostrarResultados(
+   `<div class="search-empty">${esc(e.message)}</div>`
+  );
+ }
+}
+
+function aplicarPaciente(p) {
+ cerrarResultados();
+
+ $('patientName').value=p.nombre;
+
+ const documento=normalizarDUI(p.documento);
+
+ ayuda('patientHelper',
+  'Paciente seleccionado de la base.','ok');
+
+ if(p.valido&&documento) {
+  $('doc').value=documento;
+  S.paciente={nombre:p.nombre,documento};
+
+  ayuda('docHelper',
+   'DUI recuperado automáticamente'+
+   (p.ajustado?' (se agregó un cero inicial).':'.'),
+   'ok');
+
+ } else {
+  $('doc').value='';
+  S.paciente=null;
+
+  ayuda('docHelper',
+   'El DUI de la base ('+(p.original||'vacío')+
+   ') no tiene nueve dígitos. Verifícalo e '+
+   'ingrésalo manualmente.','bad');
+ }
+
+ MOV.pulso($('doc'));
+}
+
+function elegirPaciente(i) {
+ const p=B.resultados[i];
+
+ if(!p)return;
+
+ aplicarPaciente(p);
+
+ if(!p.valido)$('doc').focus();
+}
+
+function montarBuscador() {
+ const input=$('patientName');
+
+ input.addEventListener('input',()=>{
+  // Si se edita el nombre elegido, el DUI deja de
+  // corresponder y se limpia.
+  if(S.paciente&&input.value!==S.paciente.nombre) {
+   if($('doc').value===S.paciente.documento) {
+    $('doc').value='';
+   }
+   S.paciente=null;
+   ayuda('patientHelper',
+    'Escribe al menos 3 letras para buscar en la '+
+    'base de pacientes.');
+   revisarDUI();
+  }
+
+  const texto=input.value.trim();
+  const digitos=texto.replace(/\D/g,'');
+  const porDui=digitos.length>=4&&
+   /^[0-9\s-]+$/.test(texto);
+
+  clearTimeout(B.timer);
+
+  if(!porDui&&texto.replace(/\s/g,'').length<3) {
+   cerrarResultados();
+   return;
+  }
+
+  B.timer=setTimeout(
+   ()=>buscarPaciente(texto),
+   P.listo?60:350
+  );
+ });
+
+ // mousedown evita que el blur cierre la lista.
+ $('patientResults').addEventListener('mousedown',ev=>{
+  const item=ev.target.closest('.search-item');
+  if(!item)return;
+  ev.preventDefault();
+  elegirPaciente(Number(item.dataset.i));
+ });
+
+ input.addEventListener('keydown',ev=>{
+  const abierta=
+   !$('patientResults').classList.contains('hidden');
+
+  if(!abierta||!B.resultados.length) {
+   if(ev.key==='Escape')cerrarResultados();
+   return;
+  }
+
+  if(ev.key==='ArrowDown') {
+   ev.preventDefault();
+   B.indice=(B.indice+1)%B.resultados.length;
+   marcarResultado();
+  } else if(ev.key==='ArrowUp') {
+   ev.preventDefault();
+   B.indice=(B.indice-1+B.resultados.length)%
+    B.resultados.length;
+   marcarResultado();
+  } else if(ev.key==='Enter') {
+   ev.preventDefault();
+   elegirPaciente(B.indice);
+  } else if(ev.key==='Escape') {
+   cerrarResultados();
+  }
+ });
+
+ input.addEventListener('blur',()=>{
+  setTimeout(cerrarResultados,150);
+ });
+
+ // Página de búsqueda
+ let espera=null;
+
+ $('qPaciente').addEventListener('input',()=>{
+  clearTimeout(espera);
+  espera=setTimeout(pintarBusqueda,60);
+ });
+
+ $('qEspecialidad').addEventListener(
+  'change',pintarBusqueda
+ );
+
+ $('qRows').addEventListener('click',ev=>{
+  const fila=ev.target.closest('tr[data-i]');
+  if(!fila)return;
+  const p=S.qResultados[Number(fila.dataset.i)];
+  if(p)usarPaciente(p);
+ });
+}
+
+function revisarDUI() {
+ if(S.paciente&&
+    $('doc').value===S.paciente.documento) {
+  return;
+ }
+
+ const n=$('doc').value.replace(/\D/g,'').length;
+
+ if(n===0) {
+  ayuda('docHelper',
+   'El guion se agrega automáticamente.');
+ } else if(n<9) {
+  ayuda('docHelper',
+   'DUI incompleto: faltan '+(9-n)+
+   ' dígito(s). Debe tener nueve.','bad');
+ } else {
+  ayuda('docHelper','DUI con nueve dígitos.','ok');
+ }
+}
+
+</script>
+
+</body>
+</html>

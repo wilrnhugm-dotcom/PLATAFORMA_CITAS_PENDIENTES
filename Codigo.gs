@@ -47,11 +47,11 @@
 const UGM3 = {
   TZ: 'America/El_Salvador',
 
-  // Claves exactas: respetar mayúsculas y espacios.
+  // Claves exactas (mayúsculas, sin espacios).
   ROLES: {
-    SUPERVISOR: 'SUP 1',
+    SUPERVISOR: 'SUP1',
     AUTORIZADO: 'HNRUGM$',
-    TECNICO: 'UGM 2026'
+    TECNICO: 'UGM2026'
   },
 
   // Sin nuevas programaciones ni asignación de cupos.
@@ -123,7 +123,10 @@ const UGM3 = {
       'GestionadoPor',
       'FechaGestion',
       'ComprobanteID',
-      'Observacion'
+      'Observacion',
+      'Tipo',
+      'TicketFrente',
+      'TicketReverso'
     ],
 
     DISPONIBILIDAD: [
@@ -151,6 +154,20 @@ const UGM3 = {
       'IDExterno'
     ],
 
+    ASISTENCIA: [
+      'Clave',
+      'Fecha',
+      'Especialidad',
+      'Documento',
+      'Paciente',
+      'Origen',
+      'Referencia',
+      'Asistencia',
+      'MarcadoPor',
+      'Sesion',
+      'FechaHora'
+    ],
+
     PACIENTES: [
       'Nombre',
       'Documento',
@@ -166,14 +183,34 @@ const UGM3 = {
    APLICACIÓN
    ========================================================== */
 
-function doGet() {
+// ?vista=supervisor abre Supervisor.html; cualquier
+// otro enlace abre Tecnico.html.
+function doGet(e) {
+  const vista = texto3_(
+    e && e.parameter && e.parameter.vista
+  ).toLowerCase();
+
+  const supervisor = vista === 'supervisor';
+
   return HtmlService
-    .createHtmlOutputFromFile('Index')
-    .setTitle('UGM | Control de Sobrecupos')
+    .createTemplateFromFile(
+      supervisor ? 'Supervisor' : 'Tecnico'
+    )
+    .evaluate()
+    .setTitle(
+      supervisor ? 'UGM | Supervisión' : 'UGM | Técnicos'
+    )
     .addMetaTag(
       'viewport',
       'width=device-width,initial-scale=1'
     );
+}
+
+// Inserta Estilos.html y Comun.html en cada plataforma.
+function include(nombre) {
+  return HtmlService
+    .createHtmlOutputFromFile(nombre)
+    .getContent();
 }
 
 /* ==========================================================
@@ -365,6 +402,17 @@ function prepararHojas3_(libro) {
   crear('AUDITORIA', UGM3.HEADERS.AUDITORIA);
   crear('PERSONAL', UGM3.HEADERS.PERSONAL);
 
+  const asistencia = crear(
+    'ASISTENCIA', UGM3.HEADERS.ASISTENCIA
+  );
+
+  if (asistencia) {
+    asistencia.getRange('A:G').setNumberFormat('@');
+  }
+
+  const sc = libro.getSheetByName('SOBRECUPOS');
+  if (sc) asegurarColumnas3_(sc, UGM3.HEADERS.SOBRECUPOS);
+
   return creadas;
 }
 
@@ -494,14 +542,60 @@ function diagnosticoUGM() {
   return texto;
 }
 
+const revisadas3_ = {};
+
+// Completa encabezados nuevos sin mover los existentes.
+function asegurarColumnas3_(sh, cabeceras) {
+  const n = cabeceras.length;
+
+  if (sh.getMaxColumns() < n) {
+    sh.insertColumnsAfter(
+      sh.getMaxColumns(), n - sh.getMaxColumns()
+    );
+  }
+
+  const actual = sh.getRange(1,1,1,n).getValues()[0];
+
+  if (actual.every((v,i) => String(v) === cabeceras[i])) {
+    return;
+  }
+
+  sh.getRange(1,1,1,n).setValues([
+    cabeceras.map((c,i) => actual[i] === '' ? c : actual[i])
+  ]);
+}
+
 function hoja3_(nombre) {
-  const sh = base3_().getSheetByName(nombre);
+  const libro = base3_();
+  let sh = libro.getSheetByName(nombre);
+
+  // Hojas nuevas de esta versión se crean solas.
+  if (!sh && nombre === 'ASISTENCIA') {
+    prepararHojas3_(libro);
+    sh = libro.getSheetByName(nombre);
+  }
 
   if (!sh) {
     throw Error('No existe la hoja: ' + nombre);
   }
 
+  if (!revisadas3_[nombre] && UGM3.HEADERS[nombre] &&
+      ['SOBRECUPOS','ASISTENCIA'].includes(nombre)) {
+    asegurarColumnas3_(sh, UGM3.HEADERS[nombre]);
+    revisadas3_[nombre] = true;
+  }
+
   return sh;
+}
+
+function hoy3_() {
+  return Utilities.formatDate(
+    new Date(), UGM3.TZ, 'yyyy-MM-dd'
+  );
+}
+
+function columna3_(hoja, campo) {
+  return UGM3.HEADERS[hoja].indexOf(campo);
 }
 
 function garantizarAgenda3_() {
@@ -1379,6 +1473,14 @@ function sincronizar(token,fecha,actividad) {
   // La lectura no espera a modificar PERSONAL.
   const datos=tablero(token,fecha);
 
+  actividad3_(s,actividad);
+
+  return datos;
+}
+
+// Registra lo que está haciendo cada usuario (lo ve
+// el supervisor en tiempo real). No bloquea la lectura.
+function actividad3_(s,actividad) {
   try {
     const lock=LockService.getScriptLock();
 
@@ -1404,15 +1506,38 @@ function sincronizar(token,fecha,actividad) {
   } catch(e) {
     console.error(e.message);
   }
-
-  return datos;
 }
 
 /* ==========================================================
    GUARDAR SOBRECUPO
    ========================================================== */
 
-function crearSolicitud(token,datos) {
+const EXTENSIONES3={
+  'image/jpeg':'jpg',
+  'image/png':'png',
+  'image/webp':'webp',
+  'application/pdf':'pdf'
+};
+
+function ticket3_(archivo) {
+  if (!archivo || !archivo.base64) return null;
+
+  const mime=texto3_(archivo.mime);
+
+  return {
+    mime,
+    bytes:bytesComprobante3_(mime,archivo.base64)
+  };
+}
+
+/**
+ * Solicitud de sobrecupo.
+ * - Sábado y domingo: según cupos disponibles.
+ * - Otro día: solo como solicitud médica, con ticket
+ *   (frente y reverso sellado y firmado por el médico).
+ * - Fechas bloqueadas: nunca.
+ */
+function crearSolicitud(token,datos,archivos) {
   const s=validar3_(token);
 
   if (!datos || typeof datos!=='object') {
@@ -1453,15 +1578,47 @@ function crearSolicitud(token,datos) {
     );
   }
 
-  if (dia3_(fecha)==='SEMANA') {
+  if (fecha<hoy3_()) {
     fallo3_(
-      'DIA_NO_HABILITADO',
-      'No está permitido registrar sobrecupos '+
-      'de lunes a viernes.'
+      'FECHA_NO_DISPONIBLE',
+      'No se pueden solicitar sobrecupos para '+
+      'fechas pasadas.'
     );
   }
 
-  if (!especialidad ||
+  if (!especialidad) {
+    fallo3_(
+      'ESPECIALIDAD_NO_HABILITADA',
+      'Selecciona una especialidad del catálogo.'
+    );
+  }
+
+  const finDeSemana=dia3_(fecha)!=='SEMANA';
+  const medico=!finDeSemana;
+
+  if (medico && datos.tipo!=='MEDICO') {
+    fallo3_(
+      'DIA_NO_HABILITADO',
+      'Los sobrecupos son solo sábado y domingo. '+
+      'Para otro día marca "Solicitud médica" y '+
+      'adjunta el ticket (frente y reverso sellado '+
+      'y firmado por el médico).'
+    );
+  }
+
+  const frente=ticket3_(archivos && archivos.frente);
+  const reverso=ticket3_(archivos && archivos.reverso);
+
+  if (medico && (!frente || !reverso)) {
+    fallo3_(
+      'TICKET_REQUERIDO',
+      'La solicitud médica requiere el ticket de la '+
+      'consulta: frente y reverso sellado y firmado '+
+      'por el médico.'
+    );
+  }
+
+  if (finDeSemana &&
       limite3_(fecha,especialidad)===null) {
     fallo3_(
       'ESPECIALIDAD_NO_HABILITADA',
@@ -1470,105 +1627,128 @@ function crearSolicitud(token,datos) {
     );
   }
 
-  const lock=LockService.getScriptLock();
-  lock.waitLock(30000);
+  const id='UGM-'+Utilities.formatDate(
+    new Date(),UGM3.TZ,'yyyyMMdd'
+  )+'-'+Utilities.getUuid()
+    .slice(0,8).toUpperCase();
 
-  let id;
-  let disponibles;
+  // Los archivos se guardan antes del bloqueo para no
+  // detener a los demás; si algo falla se descartan.
+  const guardados=[];
 
-  try {
-    const vigente=estadoAgenda3_();
-
-    if (!vigente.vigente) {
-      fallo3_(
-        'AGENDA_DESACTUALIZADA',
-        'Actualiza la agenda hospitalaria antes '+
-        'de registrar el sobrecupo. Se requiere '+
-        'una carga válida de los últimos 30 minutos.'
-      );
-    }
-
-    const existentes=leer3_('SOBRECUPOS');
-
-    const duplicado=existentes.find(r =>
-      texto3_(r.FechaSobrecupo)===fecha &&
-      norm3_(r.Especialidad)===
-        norm3_(especialidad) &&
-      texto3_(r.Documento)===documento &&
-      !['RECHAZADO','ANULADO'].includes(
-        norm3_(r.Estado)
+  const guardar=(t,etiqueta)=>{
+    if (!t) return '';
+    const archivo=carpeta3_().createFile(
+      Utilities.newBlob(
+        t.bytes,t.mime,
+        id+'_'+etiqueta+'.'+EXTENSIONES3[t.mime]
       )
     );
+    guardados.push(archivo);
+    return archivo.getId();
+  };
 
-    if (duplicado) {
-      fallo3_(
-        'DUPLICADO',
-        'Ya existe una solicitud vigente: '+
-        duplicado.ID
+  let disponibles=null;
+
+  try {
+    const idFrente=guardar(frente,'ticket_frente');
+    const idReverso=guardar(reverso,'ticket_reverso');
+
+    const lock=LockService.getScriptLock();
+    lock.waitLock(30000);
+
+    try {
+      const existentes=leer3_('SOBRECUPOS');
+
+      const duplicado=existentes.find(r =>
+        texto3_(r.FechaSobrecupo)===fecha &&
+        norm3_(r.Especialidad)===
+          norm3_(especialidad) &&
+        texto3_(r.Documento)===documento &&
+        !['RECHAZADO','ANULADO'].includes(
+          norm3_(r.Estado)
+        )
       );
+
+      if (duplicado) {
+        fallo3_(
+          'DUPLICADO',
+          'Ya existe una solicitud vigente: '+
+          duplicado.ID
+        );
+      }
+
+      if (finDeSemana) {
+        if (!estadoAgenda3_().vigente) {
+          fallo3_(
+            'AGENDA_DESACTUALIZADA',
+            'Actualiza la agenda hospitalaria antes '+
+            'de registrar el sobrecupo. Se requiere '+
+            'una carga válida de los últimos 30 minutos.'
+          );
+        }
+
+        const agenda=leer3_('AGENDA_EXCEL');
+        const pacientes=contarAgenda3_(
+          agenda,fecha,especialidad
+        );
+        const generados=Math.min(
+          Math.floor(pacientes.activas/10),
+          limite3_(fecha,especialidad)
+        );
+        const ocupados=ocupados3_(
+          existentes,fecha,especialidad
+        );
+
+        if (ocupados>=generados) {
+          fallo3_(
+            'SIN_CUPOS',
+            'No hay cupos disponibles para '+
+            especialidad+' el '+fecha+'. '+
+            'Pacientes activos: '+pacientes.activas+
+            '. Sobrecupos autorizados: '+generados+
+            '. Ocupados: '+ocupados+'.'
+          );
+        }
+
+        disponibles=generados-ocupados-1;
+      }
+
+      insertar3_('SOBRECUPOS',{
+        ID:id,
+        FechaSobrecupo:fecha,
+        Especialidad:especialidad,
+        Nombres:texto3_(datos.nombres).slice(0,120),
+        Documento:documento,
+        SolicitadoPor:
+          texto3_(datos.solicitadoPor).slice(0,100),
+        RegistradoPor:s.nombre,
+        Sesion:s.id,
+        FechaRegistro:ahora3_(),
+        Estado:'PENDIENTE',
+        ComprobanteID:idFrente,
+        Tipo:medico ? 'MEDICO' : 'FIN_DE_SEMANA',
+        TicketFrente:idFrente,
+        TicketReverso:idReverso
+      });
+
+      SpreadsheetApp.flush();
+
+    } finally {
+      lock.releaseLock();
     }
 
-    const agenda=leer3_('AGENDA_EXCEL');
-
-    const pacientes=contarAgenda3_(
-      agenda,fecha,especialidad
-    );
-
-    const limite=limite3_(
-      fecha,especialidad
-    );
-
-    const generados=Math.min(
-      Math.floor(pacientes.activas/10),
-      limite
-    );
-
-    const ocupados=ocupados3_(
-      existentes,fecha,especialidad
-    );
-
-    if (ocupados>=generados) {
-      fallo3_(
-        'SIN_CUPOS',
-        'No hay cupos disponibles para '+
-        especialidad+' el '+fecha+'. '+
-        'Pacientes activos: '+pacientes.activas+
-        '. Sobrecupos autorizados: '+generados+
-        '. Ocupados: '+ocupados+'.'
-      );
-    }
-
-    id='UGM-'+Utilities.formatDate(
-      new Date(),UGM3.TZ,'yyyyMMdd'
-    )+'-'+Utilities.getUuid()
-      .slice(0,8).toUpperCase();
-
-    insertar3_('SOBRECUPOS',{
-      ID:id,
-      FechaSobrecupo:fecha,
-      Especialidad:especialidad,
-      Nombres:texto3_(datos.nombres).slice(0,120),
-      Documento:documento,
-      SolicitadoPor:
-        texto3_(datos.solicitadoPor).slice(0,100),
-      RegistradoPor:s.nombre,
-      Sesion:s.id,
-      FechaRegistro:ahora3_(),
-      Estado:'PENDIENTE'
+  } catch(error) {
+    guardados.forEach(a => {
+      try { a.setTrashed(true); } catch(e) {}
     });
-
-    SpreadsheetApp.flush();
-
-    disponibles=generados-ocupados-1;
-
-  } finally {
-    lock.releaseLock();
+    throw error;
   }
 
   try {
     auditar3_(
       s.nombre,s.perfil,
-      'SOBRECUPO_GUARDADO',
+      medico ? 'SOLICITUD_MEDICA' : 'SOBRECUPO_GUARDADO',
       id,especialidad+' / '+fecha
     );
   } catch(e) {
@@ -1579,7 +1759,8 @@ function crearSolicitud(token,datos) {
     ok:true,
     id,
     disponibles,
-    mensaje:'Sobrecupo guardado correctamente.'
+    medico,
+    mensaje:'Solicitud registrada correctamente.'
   };
 }
 
@@ -1778,7 +1959,8 @@ function cambiarEstado(
     }
 
     if (nuevoEstado==='REGISTRADO') {
-      const comprobante=texto3_(m[i][12]);
+      const comprobante=texto3_(m[i][12]) ||
+        texto3_(m[i][columna3_('SOBRECUPOS','TicketFrente')]);
 
       if (!comprobante) {
         throw Error(
@@ -2303,5 +2485,493 @@ function buscarPacientes(token,consulta) {
     resultados:encontrados
       .slice(0,UGM3.MAX_RESULTADOS)
       .map(({prioridad,...r})=>r)
+  };
+}
+
+/* ==========================================================
+   CONSULTAS DEL DÍA Y ASISTENCIA
+   ========================================================== */
+
+function claveAsistencia3_(fecha,especialidad,documento,paciente) {
+  const doc=norm3_(documento).replace(/[^A-Z0-9]/g,'');
+  const id=doc ? 'D:'+doc : 'N:'+busqueda3_(paciente);
+  return fecha+'|'+norm3_(especialidad)+'|'+id;
+}
+
+/**
+ * Citas de una fecha (agenda + sobrecupos vigentes),
+ * una por paciente y especialidad, con su asistencia.
+ */
+function consultasDelDia3_(fecha,agenda,solicitudes,asistencia) {
+  const mapa=new Map();
+
+  agenda.forEach(r => {
+    if (texto3_(r.Fecha)!==fecha) return;
+
+    const estado=estadoCita3_(r.Estado);
+    if (estado==='CANCELADA') return;
+
+    const clave=claveAsistencia3_(
+      fecha,r.Especialidad,r.Documento,r.Paciente
+    );
+
+    if (mapa.has(clave)) {
+      if (estado==='ACTIVA') {
+        mapa.get(clave).estadoCita='ACTIVA';
+      }
+      return;
+    }
+
+    mapa.set(clave,{
+      clave,
+      especialidad:texto3_(r.Especialidad),
+      paciente:texto3_(r.Paciente),
+      documento:texto3_(r.Documento),
+      estadoCita:estado,
+      origen:'AGENDA',
+      referencia:texto3_(r.IDExterno),
+      sobrecupo:''
+    });
+  });
+
+  solicitudes.forEach(r => {
+    if (texto3_(r.FechaSobrecupo)!==fecha) return;
+
+    if (['RECHAZADO','ANULADO'].includes(
+      norm3_(r.Estado)
+    )) return;
+
+    const clave=claveAsistencia3_(
+      fecha,r.Especialidad,r.Documento,r.Nombres
+    );
+
+    if (mapa.has(clave)) {
+      mapa.get(clave).sobrecupo=texto3_(r.Estado);
+      return;
+    }
+
+    mapa.set(clave,{
+      clave,
+      especialidad:texto3_(r.Especialidad),
+      paciente:texto3_(r.Nombres),
+      documento:texto3_(r.Documento),
+      estadoCita:'SOBRECUPO',
+      origen:'SOBRECUPO',
+      referencia:texto3_(r.ID),
+      sobrecupo:texto3_(r.Estado)
+    });
+  });
+
+  const marcas={};
+
+  asistencia.forEach(a => {
+    if (texto3_(a.Fecha)===fecha) {
+      marcas[texto3_(a.Clave)]=a;
+    }
+  });
+
+  // Marcas cuya cita ya no está en la agenda cargada:
+  // se conservan para el reporte.
+  Object.keys(marcas).forEach(clave => {
+    if (mapa.has(clave)) return;
+
+    const a=marcas[clave];
+
+    mapa.set(clave,{
+      clave,
+      especialidad:texto3_(a.Especialidad),
+      paciente:texto3_(a.Paciente),
+      documento:texto3_(a.Documento),
+      estadoCita:'REGISTRADA',
+      origen:texto3_(a.Origen) || 'REGISTRO',
+      referencia:texto3_(a.Referencia),
+      sobrecupo:''
+    });
+  });
+
+  return [...mapa.values()]
+    .map(c => {
+      const a=marcas[c.clave];
+      c.asistencia=a ? texto3_(a.Asistencia) : '';
+      c.marcadoPor=a ? texto3_(a.MarcadoPor) : '';
+      c.hora=a ? texto3_(a.FechaHora) : '';
+      return c;
+    })
+    .sort((a,b) =>
+      a.especialidad.localeCompare(b.especialidad) ||
+      a.paciente.localeCompare(b.paciente)
+    );
+}
+
+function resumenAsistencia3_(consultas) {
+  const porEsp={};
+  const total={citas:0,asistio:0,noAsistio:0,sinMarcar:0};
+
+  consultas.forEach(c => {
+    const e=porEsp[c.especialidad] ||
+      (porEsp[c.especialidad]={
+        especialidad:c.especialidad,
+        citas:0,asistio:0,noAsistio:0,sinMarcar:0
+      });
+
+    const campo=c.asistencia==='ASISTIO' ? 'asistio' :
+      c.asistencia==='NO_ASISTIO' ? 'noAsistio' :
+      'sinMarcar';
+
+    e.citas++; e[campo]++;
+    total.citas++; total[campo]++;
+  });
+
+  return {
+    total,
+    especialidades:Object.values(porEsp)
+      .sort((a,b)=>b.citas-a.citas)
+  };
+}
+
+function marcarAsistencia(token,datos) {
+  const s=validar3_(token);
+
+  datos=datos || {};
+
+  const fecha=fecha3_(datos.fecha);
+  const especialidad=texto3_(datos.especialidad).slice(0,100);
+  const paciente=texto3_(datos.paciente).slice(0,150);
+  const documento=texto3_(datos.documento).slice(0,40);
+  const valor=texto3_(datos.asistencia).toUpperCase();
+
+  if (!['ASISTIO','NO_ASISTIO',''].includes(valor)) {
+    throw Error('Valor de asistencia inválido.');
+  }
+
+  if (!especialidad || (!paciente && !documento)) {
+    throw Error('Datos de la cita incompletos.');
+  }
+
+  if (fecha>hoy3_()) {
+    throw Error(
+      'La asistencia se marca el día de la cita.'
+    );
+  }
+
+  const clave=claveAsistencia3_(
+    fecha,especialidad,documento,paciente
+  );
+
+  const hora=ahora3_();
+
+  const fila=[
+    clave,fecha,especialidad,documento,paciente,
+    texto3_(datos.origen).slice(0,20),
+    texto3_(datos.referencia).slice(0,100),
+    valor,s.nombre,s.id,hora
+  ].map(seguro3_);
+
+  const lock=LockService.getScriptLock();
+  lock.waitLock(20000);
+
+  try {
+    const sh=hoja3_('ASISTENCIA');
+    const ultima=sh.getLastRow();
+
+    const claves=ultima>1
+      ? sh.getRange(2,1,ultima-1,1).getValues()
+      : [];
+
+    const i=claves.findIndex(
+      r=>String(r[0])===clave
+    );
+
+    sh.getRange(
+      i>=0 ? i+2 : ultima+1,1,1,fila.length
+    ).setValues([fila]);
+
+    SpreadsheetApp.flush();
+
+  } finally {
+    lock.releaseLock();
+  }
+
+  try {
+    auditar3_(
+      s.nombre,s.perfil,
+      valor ? 'ASISTENCIA_'+valor : 'ASISTENCIA_BORRADA',
+      paciente || documento,
+      especialidad+' / '+fecha
+    );
+  } catch(e) {
+    console.error(e.message);
+  }
+
+  return {
+    ok:true,
+    clave,
+    asistencia:valor,
+    marcadoPor:s.nombre,
+    hora
+  };
+}
+
+/* ==========================================================
+   PLATAFORMA DE TÉCNICOS
+   ========================================================== */
+
+function tableroTecnico(token,fecha,actividad) {
+  const s=validar3_(token);
+  const f=fecha3_(fecha);
+
+  actividad3_(s,actividad);
+
+  const agenda=leer3_('AGENDA_EXCEL');
+  const solicitudes=leer3_('SOBRECUPOS');
+  const asistencia=leer3_('ASISTENCIA');
+
+  const consultas=consultasDelDia3_(
+    f,agenda,solicitudes,asistencia
+  );
+
+  const nombre=norm3_(s.nombre);
+
+  const mias=solicitudes
+    .filter(r =>
+      String(r.Sesion)===s.id ||
+      norm3_(r.RegistradoPor)===nombre
+    )
+    .sort((a,b)=>
+      String(b.FechaRegistro||'').localeCompare(
+        String(a.FechaRegistro||'')
+      )
+    )
+    .slice(0,100)
+    .map(r=>({
+      ID:r.ID,
+      FechaSobrecupo:r.FechaSobrecupo,
+      Especialidad:r.Especialidad,
+      Nombres:r.Nombres,
+      Documento:r.Documento,
+      Estado:r.Estado,
+      Tipo:r.Tipo || 'FIN_DE_SEMANA',
+      Observacion:r.Observacion,
+      FechaRegistro:r.FechaRegistro,
+      ticket:Boolean(r.TicketFrente || r.ComprobanteID)
+    }));
+
+  return {
+    fecha:f,
+    hoy:hoy3_(),
+    dia:dia3_(f),
+    bloqueada:bloqueada3_(f),
+    agenda:estadoAgenda3_(),
+    pacientes:estadoPacientes3_(),
+    consultas,
+    resumen:resumenAsistencia3_(consultas).total,
+    solicitudes:mias
+  };
+}
+
+function consultarCupos(token,fecha) {
+  validar3_(token);
+
+  const f=fecha3_(fecha);
+
+  return {
+    fecha:f,
+    dia:dia3_(f),
+    bloqueada:bloqueada3_(f),
+    agenda:estadoAgenda3_(),
+    lista:calcular3_(
+      f,leer3_('AGENDA_EXCEL'),leer3_('SOBRECUPOS')
+    )
+  };
+}
+
+/* ==========================================================
+   PLATAFORMA DE SUPERVISIÓN
+   ========================================================== */
+
+function supervisor3_(token) {
+  const s=validar3_(token);
+
+  if (!['SUPERVISOR','AUTORIZADO'].includes(s.perfil)) {
+    throw Error('Acceso exclusivo de supervisión.');
+  }
+
+  return s;
+}
+
+function tableroSupervisor(token,fecha,opciones) {
+  const s=supervisor3_(token);
+  const f=fecha3_(fecha);
+  opciones=opciones || {};
+
+  actividad3_(s,opciones.actividad || 'Centro de control');
+
+  const agenda=leer3_('AGENDA_EXCEL');
+  const solicitudes=leer3_('SOBRECUPOS');
+  const asistencia=leer3_('ASISTENCIA');
+  const personal=leer3_('PERSONAL');
+  const auditoria=leer3_('AUDITORIA');
+  const hoy=hoy3_();
+  const ahora=Date.now();
+
+  const consultas=consultasDelDia3_(
+    f,agenda,solicitudes,asistencia
+  );
+
+  const cupos=calcular3_(f,agenda,solicitudes);
+
+  const estados={};
+  const estadosFecha={};
+  let registradasHoy=0;
+  let medicasPendientes=0;
+
+  solicitudes.forEach(r => {
+    const e=texto3_(r.Estado) || 'PENDIENTE';
+    estados[e]=(estados[e]||0)+1;
+
+    if (texto3_(r.FechaSobrecupo)===f) {
+      estadosFecha[e]=(estadosFecha[e]||0)+1;
+    }
+
+    if (String(r.FechaRegistro).slice(0,10)===hoy ||
+        (r.FechaRegistro &&
+         Utilities.formatDate(
+           new Date(r.FechaRegistro),UGM3.TZ,'yyyy-MM-dd'
+         )===hoy)) {
+      registradasHoy++;
+    }
+
+    if (r.Tipo==='MEDICO' &&
+        ['PENDIENTE','EN GESTION','OBSERVADO']
+          .includes(norm3_(r.Estado))) {
+      medicasPendientes++;
+    }
+  });
+
+  const sesiones=personal
+    .filter(r=>r.Estado==='CONECTADO')
+    .map(r => {
+      const ultima=Date.parse(r.UltimaActividad);
+      const segundos=isNaN(ultima)
+        ? null : Math.round((ahora-ultima)/1000);
+      return {
+        Sesion:r.Sesion,
+        Nombre:r.Nombre,
+        Perfil:r.Perfil,
+        Ingreso:r.Ingreso,
+        UltimaActividad:r.UltimaActividad,
+        Actividad:r.Actividad,
+        segundos,
+        enLinea:segundos!==null && segundos<90
+      };
+    })
+    // Inactivas por más de 12 h ya vencieron.
+    .filter(r=>r.segundos!==null && r.segundos<43200)
+    .sort((a,b)=>a.segundos-b.segundos);
+
+  const horas=new Array(24).fill(0);
+
+  auditoria.forEach(r => {
+    const d=new Date(r.FechaHora);
+    if (isNaN(d.getTime())) return;
+    if (Utilities.formatDate(d,UGM3.TZ,'yyyy-MM-dd')!==hoy) {
+      return;
+    }
+    horas[Number(Utilities.formatDate(d,UGM3.TZ,'H'))]++;
+  });
+
+  const resumen=resumenAsistencia3_(consultas);
+
+  const ordenadas=solicitudes.slice().sort((a,b)=>
+    String(b.FechaRegistro||'').localeCompare(
+      String(a.FechaRegistro||'')
+    )
+  );
+
+  return {
+    fecha:f,
+    hoy,
+    dia:dia3_(f),
+    bloqueada:bloqueada3_(f),
+    agenda:estadoAgenda3_(),
+    pacientes:estadoPacientes3_(),
+    cupos,
+    estados,
+    estadosFecha,
+    registradasHoy,
+    medicasPendientes,
+    pendientes:solicitudes.filter(r =>
+      ['PENDIENTE','EN GESTION','OBSERVADO']
+        .includes(norm3_(r.Estado))
+    ).length,
+    personal:sesiones,
+    auditoria:auditoria.slice(-80).reverse(),
+    horas,
+    asistencia:resumen,
+    consultas:opciones.detalle ? consultas : [],
+    solicitudes:ordenadas.slice(0,400).map(r=>({
+      ID:r.ID,
+      FechaSobrecupo:r.FechaSobrecupo,
+      Especialidad:r.Especialidad,
+      Nombres:r.Nombres,
+      Documento:r.Documento,
+      SolicitadoPor:r.SolicitadoPor,
+      RegistradoPor:r.RegistradoPor,
+      FechaRegistro:r.FechaRegistro,
+      Estado:r.Estado,
+      GestionadoPor:r.GestionadoPor,
+      Observacion:r.Observacion,
+      Tipo:r.Tipo || 'FIN_DE_SEMANA',
+      ComprobanteID:r.ComprobanteID,
+      TicketFrente:r.TicketFrente,
+      TicketReverso:r.TicketReverso
+    }))
+  };
+}
+
+function cerrarSesionRemota(token,sesion) {
+  const s=supervisor3_(token);
+
+  const ok=modificarSesion3_(
+    {id:texto3_(sesion)},'Cerrada por supervisión',true
+  );
+
+  if (!ok) throw Error('Sesión no encontrada.');
+
+  try {
+    auditar3_(
+      s.nombre,s.perfil,'SESION_CERRADA_SUPERVISOR',
+      texto3_(sesion),''
+    );
+  } catch(e) {
+    console.error(e.message);
+  }
+
+  return {ok:true};
+}
+
+function verTicket(token,id,cual) {
+  supervisor3_(token);
+
+  const r=leer3_('SOBRECUPOS').find(
+    x=>String(x.ID)===String(id)
+  );
+
+  if (!r) throw Error('Solicitud inexistente.');
+
+  const archivoId=cual==='reverso'
+    ? r.TicketReverso
+    : cual==='comprobante'
+      ? r.ComprobanteID
+      : (r.TicketFrente || r.ComprobanteID);
+
+  if (!archivoId) return {vacio:true};
+
+  const blob=DriveApp.getFileById(archivoId).getBlob();
+
+  return {
+    nombre:blob.getName(),
+    mime:blob.getContentType(),
+    base64:Utilities.base64Encode(blob.getBytes())
   };
 }

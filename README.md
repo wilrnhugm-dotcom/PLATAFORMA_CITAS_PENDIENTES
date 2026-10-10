@@ -1,59 +1,34 @@
 # UGM · Control de Sobrecupos — Nuevo Hospital Rosales
 
-Aplicación web en Google Apps Script.
+Aplicación web en Google Apps Script con **dos plataformas**: técnicos y supervisión.
 
-| Archivo | En Apps Script |
-|---|---|
-| `Codigo.gs` | `Código.gs` |
-| `Index.html` | archivo HTML llamado `Index` |
+| Archivo | En Apps Script | Contenido |
+|---|---|---|
+| `Codigo.gs` | `Código.gs` | Servidor: datos, reglas, asistencia, tickets, tablero de supervisión |
+| `Tecnico.html` | HTML `Tecnico` | Plataforma de técnicos |
+| `Supervisor.html` | HTML `Supervisor` | Centro de control de supervisión |
+| `Estilos.html` | HTML `Estilos` | Estilos y logo (compartido) |
+| `Comun.html` | HTML `Comun` | JavaScript compartido: animaciones GSAP, acceso, utilidades |
 
-## Instalación desde cero (recomendada)
+Instalación y actualización: `entregables/0_GUIA_INSTALACION.txt`.
 
-Seguir `entregables/0_GUIA_INSTALACION.txt`: hoja de cálculo nueva → Extensiones → Apps Script →
-pegar código → ejecutar `instalarUGM()` una vez → implementar como aplicación web (Ejecutar como "Yo").
-La hoja de cálculo queda como base de datos.
+## Enlaces y claves
 
-## Despliegue (proyecto existente)
+| Plataforma | Enlace | Clave |
+|---|---|---|
+| Técnicos | `URL/exec` | `UGM2026` |
+| Supervisión | `URL/exec?vista=supervisor` | `SUP1` |
+| (ambas) | — | Técnico autorizado `HNRUGM$` |
 
-1. Copiar `Codigo.gs` e `Index.html` al proyecto de Apps Script (reemplazando el contenido).
-2. Guardar y **Implementar → Gestionar implementaciones → Editar → Nueva versión**.
-3. La propiedad del script `UGM2_BASE_ID` debe seguir apuntando a la hoja de cálculo.
+## Hojas de la base
 
-## Credenciales (exactas, con mayúsculas y espacio)
+`SOBRECUPOS`, `DISPONIBILIDAD`, `AUDITORIA`, `PERSONAL`, `AGENDA_EXCEL`, `ASISTENCIA`,
+`PACIENTES` (al cargar la base) y `UGM_CONFIG` (oculta). `instalarUGM()` crea las que falten sin borrar datos.
 
-| Perfil | Clave |
-|---|---|
-| Supervisor | `SUP 1` |
-| Técnico | `UGM 2026` |
-| Técnico autorizado | `HNRUGM$` (sin cambios) |
+## Reglas
 
-## Si el ingreso muestra "No cuentas con el permiso necesario…"
-
-La clave es correcta; el sistema no puede abrir la hoja de Google Sheets.
-1. **Implementar → Gestionar implementaciones → ✏️ → Ejecutar como: "Yo"** · Quién tiene acceso: según la política del hospital.
-2. Esa cuenta debe tener acceso de **edición** a la hoja de `UGM2_BASE_ID`.
-3. En el editor, seleccionar la función `diagnosticoUGM` y pulsar **Ejecutar** (autoriza permisos y muestra el diagnóstico en el registro).
-
-## Base de pacientes
-
-Se carga desde **Base de pacientes** (menú del supervisor). Los técnicos la buscan en **Buscar paciente**
-(por nombre, DUI, expediente o especialidad) y en el campo Nombres del formulario. La búsqueda es local e instantánea.
-Carga del archivo:
-arrastrar el archivo, hacer clic para adjuntarlo, o pegar con Ctrl+V (archivo o celdas copiadas de Excel).
-Se requiere una columna de nombre (`NOMBRE`, `NOMBRES` + `APELLIDOS`, `PACIENTE`, `NOMBRE COMPLETO`…)
-y una de DUI (`DUI`, `DOCUMENTO`…). Opcionales: `EXPEDIENTE`, `ESPECIALIDAD`. Si no hay especialidad, se toma de la agenda Excel. Se guarda en la hoja `PACIENTES`; cada carga reemplaza la anterior.
-
-## Fechas bloqueadas
-
-Definidas en `UGM3.FECHAS_BLOQUEADAS` (`Codigo.gs`) y `FECHAS_BLOQUEADAS` (`Index.html`); mantener ambas iguales.
-
-## Dos plataformas (un solo código)
-
-Misma implementación, dos enlaces:
-- Técnicos: `URL_DE_LA_APP/exec?vista=tecnico` (acepta `UGM 2026` y `HNRUGM$`)
-- Supervisión: `URL_DE_LA_APP/exec?vista=supervisor` (acepta `SUP 1` y `HNRUGM$`)
-
-## Base nueva
-
-Si la hoja de `UGM2_BASE_ID` no es accesible y no se puede recuperar el permiso, ejecutar `crearBaseUGM()`
-desde el editor: crea una hoja nueva en la cuenta que ejecuta, con todas las hojas y límites, y la vincula.
+- Sobrecupos: sábado y domingo, 1 por cada 10 pacientes activos, con límite por especialidad.
+- Otro día: solo solicitud médica con ticket (frente y reverso sellado y firmado), aprobación de supervisión.
+- Fechas bloqueadas: 24–27 y 31 dic 2026; 1–3 ene 2027 (`UGM3.FECHAS_BLOQUEADAS` y `Comun.html`).
+- DUI: 9 dígitos; los de 8 dígitos de la base se completan con un cero inicial.
+- Asistencia: se marca el día de la cita o después; supervisión descarga el reporte en Excel.
