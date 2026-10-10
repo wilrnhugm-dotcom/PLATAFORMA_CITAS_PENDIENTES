@@ -1020,7 +1020,7 @@ function revisarFecha() {
 function revisarBoton() {
  if(S.guardando)return;
  const completo=esFinDeSemana($('date').value)&&
-  T.cupo&&T.cupo.disponibles===0;
+  T.cupo&&T.cupo.disponibles===0&&!T.cupo.urgenciaLibre;
  $('btnRequest').disabled=Boolean(T.bloqueoFecha||completo);
 }
 
@@ -1033,7 +1033,8 @@ function avisoCompleto(fila,f) {
    <b>${esc(fila.especialidad)}</b> para el</p>
    <div class="dia-grande">${esc(fechaLarga(f))}</div>
    <p>está completo: <b>${fila.ocupados} de ${fila.limite}</b>
-   sobrecupos agendados.</p>
+   sobrecupos agendados${fila.urgencia?` y el cupo de urgencia
+   también está ocupado`:''}.</p>
    <p class="muted">Elige otra fecha o especialidad. Solo
    supervisión puede liberar cupos o ampliar el límite.</p>`,
   ok:'Entendido'
@@ -1121,11 +1122,20 @@ async function pintarCupos() {
 
  const clave=f+'|'+esp;
 
+ if(fila.soloUrgencia) {
+  poner('!','<b style="color:var(--yellow)">Cupos regulares completos ('+
+   fila.ocupados+' de '+fila.limite+').</b> Queda <b>1 cupo de '+
+   'urgencia</b> para '+esc(esp)+': solo para casos que lo '+
+   'requieran, con motivo y validación de supervisión.','ultimo urgencia');
+  revisarBoton();
+  return;
+ }
+
  if(fila.disponibles===0) {
   poner('0','<b>Cupo completo · restricción médica.</b> '+
    esc(esp)+' ya tiene '+fila.ocupados+' de '+fila.limite+
-   ' sobrecupos para el '+esc(fechaLarga(f))+
-   '. No se pueden agendar más.','sin');
+   ' sobrecupos'+(fila.urgencia?' + '+fila.urgencia+' de urgencia':'')+
+   ' para el '+esc(fechaLarga(f))+'. No se pueden agendar más.','sin');
   revisarBoton();
   if(T.avisoCompleto!==clave) {
    T.avisoCompleto=clave;
@@ -1135,9 +1145,10 @@ async function pintarCupos() {
  }
 
  poner(fila.disponibles,
-  (fila.ultimo?'<b style="color:var(--yellow)">Último cupo disponible</b>':
+  (fila.ultimo?'<b style="color:var(--yellow)">Último cupo regular</b>':
    '<b>Cupos disponibles</b>')+' de <b>'+fila.limite+'</b> para '+
   esc(esp)+' · '+fila.ocupados+' agendado(s)'+
+  (fila.urgencia?' · +'+fila.urgencia+' de urgencia':'')+
   (fila.porFecha?' · límite ajustado por supervisión para esta fecha':''),
   fila.ultimo?'ultimo':'');
  revisarBoton();
@@ -1301,6 +1312,8 @@ async function enviar(ev) {
  if(S.guardando)return;
 
  const datos={
+  urgente:false,
+  motivoUrgencia:'',
   especialidad:$('esp').value,
   nombres:$('patientName').value.trim(),
   documento:$('doc').value.trim(),
@@ -1354,24 +1367,52 @@ async function enviar(ev) {
   T.avisoCompleto=datos.fecha+'|'+datos.especialidad;
   pintarCupos();
 
-  if(!fila||!fila.habilitada||fila.disponibles===0) {
+  if(!fila||!fila.habilitada||(fila.disponibles===0&&!fila.urgenciaLibre)) {
    if(fila&&fila.habilitada)await avisoCompleto(fila,datos.fecha);
    else mostrarError('ESPECIALIDAD_NO_HABILITADA|'+datos.especialidad+
     ' no tiene sobrecupos habilitados ese día.');
    return;
   }
 
-  if(fila.disponibles===1) {
+  if(fila.disponibles===0&&fila.urgenciaLibre) {
+   const motivo=await dialogo({
+    tipo:'urgente',
+    icono:'alerta',
+    titulo:'CUPO DE URGENCIA',
+    html:`<p>Los <b>${fila.limite} cupos regulares</b> de
+     <b>${esc(datos.especialidad)}</b> para el</p>
+     <div class="dia-grande">${esc(fechaLarga(datos.fecha))}</div>
+     <p>ya están ocupados. Queda <b>1 cupo de urgencia</b>
+     (${fila.limite+1}.º paciente).</p>
+     <ul class="aviso-lista">
+      <li>Úsalo <b>solo si el caso lo requiere</b> con urgencia.</li>
+      <li>Llega a supervisión marcado como <b>URGENTE</b> para
+       que <b>valide el caso</b>.</li>
+      <li>Si supervisión lo rechaza, el cupo vuelve a quedar libre.</li>
+     </ul>`,
+    campo:{
+     etiqueta:'¿Por qué es urgente este caso?',
+     placeholder:'Ej.: control post-operatorio que no puede esperar a la siguiente fecha.',
+     minimo:15
+    },
+    ok:'Solicitar cupo de urgencia',
+    cancelar:'Cancelar'
+   });
+   if(!motivo)return;
+   datos.urgente=true;
+   datos.motivoUrgencia=motivo;
+  } else if(fila.disponibles===1) {
    const ok=await dialogo({
     tipo:'info',
     icono:'info',
-    titulo:'ÚLTIMO CUPO DISPONIBLE',
-    html:`<p>Vas a agendar el <b>último sobrecupo</b>
+    titulo:'ÚLTIMO CUPO REGULAR',
+    html:`<p>Vas a agendar el <b>último sobrecupo regular</b>
      (${fila.limite} de ${fila.limite}) de
      <b>${esc(datos.especialidad)}</b> para el</p>
      <div class="dia-grande">${esc(fechaLarga(datos.fecha))}</div>
-     <p>Después de este registro <b>ya no se podrán agendar
-     más</b> pacientes ese día por restricción médica.</p>`,
+     <p>Después de este registro solo quedará el
+     <b>cupo de urgencia</b>, que requiere motivo y
+     validación de supervisión.</p>`,
     ok:'Agendar último cupo',
     cancelar:'Revisar'
    });
@@ -1417,15 +1458,28 @@ async function enviar(ev) {
   MOV.exito();
   aviso('Solicitud enviada a supervisión. Referencia: '+r.id);
 
-  if(!r.medico&&r.disponibles===0) {
+  if(r.urgencia) {
+   setTimeout(()=>dialogo({
+    tipo:'urgente',
+    icono:'alerta',
+    titulo:'URGENCIA ENVIADA A SUPERVISIÓN',
+    html:`<p>Se registró el <b>cupo de urgencia</b> de
+     <b>${esc(datos.especialidad)}</b> para el</p>
+     <div class="dia-grande">${esc(fechaLarga(datos.fecha))}</div>
+     <p>Supervisión debe <b>validar el caso</b>. La especialidad
+     queda completa para ese día.</p>`,
+    ok:'Entendido'
+   }),1100);
+  } else if(!r.medico&&r.disponibles===0) {
    setTimeout(()=>dialogo({
     tipo:'info',
     icono:'info',
-    titulo:'CUPO COMPLETO',
-    html:`<p>Se agendó el último sobrecupo de
+    titulo:'CUPOS REGULARES COMPLETOS',
+    html:`<p>Se agendó el último sobrecupo regular de
      <b>${esc(datos.especialidad)}</b> para el</p>
      <div class="dia-grande">${esc(fechaLarga(datos.fecha))}</div>
-     <p>Ya no se podrán agendar más pacientes ese día.</p>`,
+     <p>Desde ahora solo queda el <b>cupo de urgencia</b>,
+     con motivo y validación de supervisión.</p>`,
     ok:'Entendido'
    }),1100);
   }

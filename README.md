@@ -27,7 +27,9 @@ Instalación y actualización: `entregables/0_GUIA_INSTALACION.txt`.
 
 ## Reglas
 
-- Sobrecupos sábado y domingo. Cupos por especialidad y día = límite de `DISPONIBILIDAD` (10; Cuidados Paliativos 5; Nutrición-PE 7) o el de la fecha en `LIMITES_FECHA`. Aviso en el último cupo; bloqueo por restricción médica al llenarse (validado bajo LockService).
+- Sobrecupos sábado y domingo. Cupos por especialidad y día = límite de `DISPONIBILIDAD` (10; Cuidados Paliativos 5; Nutrición-PE 7) o el de la fecha en `LIMITES_FECHA`, **más 1 cupo de urgencia** (`EXTRA_URGENCIA`). Aviso en el último cupo regular; el de urgencia exige motivo, llega como URGENTE a supervisión para validar el caso y, si se rechaza, se libera. Bloqueo por restricción médica al llenarse (validado bajo LockService).
+- El indicador del supervisor muestra **especialidades con cupo**, no la suma de cupos de todas las especialidades.
+- Cargar una agenda o una base de pacientes nueva **reemplaza** la anterior (no se mezclan).
 - Supervisión cambia límites por fecha o generales desde "Cupos y límites".
 - Toda solicitud entra como PENDIENTE ("sin verificar") a la bandeja de supervisión, con alerta y urgentes (cita en ≤ 2 días o > 2 h esperando). Estados: Agendado, En validación (otra área), En gestión, Observado, Rechazado, Anulado. Procesar no libera cupo; Rechazar/Anular/Liberar sí.
 - Ticket obligatorio en toda solicitud (frente y reverso sellado y firmado).

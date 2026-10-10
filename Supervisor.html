@@ -190,8 +190,8 @@
     <div class="kpi-icon" data-ico="grafica"></div>
     <div>
      <strong id="kDisp">0</strong>
-     <b>Sobrecupos disponibles</b>
-     <small id="kDispSub">de 0 autorizados</small>
+     <b>Especialidades con cupo</b>
+     <small id="kDispSub">Máx. 10 por especialidad + 1 de urgencia</small>
     </div>
    </div>
    <div class="kpi glass">
@@ -772,13 +772,21 @@ function dibujar(animar) {
    INDICADORES
    ===================================================== */
 
+// Resumen por especialidad: el total sumado de todas las
+// especialidades (p. ej. 202) no sirve al supervisor,
+// porque cada especialidad tiene su propio tope.
 function totalesCupos() {
  return (V.datos.cupos||[]).reduce((t,r)=>{
-  t.generados+=Number(r.generados)||0;
+  if(!r.habilitada)return t;
+  t.habilitadas++;
   t.ocupados+=Number(r.ocupados)||0;
-  t.disponibles+=Number(r.disponibles)||0;
+  if(r.disponibles>0)t.conCupo++;
+  else if(r.urgenciaLibre>0)t.soloUrgencia++;
+  else t.completas++;
+  t.urgencias+=Number(r.urgenciaUsada)||0;
   return t;
- },{generados:0,ocupados:0,disponibles:0});
+ },{habilitadas:0,conCupo:0,soloUrgencia:0,completas:0,
+   ocupados:0,urgencias:0});
 }
 
 function pintarKpis() {
@@ -796,9 +804,14 @@ function pintarKpis() {
  $('kPendSub').textContent=d.bandeja.urgentes+' urgente(s) · '+
   (d.pendientes-d.bandeja.total)+' en proceso';
 
- contarNumero('kDisp',t.disponibles);
- $('kDispSub').textContent='de '+t.generados+' autorizados · '+
-  t.ocupados+' ocupados';
+ contarNumero('kDisp',t.conCupo);
+ $('kDispSub').textContent=!t.habilitadas
+  ?'Sin sobrecupos para esta fecha'
+  :'de '+t.habilitadas+' · máx. 10 c/u + 1 urgencia · '+
+   t.ocupados+' agendados'+
+   (t.soloUrgencia?' · '+t.soloUrgencia+' solo urgencia':'')+
+   (t.completas?' · '+t.completas+' completas':'')+
+   (t.urgencias?' · '+t.urgencias+' urgencia(s) usada(s)':'');
 
  const pct=marcados?Math.round(a.asistio/marcados*100):0;
  contarNumero('kAsis',pct);
@@ -938,7 +951,9 @@ function pintarCupos(animar) {
     <span class="${r.ocupados>=r.generados&&r.generados?'full':'occ'}"
      data-v="${Math.min(r.ocupados,Math.max(r.generados,r.ocupados))/max}"></span>
    </div>
-   <span class="val">${r.ocupados}/${r.generados}</span>
+   <span class="val">${r.ocupados}/${r.generados}${r.urgencia
+    ?`<small class="${r.urgenciaUsada?'urg-usada':'urg-libre'}"
+      title="Cupo de urgencia ${r.urgenciaUsada?'usado':'libre'}">+${r.urgencia}</small>`:''}</span>
   </div>`).join('');
 
  MOV.alVer(cont,()=>{
@@ -1232,6 +1247,8 @@ function pintarSolicitudes(animar) {
    <td>${esc(r.RegistradoPor)}</td>
    <td>${esc(fechaHora(r.FechaRegistro))}</td>
    <td>${etiquetaEstado(r.Estado)}${
+    r.Urgencia==='SI'
+     ?' <span class="tag urgente">Cupo de urgencia</span>':
     V.datos.bandeja.urgentesIds.includes(r.ID)
      ?' <span class="tag urgente">Urgente</span>':''}</td>
   </tr>`).join('')||
@@ -1309,6 +1326,8 @@ function abrirSolicitud(id) {
    <p><b>Fecha:</b> ${esc(r.FechaSobrecupo)}</p>
    <p><b>Tipo:</b> ${r.Tipo==='MEDICO'?'Solicitud médica':'Fin de semana'}</p>
    <p><b>A solicitud de:</b> ${esc(r.SolicitadoPor)}</p>
+   ${r.Urgencia==='SI'?`<p class="motivo-urgencia"><b>Cupo de urgencia
+    (validar el caso):</b> ${esc(r.MotivoUrgencia||'Sin motivo')}</p>`:''}
    <p><b>Registró:</b> ${esc(r.RegistradoPor)}</p>
    <p><b>Registro:</b> ${esc(fechaHora(r.FechaRegistro))}</p>
    ${r.GestionadoPor?`<p><b>Gestionó:</b> ${esc(r.GestionadoPor)}</p>`:''}
@@ -2064,8 +2083,9 @@ function pintarTablaCupos() {
     <td>${r.bloqueada?'<span style="color:var(--red)">Fecha bloqueada</span>':
      !r.habilitada?'No habilitada':
      r.incidencia?'<span style="color:var(--red)">Excede el límite</span>':
-     r.completo?'<span style="color:var(--red)">Completo</span>':
-     r.ultimo?'<span style="color:var(--yellow)">Último cupo</span>':'Disponible'}</td>
+     r.completo?'<span style="color:var(--red)">Completo (incl. urgencia)</span>':
+     r.soloUrgencia?'<span style="color:var(--yellow)">Solo cupo de urgencia</span>':
+     r.ultimo?'<span style="color:var(--yellow)">Último cupo regular</span>':'Disponible'}</td>
     <td style="white-space:nowrap">
      <button class="btn mini primary" type="button" data-guardar="FECHA">Guardar</button>
      ${r.porFecha?`<button class="btn mini" type="button"

@@ -20,8 +20,11 @@
  * REGLAS:
  * - Cupos de sobrecupo por especialidad y día de fin de
  *   semana = Limite de DISPONIBILIDAD (10; Cuidados
- *   Paliativos 5; Nutrición-PE 7). Al llenarse se bloquea
- *   por restricción médica. Supervisión puede cambiar el
+ *   Paliativos 5; Nutrición-PE 7) + 1 cupo de URGENCIA
+ *   (EXTRA_URGENCIA). El cupo de urgencia solo se usa
+ *   cuando los regulares están llenos, exige motivo y
+ *   siempre llega como urgente a supervisión, que valida
+ *   el caso. Al llenarse se bloquea por restricción médica. Supervisión puede cambiar el
  *   límite general o el de una fecha (LIMITES_FECHA).
  * - No se agendan sobrecupos para el mismo día, salvo
  *   solicitud médica (igual que entre semana).
@@ -69,6 +72,12 @@ const UGM3 = {
     '2026-12-27', '2026-12-31',
     '2027-01-01', '2027-01-02', '2027-01-03'
   ],
+
+  // Cupos extra por especialidad y día, por encima del
+  // límite regular, solo para casos urgentes validados
+  // por supervisión (p. ej. 10 regulares + 1 = 11).
+  EXTRA_URGENCIA: 1,
+  MIN_MOTIVO_URGENCIA: 15,
 
   VIGENCIA_MINUTOS: 30,
   ALERTA_MINUTOS: 60,
@@ -140,7 +149,9 @@ const UGM3 = {
       'Observacion',
       'Tipo',
       'TicketFrente',
-      'TicketReverso'
+      'TicketReverso',
+      'Urgencia',
+      'MotivoUrgencia'
     ],
 
     DISPONIBILIDAD: [
@@ -1434,6 +1445,13 @@ function calcular3_(fecha,agenda,solicitudes) {
 
     const disponibles=Math.max(0,autorizados-ocupados);
 
+    // Cupo(s) de urgencia: solo cuando los regulares
+    // ya están ocupados.
+    const urgencia=autorizados>0 ? UGM3.EXTRA_URGENCIA : 0;
+    const urgenciaLibre=Math.max(
+      0,autorizados+urgencia-Math.max(ocupados,autorizados)
+    );
+
     return {
       especialidad:l.especialidad,
       activas:pacientes.activas,
@@ -1442,15 +1460,20 @@ function calcular3_(fecha,agenda,solicitudes) {
       general:l.general,
       porFecha:l.porFecha,
       cambiadoPor:l.cambiadoPor || '',
-      capacidad:l.limite,
+      capacidad:autorizados+urgencia,
       generados:autorizados,
       ocupados,
       disponibles,
+      urgencia,
+      urgenciaLibre,
+      urgenciaUsada:Math.max(0,ocupados-autorizados),
+      soloUrgencia:disponibles===0 && urgenciaLibre>0,
       ultimo:disponibles===1,
-      completo:autorizados>0 && disponibles===0,
+      completo:autorizados>0 && disponibles===0 &&
+        urgenciaLibre===0,
       habilitada:l.limite!==null && !bloqueada,
       bloqueada,
-      incidencia:!bloqueada && ocupados>autorizados
+      incidencia:!bloqueada && ocupados>autorizados+urgencia
     };
   });
 }
@@ -1718,6 +1741,9 @@ function crearSolicitud(token,datos,archivos) {
 
   let disponibles=null;
   let limiteFinal=null;
+  let esUrgencia=false;
+  const motivoUrgencia=texto3_(datos.motivoUrgencia)
+    .replace(/\s+/g,' ').slice(0,300);
 
   try {
     const idFrente=guardar(frente,'ticket_frente');
@@ -1755,17 +1781,44 @@ function crearSolicitud(token,datos,archivos) {
           existentes,fecha,especialidad
         );
 
-        if (ocupados>=limite) {
+        const extra=limite>0 ? UGM3.EXTRA_URGENCIA : 0;
+
+        if (ocupados>=limite+extra) {
           fallo3_(
             'SIN_CUPOS',
             'Ya no se pueden agendar más sobrecupos de '+
             especialidad+' para el '+fecha+
             ' por restricción médica. Cupo completo: '+
-            ocupados+' de '+limite+'.'
+            ocupados+' de '+limite+
+            (extra ? ' + '+extra+' de urgencia' : '')+'.'
           );
         }
 
-        disponibles=limite-ocupados-1;
+        if (ocupados>=limite) {
+          // Solo queda el cupo de urgencia.
+          if (datos.urgente!==true) {
+            fallo3_(
+              'SOLO_URGENCIA',
+              'Los '+limite+' cupos regulares de '+
+              especialidad+' para el '+fecha+' están '+
+              'ocupados. Solo queda el cupo de urgencia: '+
+              'marca el caso como urgente y escribe el motivo.'
+            );
+          }
+
+          if (motivoUrgencia.length<UGM3.MIN_MOTIVO_URGENCIA) {
+            fallo3_(
+              'MOTIVO_URGENCIA',
+              'Escribe el motivo de la urgencia (mínimo '+
+              UGM3.MIN_MOTIVO_URGENCIA+' caracteres) para que '+
+              'supervisión valide el caso.'
+            );
+          }
+
+          esUrgencia=true;
+        }
+
+        disponibles=Math.max(0,limite-ocupados-1);
         limiteFinal=limite;
       }
 
@@ -1784,7 +1837,9 @@ function crearSolicitud(token,datos,archivos) {
         ComprobanteID:idFrente,
         Tipo:medico ? 'MEDICO' : 'FIN_DE_SEMANA',
         TicketFrente:idFrente,
-        TicketReverso:idReverso
+        TicketReverso:idReverso,
+        Urgencia:esUrgencia ? 'SI' : '',
+        MotivoUrgencia:esUrgencia ? motivoUrgencia : ''
       });
 
       SpreadsheetApp.flush();
@@ -1803,8 +1858,10 @@ function crearSolicitud(token,datos,archivos) {
   try {
     auditar3_(
       s.nombre,s.perfil,
-      medico ? 'SOLICITUD_MEDICA' : 'SOBRECUPO_GUARDADO',
-      id,especialidad+' / '+fecha
+      medico ? 'SOLICITUD_MEDICA' :
+        esUrgencia ? 'CUPO_URGENCIA' : 'SOBRECUPO_GUARDADO',
+      id,especialidad+' / '+fecha+
+        (esUrgencia ? ' · URGENCIA: '+motivoUrgencia : '')
     );
   } catch(e) {
     console.error(e.message);
@@ -1816,7 +1873,10 @@ function crearSolicitud(token,datos,archivos) {
     disponibles,
     limite:limiteFinal,
     medico,
-    mensaje:'Solicitud registrada correctamente.'
+    urgencia:esUrgencia,
+    mensaje:esUrgencia
+      ? 'Cupo de urgencia registrado: supervisión debe validarlo.'
+      : 'Solicitud registrada correctamente.'
   };
 }
 
@@ -2992,7 +3052,9 @@ function tableroSupervisor(token,fecha,opciones) {
       Tipo:r.Tipo || 'FIN_DE_SEMANA',
       ComprobanteID:r.ComprobanteID,
       TicketFrente:r.TicketFrente,
-      TicketReverso:r.TicketReverso
+      TicketReverso:r.TicketReverso,
+      Urgencia:texto3_(r.Urgencia),
+      MotivoUrgencia:texto3_(r.MotivoUrgencia)
     }))
   };
 }
@@ -3192,6 +3254,7 @@ function bandeja3_(solicitudes) {
   );
 
   const urgentes=sinVerificar.filter(r => {
+    if (texto3_(r.Urgencia)==='SI') return true;
     const f=texto3_(r.FechaSobrecupo);
     const registro=Date.parse(r.FechaRegistro);
     return (f && f<=limiteFecha) ||
@@ -3211,6 +3274,9 @@ function bandeja3_(solicitudes) {
     urgentes:urgentes.length,
     ids:sinVerificar.map(r=>String(r.ID)),
     urgentesIds:urgentes.map(r=>String(r.ID)),
+    cupoUrgencia:sinVerificar.filter(r=>
+      texto3_(r.Urgencia)==='SI'
+    ).length,
     vencidas:sinVerificar.filter(r=>
       texto3_(r.FechaSobrecupo)<hoy
     ).length,
