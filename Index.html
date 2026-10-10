@@ -467,6 +467,67 @@ tbody tr{cursor:pointer}
 .error-panel .btn{
  min-width:210px
 }
+.dui-helper.ok{color:var(--green)}
+.dui-helper.bad{color:var(--red)}
+input.blocked{
+ border-color:var(--red);
+ box-shadow:0 0 0 3px rgba(255,121,136,.15)
+}
+.blocked-list{
+ display:flex;flex-wrap:wrap;gap:5px;
+ margin-top:7px
+}
+.blocked-chip{
+ font-size:10px;padding:3px 7px;
+ border-radius:20px;
+ border:1px solid var(--red);
+ color:var(--red);
+ text-decoration:line-through
+}
+.blocked-chip.current{
+ background:var(--red);color:#fff;
+ text-decoration:none
+}
+.notice.danger{
+ border-color:var(--red);
+ background:rgba(255,121,136,.1)
+}
+.notice.danger strong{color:var(--red)}
+.search-box{position:relative}
+.search-results{
+ position:absolute;left:0;right:0;
+ top:calc(100% + 4px);z-index:15;
+ max-height:290px;overflow:auto;
+ background:var(--panel);
+ border:1px solid var(--cyan);
+ border-radius:10px;
+ box-shadow:0 14px 36px var(--shadow)
+}
+.search-item{
+ padding:10px 13px;cursor:pointer;
+ border-bottom:1px solid var(--border);
+ font-size:13px
+}
+.search-item:last-child{border-bottom:0}
+.search-item small{
+ display:block;color:var(--muted);
+ margin-top:3px;font-size:11px
+}
+.search-item small.bad{color:var(--red)}
+.search-item:hover,.search-item.active{
+ background:var(--ring)
+}
+.search-empty{
+ padding:12px 13px;font-size:12px;
+ color:var(--muted)
+}
+.dropzone:focus{
+ outline:none;border-color:var(--cyan)
+}
+.progress{
+ margin-top:12px;font-size:13px;
+ color:var(--cyan);font-weight:700
+}
 @media(max-width:1100px){
  .kpis.supervisor-kpis{
   grid-template-columns:repeat(2,1fr)
@@ -710,10 +771,23 @@ tbody tr{cursor:pointer}
       <label>Nombres
        <span class="required">*</span>
       </label>
-      <input id="patientName"
-       required maxlength="120"
-       autocomplete="off"
-       placeholder="Nombres y apellidos">
+      <div class="search-box">
+       <input id="patientName"
+        required maxlength="150"
+        autocomplete="off"
+        role="combobox"
+        aria-autocomplete="list"
+        aria-controls="patientResults"
+        aria-expanded="false"
+        placeholder="Buscar paciente por nombre o DUI">
+       <div id="patientResults"
+        class="search-results hidden"
+        role="listbox"></div>
+      </div>
+      <div class="dui-helper" id="patientHelper">
+       Escribe al menos 3 letras para buscar en la
+       base de pacientes.
+      </div>
      </div>
 
      <div class="field">
@@ -727,7 +801,7 @@ tbody tr{cursor:pointer}
        autocomplete="off"
        pattern="[0-9]{8}-[0-9]"
        placeholder="00000000-0">
-      <div class="dui-helper">
+      <div class="dui-helper" id="docHelper">
        El guion se agrega automáticamente.
       </div>
      </div>
@@ -739,6 +813,10 @@ tbody tr{cursor:pointer}
       <input id="date"
        type="date" required
        autocomplete="off">
+      <div class="dui-helper" id="dateHelper">
+       Fechas no disponibles:
+      </div>
+      <div class="blocked-list" id="blockedList"></div>
      </div>
 
      <div class="field full">
@@ -779,6 +857,14 @@ tbody tr{cursor:pointer}
     Citas activas únicas, sobrecupos generados,
     ocupados y disponibles para toda la jornada.
    </p>
+
+   <div class="notice danger hidden" id="blockedNotice">
+    <strong>Fecha no disponible</strong>
+    <p>
+     Esta fecha está bloqueada. No se permiten nuevas
+     programaciones ni asignación de cupos.
+    </p>
+   </div>
 
    <div class="tablebox">
     <table>
@@ -862,8 +948,9 @@ tbody tr{cursor:pointer}
     <strong>Arrastra aquí el archivo Excel</strong>
     <small>
      O haz clic para seleccionar el archivo.
+     También puedes pegarlo con Ctrl+V.
     </small>
-    <small>Formatos .xlsx, .xls y .csv</small>
+    <small>Formatos .xlsx, .xls y .csv · Celdas copiadas de Excel</small>
    </div>
 
    <input id="excelFile" type="file"
@@ -881,6 +968,40 @@ tbody tr{cursor:pointer}
     La última carga válida se compartirá con todos
     los técnicos y supervisores conectados.
    </p>
+  </div>
+
+  <div class="panel glass">
+   <h2>Base de pacientes</h2>
+
+   <p class="desc">
+    Base utilizada por el buscador de pacientes de la
+    vista técnico. Debe contener una columna de nombre
+    y una de DUI. Una nueva carga reemplaza la anterior.
+   </p>
+
+   <div class="notice">
+    <strong>Estado de la base</strong>
+    <p id="patientsStatus">Sin información.</p>
+   </div>
+
+   <div class="gestor">
+    <div class="dropzone" id="patientsZone"
+     role="button" tabindex="0">
+     <strong>Arrastra aquí la base de pacientes</strong>
+     <small>
+      O haz clic para adjuntar el archivo.
+      También puedes pegarlo con Ctrl+V.
+     </small>
+     <small>Formatos .xlsx, .xls y .csv · Celdas copiadas de Excel</small>
+    </div>
+
+    <input id="patientsFile" type="file"
+     class="hidden"
+     accept=".xlsx,.xls,.csv,.txt">
+
+    <div class="progress hidden"
+     id="patientsProgress"></div>
+   </div>
   </div>
  </section>
 
@@ -964,6 +1085,9 @@ const S = {
  guardando:false,
  cerrando:false,
  importando:false,
+ cargandoPacientes:false,
+ zonaPegado:'agenda',
+ paciente:null,
  archivo:null,
  previewURL:null,
  timer:null,
@@ -977,6 +1101,21 @@ const S = {
   agenda:{}
  }
 };
+
+// Debe coincidir con UGM3.FECHAS_BLOQUEADAS (Codigo.gs).
+const FECHAS_BLOQUEADAS=[
+ '2026-12-24','2026-12-25','2026-12-26',
+ '2026-12-27','2026-12-31',
+ '2027-01-01','2027-01-02','2027-01-03'
+];
+
+function fechaBloqueada(fecha) {
+ return FECHAS_BLOQUEADAS.includes(fecha);
+}
+
+function puedeGestionar() {
+ return ['SUPERVISOR','AUTORIZADO'].includes(S.perfil);
+}
 
 const $ = id => document.getElementById(id);
 
@@ -1033,6 +1172,8 @@ const ERRORES_GRANDES = {
  ESPECIALIDAD_NO_HABILITADA:
   'ESPECIALIDAD NO AUTORIZADA',
  DUPLICADO:'SOLICITUD DUPLICADA',
+ DUI_INVALIDO:'DUI INVÁLIDO',
+ FECHA_NO_DISPONIBLE:'FECHA NO DISPONIBLE',
  AGENDA_DESACTUALIZADA:
   'ACTUALIZACIÓN DE AGENDA REQUERIDA'
 };
@@ -1189,6 +1330,11 @@ async function login(ev) {
   document.querySelectorAll('.supervisor')
    .forEach(el=>{
     el.classList.toggle('hidden',!supervisor);
+   });
+
+  document.querySelectorAll('.gestor')
+   .forEach(el=>{
+    el.classList.toggle('hidden',!puedeGestionar());
    });
 
   limpiarFormulario();
@@ -1411,7 +1557,8 @@ function dibujar() {
     r.disponibles>0?
     'var(--green)':'var(--red)'
    }">${r.disponibles}</td>
-   <td>${
+   <td style="${r.bloqueada?'color:var(--red)':''}">${
+    r.bloqueada?'No disponible':
     !r.habilitada?'No habilitado':
     r.incidencia?'Excede capacidad':
     r.disponibles>0?'Disponible':'Agotado'
@@ -1419,11 +1566,18 @@ function dibujar() {
   </tr>
  `).join('')||`
   <tr>
-   <td colspan="7">
-    No hay sobrecupos autorizados para esta fecha.
-   </td>
+   <td colspan="7">${
+    fechaBloqueada(S.fecha)
+     ?'Fecha no disponible: no se permiten '+
+      'nuevas programaciones ni cupos.'
+     :'No hay sobrecupos autorizados para esta fecha.'
+   }</td>
   </tr>
  `;
+
+ $('blockedNotice').classList.toggle(
+  'hidden',!fechaBloqueada(S.fecha)
+ );
 
  $('requestsRows').innerHTML=
   solicitudes.map(r=>`
@@ -1501,6 +1655,15 @@ function dibujar() {
 
 function dibujarAgendaEstado() {
  const a=S.datos.agenda||{};
+ const pac=S.datos.pacientes||{};
+
+ $('patientsStatus').textContent=pac.fecha
+  ?'Última carga: '+pac.archivo+
+   ' · Responsable: '+pac.usuario+
+   ' · '+new Date(pac.fecha).toLocaleString('es-SV')+
+   ' · Pacientes: '+pac.total+
+   ' · DUI inválidos: '+pac.invalidos+'.'
+  :'Todavía no se ha cargado la base de pacientes.';
 
  $('lastUpdate').textContent=a.fecha
   ?new Date(a.fecha).toLocaleString('es-SV')
@@ -1540,6 +1703,72 @@ function formatearDUI(v) {
   :digitos;
 }
 
+// DUI recuperado de la base: ocho dígitos se completan
+// con un cero inicial; se exige exactamente nueve.
+function normalizarDUI(v) {
+ const digitos=String(v||'')
+  .replace(/\.0+$/,'')
+  .replace(/\D/g,'');
+
+ const nueve=digitos.length===8
+  ?'0'+digitos:digitos;
+
+ return nueve.length===9
+  ?nueve.slice(0,8)+'-'+nueve.slice(8)
+  :'';
+}
+
+function ayuda(id,texto,tipo) {
+ $(id).textContent=texto;
+ $(id).classList.toggle('ok',tipo==='ok');
+ $(id).classList.toggle('bad',tipo==='bad');
+}
+
+function revisarDUI() {
+ if(S.paciente&&
+    $('doc').value===S.paciente.documento) {
+  return;
+ }
+
+ const n=$('doc').value.replace(/\D/g,'').length;
+
+ if(n===0) {
+  ayuda('docHelper',
+   'El guion se agrega automáticamente.');
+ } else if(n<9) {
+  ayuda('docHelper',
+   'DUI incompleto: faltan '+(9-n)+
+   ' dígito(s). Debe tener nueve.','bad');
+ } else {
+  ayuda('docHelper','DUI con nueve dígitos.','ok');
+ }
+}
+
+function revisarFecha() {
+ const f=$('date').value;
+ const bloqueada=fechaBloqueada(f);
+
+ $('date').classList.toggle('blocked',bloqueada);
+
+ ayuda('dateHelper',bloqueada
+  ?'No disponible: esta fecha no admite nuevas '+
+   'programaciones ni asignación de cupos.'
+  :'Fechas no disponibles:',
+  bloqueada?'bad':'');
+
+ $('blockedList').innerHTML=FECHAS_BLOQUEADAS
+  .map(x=>{
+   const [y,m,d]=x.split('-');
+   return `<span class="blocked-chip${
+    x===f?' current':''
+   }" title="No disponible">${d}/${m}/${y}</span>`;
+  }).join('');
+
+ if(!S.guardando) {
+  $('btnRequest').disabled=bloqueada;
+ }
+}
+
 function limpiarFormulario() {
  $('formRequest').reset();
 
@@ -1551,6 +1780,210 @@ function limpiarFormulario() {
   'requestedBy'
  ].forEach(id=>{
   $(id).value='';
+ });
+
+ S.paciente=null;
+ cerrarResultados();
+ ayuda('patientHelper',
+  'Escribe al menos 3 letras para buscar en la '+
+  'base de pacientes.');
+ revisarDUI();
+ revisarFecha();
+}
+
+/* =====================================================
+   BUSCADOR DE PACIENTES
+   ===================================================== */
+
+const B={timer:null,seq:0,resultados:[],indice:-1};
+
+function cerrarResultados() {
+ clearTimeout(B.timer);
+ B.seq++;
+ B.resultados=[];
+ B.indice=-1;
+ $('patientResults').classList.add('hidden');
+ $('patientResults').innerHTML='';
+ $('patientName').setAttribute('aria-expanded','false');
+}
+
+function mostrarResultados(html) {
+ $('patientResults').innerHTML=html;
+ $('patientResults').classList.remove('hidden');
+ $('patientName').setAttribute('aria-expanded','true');
+}
+
+function dibujarResultados(r) {
+ B.resultados=(r&&r.resultados)||[];
+ B.indice=B.resultados.length?0:-1;
+
+ if(!B.resultados.length) {
+  mostrarResultados(`<div class="search-empty">${
+   r&&r.sinBase
+    ?'La base de pacientes aún no está cargada.'
+    :'Sin coincidencias en la base de pacientes.'
+  }</div>`);
+  return;
+ }
+
+ mostrarResultados(B.resultados.map((p,i)=>`
+  <div class="search-item${i===B.indice?' active':''}"
+   role="option" data-i="${i}">
+   <b>${esc(p.nombre)}</b>
+   <small class="${p.valido?'':'bad'}">${
+    p.valido
+     ?'DUI '+esc(p.documento)
+     :'DUI inválido en la base: '+
+      esc(p.original||'vacío')
+   }${p.expediente
+     ?' · Exp. '+esc(p.expediente):''}</small>
+  </div>
+ `).join(''));
+
+ document.querySelectorAll(
+  '#patientResults .search-item'
+ ).forEach(el=>{
+  // mousedown evita que el blur cierre la lista
+  el.addEventListener('mousedown',ev=>{
+   ev.preventDefault();
+   elegirPaciente(Number(el.dataset.i));
+  });
+ });
+}
+
+function marcarResultado() {
+ document.querySelectorAll(
+  '#patientResults .search-item'
+ ).forEach((el,i)=>{
+  el.classList.toggle('active',i===B.indice);
+  if(i===B.indice)el.scrollIntoView({block:'nearest'});
+ });
+}
+
+async function buscarPaciente(texto) {
+ const seq=++B.seq;
+
+ mostrarResultados(
+  '<div class="search-empty">Buscando...</div>'
+ );
+
+ try {
+  const r=await api(
+   'buscarPacientes',S.token,texto
+  );
+
+  if(seq!==B.seq||!S.token)return;
+
+  dibujarResultados(r);
+
+ }catch(e) {
+  if(seq!==B.seq)return;
+
+  mostrarResultados(
+   `<div class="search-empty">${esc(e.message)}</div>`
+  );
+ }
+}
+
+function elegirPaciente(i) {
+ const p=B.resultados[i];
+
+ if(!p)return;
+
+ cerrarResultados();
+
+ $('patientName').value=p.nombre;
+
+ const documento=normalizarDUI(p.documento);
+
+ if(p.valido&&documento) {
+  $('doc').value=documento;
+  S.paciente={nombre:p.nombre,documento};
+
+  ayuda('patientHelper',
+   'Paciente seleccionado de la base.','ok');
+
+  ayuda('docHelper',
+   'DUI recuperado automáticamente'+
+   (p.ajustado?' (se agregó un cero inicial).':'.'),
+   'ok');
+
+ } else {
+  $('doc').value='';
+  S.paciente=null;
+
+  ayuda('patientHelper',
+   'Paciente seleccionado de la base.','ok');
+
+  ayuda('docHelper',
+   'El DUI de la base ('+(p.original||'vacío')+
+   ') no tiene nueve dígitos. Verifícalo e '+
+   'ingrésalo manualmente.','bad');
+
+  $('doc').focus();
+ }
+}
+
+function montarBuscador() {
+ const input=$('patientName');
+
+ input.addEventListener('input',()=>{
+  // Si se edita el nombre elegido, el DUI deja de
+  // corresponder y se limpia.
+  if(S.paciente&&input.value!==S.paciente.nombre) {
+   if($('doc').value===S.paciente.documento) {
+    $('doc').value='';
+   }
+   S.paciente=null;
+   ayuda('patientHelper',
+    'Escribe al menos 3 letras para buscar en la '+
+    'base de pacientes.');
+   revisarDUI();
+  }
+
+  const texto=input.value.trim();
+  const digitos=texto.replace(/\D/g,'');
+  const porDui=digitos.length>=4&&
+   /^[0-9\s-]+$/.test(texto);
+
+  clearTimeout(B.timer);
+
+  if(!porDui&&texto.replace(/\s/g,'').length<3) {
+   cerrarResultados();
+   return;
+  }
+
+  B.timer=setTimeout(()=>buscarPaciente(texto),350);
+ });
+
+ input.addEventListener('keydown',ev=>{
+  const abierta=
+   !$('patientResults').classList.contains('hidden');
+
+  if(!abierta||!B.resultados.length) {
+   if(ev.key==='Escape')cerrarResultados();
+   return;
+  }
+
+  if(ev.key==='ArrowDown') {
+   ev.preventDefault();
+   B.indice=(B.indice+1)%B.resultados.length;
+   marcarResultado();
+  } else if(ev.key==='ArrowUp') {
+   ev.preventDefault();
+   B.indice=(B.indice-1+B.resultados.length)%
+    B.resultados.length;
+   marcarResultado();
+  } else if(ev.key==='Enter') {
+   ev.preventDefault();
+   elegirPaciente(B.indice);
+  } else if(ev.key==='Escape') {
+   cerrarResultados();
+  }
+ });
+
+ input.addEventListener('blur',()=>{
+  setTimeout(cerrarResultados,150);
  });
 }
 
@@ -1569,8 +2002,17 @@ async function enviar(ev) {
 
  if(!/^[0-9]{8}-[0-9]$/.test(datos.documento)) {
   mostrarError(
-   'DUPLICADO|El DUI debe contener nueve '+
-   'dígitos en formato 00000000-0.'
+   'DUI_INVALIDO|El DUI debe contener exactamente '+
+   'nueve dígitos en formato 00000000-0.'
+  );
+  return;
+ }
+
+ if(fechaBloqueada(datos.fecha)) {
+  mostrarError(
+   'FECHA_NO_DISPONIBLE|La fecha '+datos.fecha+
+   ' no está disponible. No se permiten nuevas '+
+   'programaciones ni asignación de cupos.'
   );
   return;
  }
@@ -1613,6 +2055,7 @@ async function enviar(ev) {
   S.guardando=false;
   boton.disabled=false;
   boton.textContent='✚ Guardar sobrecupo';
+  revisarFecha();
  }
 }
 
@@ -1725,7 +2168,8 @@ function detectarEncabezados(fila) {
  return campos;
 }
 
-async function procesarExcel(archivo) {
+// origen: File, o {name,texto} para celdas pegadas.
+async function leerLibro(origen) {
  if(!window.XLSX) {
   throw Error(
    'No pudo cargarse el lector Excel. '+
@@ -1733,12 +2177,25 @@ async function procesarExcel(archivo) {
   );
  }
 
- const buffer=await archivo.arrayBuffer();
+ if(typeof origen.texto==='string') {
+  // raw: conserva el texto tal cual (ceros
+  // iniciales y fechas dd/mm/aaaa).
+  return XLSX.read(origen.texto,{
+   type:'string',
+   raw:true
+  });
+ }
 
- const libro=XLSX.read(buffer,{
+ const buffer=await origen.arrayBuffer();
+
+ return XLSX.read(buffer,{
   type:'array',
   cellDates:true
  });
+}
+
+async function procesarExcel(archivo) {
+ const libro=await leerLibro(archivo);
 
  let mejor=null;
  let total=0;
@@ -1872,10 +2329,198 @@ async function importarArchivo(archivo) {
  }
 }
 
-function montarExcel() {
- const zona=$('excelZone');
- const input=$('excelFile');
+const ALIAS_PACIENTES={
+ completo:[
+  'NOMBRECOMPLETO','NOMBREDELPACIENTE',
+  'NOMBREPACIENTE','PACIENTE',
+  'NOMBREYAPELLIDO','NOMBREYAPELLIDOS',
+  'NOMBRESYAPELLIDOS'
+ ],
+ nombres:[
+  'NOMBRE','NOMBRES','PRIMERNOMBRE',
+  'SEGUNDONOMBRE','TERCERNOMBRE'
+ ],
+ apellidos:[
+  'APELLIDO','APELLIDOS','PRIMERAPELLIDO',
+  'SEGUNDOAPELLIDO','APELLIDOCASADA',
+  'APELLIDODECASADA'
+ ],
+ documento:[
+  'DUI','NUMERODUI','NODUI','NUMDUI',
+  'NUMERODEDUI','DOCUMENTO','NUMERODOCUMENTO',
+  'NODOCUMENTO','NUMERODEDOCUMENTO',
+  'DOCUMENTOIDENTIDAD','DOCUMENTODEIDENTIDAD',
+  'DOCUMENTODUI'
+ ],
+ expediente:[
+  'EXPEDIENTE','NUMEROEXPEDIENTE',
+  'NOEXPEDIENTE','NUMERODEEXPEDIENTE'
+ ]
+};
 
+function encabezadosPacientes(fila) {
+ const nombres=fila.map(nombreColumna);
+ const uno=lista=>nombres.findIndex(
+  c=>lista.includes(c)
+ );
+ const todos=lista=>nombres
+  .map((c,i)=>lista.includes(c)?i:-1)
+  .filter(i=>i>=0);
+
+ const completo=uno(ALIAS_PACIENTES.completo);
+
+ const partes=completo>=0
+  ?[completo]
+  :[
+   ...todos(ALIAS_PACIENTES.nombres),
+   ...todos(ALIAS_PACIENTES.apellidos)
+  ].sort((a,b)=>a-b);
+
+ const documento=uno(ALIAS_PACIENTES.documento);
+
+ if(!partes.length||documento<0)return null;
+
+ return {
+  partes,
+  documento,
+  expediente:uno(ALIAS_PACIENTES.expediente)
+ };
+}
+
+async function procesarPacientes(origen) {
+ const libro=await leerLibro(origen);
+
+ let mejor=null;
+
+ for(const nombre of libro.SheetNames) {
+  const matriz=XLSX.utils.sheet_to_json(
+   libro.Sheets[nombre],{
+    header:1,
+    defval:'',
+    raw:false,
+    blankrows:false
+   }
+  );
+
+  for(let i=0;i<Math.min(25,matriz.length);i++) {
+   const campos=encabezadosPacientes(matriz[i]);
+
+   if(campos&&(!mejor||
+      matriz.length-i>mejor.matriz.length-mejor.inicio)) {
+    mejor={matriz,inicio:i+1,campos};
+    break;
+   }
+  }
+ }
+
+ if(!mejor) {
+  throw Error(
+   'No encontré las columnas de Nombre y DUI '+
+   'en la base de pacientes.'
+  );
+ }
+
+ const {matriz,inicio,campos}=mejor;
+ const registros=[];
+
+ for(let i=inicio;i<matriz.length;i++) {
+  const fila=matriz[i]||[];
+
+  const nombre=campos.partes
+   .map(c=>String(fila[c]??'').trim())
+   .filter(Boolean).join(' ');
+
+  if(!nombre)continue;
+
+  registros.push({
+   nombre,
+   documento:String(fila[campos.documento]??''),
+   expediente:campos.expediente>=0
+    ?String(fila[campos.expediente]??''):''
+  });
+ }
+
+ return registros;
+}
+
+async function importarPacientes(origen) {
+ if(!origen||S.cargandoPacientes)return;
+
+ if(!puedeGestionar()) {
+  aviso('No tienes permiso para cargar la base.');
+  return;
+ }
+
+ S.cargandoPacientes=true;
+
+ const progreso=$('patientsProgress');
+ progreso.classList.remove('hidden');
+ progreso.textContent='Leyendo base de pacientes...';
+
+ try {
+  const registros=await procesarPacientes(origen);
+
+  if(!registros.length) {
+   throw Error('El archivo no contiene pacientes.');
+  }
+
+  if(registros.length>250000) {
+   throw Error(
+    'La base supera 250000 pacientes permitidos.'
+   );
+  }
+
+  const LOTE=4000;
+  const partes=Math.ceil(registros.length/LOTE);
+  let carga='';
+  let r=null;
+
+  for(let i=0;i<partes;i++) {
+   progreso.textContent='Cargando base de pacientes: '+
+    Math.round(i/partes*100)+'% ('+
+    registros.length+' registros)';
+
+   r=await api(
+    'cargarPacientes',
+    S.token,
+    carga,
+    registros.slice(i*LOTE,(i+1)*LOTE),
+    i,
+    partes,
+    origen.name
+   );
+
+   if(!r||!r.ok) {
+    throw Error(
+     'El servidor no confirmó la carga de pacientes.'
+    );
+   }
+
+   carga=r.carga;
+  }
+
+  progreso.textContent='Base de pacientes cargada: '+
+   r.total+' pacientes · DUI inválidos: '+
+   r.invalidos+'.';
+
+  aviso(
+   'Base de pacientes actualizada: '+r.total+
+   ' pacientes. DUI inválidos: '+r.invalidos+'.'
+  );
+
+  await refrescar();
+
+ }catch(e) {
+  progreso.textContent='No se pudo cargar la base.';
+  mostrarError(e);
+
+ }finally {
+  S.cargandoPacientes=false;
+  $('patientsFile').value='';
+ }
+}
+
+function montarZona(zona,input,destino,alElegir) {
  zona.addEventListener('click',()=>{
   input.click();
  });
@@ -1887,8 +2532,15 @@ function montarExcel() {
   }
  });
 
+ // La zona señalada recibe lo que se pegue (Ctrl+V).
+ ['mouseenter','focus'].forEach(tipo=>{
+  zona.addEventListener(tipo,()=>{
+   S.zonaPegado=destino;
+  });
+ });
+
  input.addEventListener('change',ev=>{
-  importarArchivo(ev.target.files[0]);
+  alElegir(ev.target.files[0]);
  });
 
  zona.addEventListener('dragover',ev=>{
@@ -1903,8 +2555,59 @@ function montarExcel() {
  zona.addEventListener('drop',ev=>{
   ev.preventDefault();
   zona.classList.remove('dragging');
-  importarArchivo(ev.dataTransfer.files[0]);
+  alElegir(ev.dataTransfer.files[0]);
  });
+}
+
+function pegarTabla(ev) {
+ if(S.pagina!=='actualizacion')return;
+
+ const t=ev.target;
+
+ if(t&&['INPUT','TEXTAREA','SELECT']
+   .includes(t.tagName))return;
+
+ const destino=S.zonaPegado==='pacientes'&&
+  puedeGestionar()?'pacientes':'agenda';
+
+ const importar=destino==='pacientes'
+  ?importarPacientes:importarArchivo;
+
+ const cd=ev.clipboardData;
+
+ if(!cd)return;
+
+ const archivo=Array.from(cd.files||[]).find(f=>
+  /\.(xlsx|xls|csv|txt)$/i.test(f.name||'')
+ );
+
+ if(archivo) {
+  ev.preventDefault();
+  importar(archivo);
+  return;
+ }
+
+ const texto=cd.getData('text/plain')||'';
+
+ if(/[\t;,]/.test(texto)&&/\n/.test(texto.trim())) {
+  ev.preventDefault();
+  importar({
+   name:'Pegado desde portapapeles',
+   texto
+  });
+ }
+}
+
+function montarExcel() {
+ montarZona(
+  $('excelZone'),$('excelFile'),
+  'agenda',importarArchivo
+ );
+
+ montarZona(
+  $('patientsZone'),$('patientsFile'),
+  'pacientes',importarPacientes
+ );
 }
 
 /* =====================================================
@@ -2027,8 +2730,12 @@ function montarComprobante() {
 }
 
 document.addEventListener('paste',ev=>{
- if($('modal').classList.contains('hidden') ||
-    !S.token)return;
+ if(!S.token)return;
+
+ if($('modal').classList.contains('hidden')) {
+  pegarTabla(ev);
+  return;
+ }
 
  const items=Array.from(
   (ev.clipboardData&&ev.clipboardData.items)||[]
@@ -2320,9 +3027,13 @@ function iniciar() {
   $('doc').value=formatearDUI(
    $('doc').value
   );
+  revisarDUI();
  });
 
+ montarBuscador();
+
  $('date').addEventListener('change',()=>{
+  revisarFecha();
   S.fecha=$('date').value;
   $('filterDate').value=S.fecha;
   refrescar();

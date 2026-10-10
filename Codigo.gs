@@ -14,6 +14,7 @@
  * AUDITORIA
  * PERSONAL
  * AGENDA_EXCEL (nueva, se crea automáticamente)
+ * PACIENTES (base de pacientes, se crea al cargarla)
  *
  * REGLAS:
  * - 1 sobrecupo por 10 pacientes activos únicos.
@@ -30,6 +31,11 @@
  * - Validación bajo LockService.
  * - Sincronización de pantallas cada 10 segundos.
  * - Agenda vigente por 30 minutos para nuevas solicitudes.
+ * - Fechas bloqueadas (FECHAS_BLOQUEADAS): no admiten
+ *   nuevas programaciones ni asignación de cupos.
+ * - DUI: exactamente nueve dígitos (00000000-0). Los DUI
+ *   de ocho dígitos de la base de pacientes se completan
+ *   con un cero inicial.
  *
  * IMPORTANTE:
  * Piloto. Las claves compartidas no constituyen
@@ -40,16 +46,27 @@
 const UGM3 = {
   TZ: 'America/El_Salvador',
 
+  // Claves exactas: respetar mayúsculas y espacios.
   ROLES: {
-    SUPERVISOR: 'Sup1',
+    SUPERVISOR: 'SUP 1',
     AUTORIZADO: 'HNRUGM$',
-    TECNICO: 'UGM2026'
+    TECNICO: 'UGM 2026'
   },
+
+  // Sin nuevas programaciones ni asignación de cupos.
+  FECHAS_BLOQUEADAS: [
+    '2026-12-24', '2026-12-25', '2026-12-26',
+    '2026-12-27', '2026-12-31',
+    '2027-01-01', '2027-01-02', '2027-01-03'
+  ],
 
   VIGENCIA_MINUTOS: 30,
   ALERTA_MINUTOS: 60,
   MAX_CITAS: 15000,
   MAX_ARCHIVO_MB: 5,
+  MAX_PACIENTES: 250000,
+  LOTE_PACIENTES: 5000,
+  MAX_RESULTADOS: 20,
 
   SABADO: {
     'Medicina Familiar - Diabetología': 10,
@@ -130,6 +147,14 @@ const UGM3 = {
       'Documento',
       'Paciente',
       'IDExterno'
+    ],
+
+    PACIENTES: [
+      'Nombre',
+      'Documento',
+      'DocumentoOriginal',
+      'Expediente',
+      'Busqueda'
     ]
   }
 };
@@ -203,6 +228,32 @@ function dia3_(fecha) {
 
   return n === 6 ? 'SABADO' :
          n === 0 ? 'DOMINGO' : 'SEMANA';
+}
+
+function bloqueada3_(fecha) {
+  return UGM3.FECHAS_BLOQUEADAS.includes(fecha);
+}
+
+// Devuelve el DUI como 00000000-0, o '' si no tiene
+// nueve dígitos. Ocho dígitos: se agrega un cero inicial.
+function dui3_(valor) {
+  const digitos = texto3_(valor)
+    .replace(/\.0+$/, '')
+    .replace(/\D/g, '');
+
+  const nueve = digitos.length === 8
+    ? '0' + digitos : digitos;
+
+  return nueve.length === 9
+    ? nueve.slice(0,8) + '-' + nueve.slice(8)
+    : '';
+}
+
+function busqueda3_(v) {
+  return norm3_(v)
+    .replace(/[^A-Z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function seguro3_(v) {
@@ -992,7 +1043,9 @@ function calcular3_(fecha,agenda,solicitudes) {
       pacientes.activas/10
     );
 
-    const autorizados=limite===null
+    const bloqueada=bloqueada3_(fecha);
+
+    const autorizados=limite===null || bloqueada
       ? 0 : Math.min(base,limite);
 
     const ocupados=ocupados3_(
@@ -1009,8 +1062,9 @@ function calcular3_(fecha,agenda,solicitudes) {
       disponibles:Math.max(
         0,autorizados-ocupados
       ),
-      habilitada:limite!==null,
-      incidencia:ocupados>autorizados
+      habilitada:limite!==null && !bloqueada,
+      bloqueada,
+      incidencia:!bloqueada && ocupados>autorizados
     };
   });
 }
@@ -1060,7 +1114,10 @@ function tablero(token,fecha) {
   const resultado={
     fecha:f,
     dia:dia3_(f),
+    bloqueada:bloqueada3_(f),
+    fechasBloqueadas:UGM3.FECHAS_BLOQUEADAS,
     agenda:estadoAgenda3_(),
+    pacientes:estadoPacientes3_(),
     fechasAgenda:fechas,
     lista,
     solicitudes:visibles.slice(0,200),
@@ -1148,8 +1205,19 @@ function crearSolicitud(token,datos) {
   const documento=texto3_(datos.documento);
 
   if (!/^[0-9]{8}-[0-9]$/.test(documento)) {
-    throw Error(
-      'DUI inválido. Formato: 00000000-0.'
+    fallo3_(
+      'DUI_INVALIDO',
+      'El DUI debe tener exactamente nueve '+
+      'dígitos en formato 00000000-0.'
+    );
+  }
+
+  if (bloqueada3_(fecha)) {
+    fallo3_(
+      'FECHA_NO_DISPONIBLE',
+      'La fecha '+fecha+' no está disponible. '+
+      'No se permiten nuevas programaciones ni '+
+      'asignación de cupos.'
     );
   }
 
@@ -1529,4 +1597,286 @@ function cambiarEstado(
   }
 
   return {ok:true,estado:nuevoEstado};
+}
+
+/* ==========================================================
+   BASE DE PACIENTES
+   ========================================================== */
+
+function hojaPacientes3_(libro,nombre) {
+  const sh=libro.insertSheet(nombre);
+  const columnas=UGM3.HEADERS.PACIENTES.length;
+
+  sh.getRange(1,1,1,columnas).setValues([
+    UGM3.HEADERS.PACIENTES
+  ]);
+
+  sh.getRange(1,1,1,columnas)
+    .setBackground('#10456B')
+    .setFontColor('#FFFFFF')
+    .setFontWeight('bold');
+
+  sh.setFrozenRows(1);
+  sh.getRange('B:D').setNumberFormat('@');
+
+  return sh;
+}
+
+function estadoPacientes3_() {
+  const p=props3_();
+
+  return {
+    fecha:p.getProperty('UGM3_PAC_AT') || '',
+    archivo:p.getProperty('UGM3_PAC_ARCHIVO') || '',
+    usuario:p.getProperty('UGM3_PAC_USUARIO') || '',
+    total:Number(p.getProperty('UGM3_PAC_TOTAL')) || 0,
+    invalidos:
+      Number(p.getProperty('UGM3_PAC_INVALIDOS')) || 0
+  };
+}
+
+/**
+ * Carga la base de pacientes por lotes. El primer lote
+ * crea una hoja temporal; el último la publica como
+ * PACIENTES, de modo que una carga interrumpida nunca
+ * deja la base a medias.
+ */
+function cargarPacientes(
+  token,carga,lote,parte,partes,archivo
+) {
+  const s=validar3_(token);
+
+  if (!['SUPERVISOR','AUTORIZADO']
+    .includes(s.perfil)) {
+    throw Error(
+      'No tienes permiso para cargar la base de pacientes.'
+    );
+  }
+
+  parte=Number(parte);
+  partes=Number(partes);
+
+  if (!Number.isInteger(parte) ||
+      !Number.isInteger(partes) ||
+      parte<0 || parte>=partes ||
+      partes*UGM3.LOTE_PACIENTES >
+        UGM3.MAX_PACIENTES+UGM3.LOTE_PACIENTES) {
+    throw Error('Lote de carga inválido.');
+  }
+
+  if (!Array.isArray(lote) ||
+      lote.length>UGM3.LOTE_PACIENTES) {
+    throw Error('Lote de pacientes inválido.');
+  }
+
+  let invalidos=0;
+
+  const filas=lote.map(r => {
+    r=r || {};
+
+    const nombre=texto3_(r.nombre)
+      .replace(/\s+/g,' ')
+      .slice(0,150);
+
+    if (!nombre) return null;
+
+    const original=texto3_(r.documento).slice(0,30);
+    const documento=dui3_(original);
+
+    if (!documento) invalidos++;
+
+    return [
+      seguro3_(nombre),
+      documento,
+      seguro3_(original),
+      seguro3_(texto3_(r.expediente).slice(0,50)),
+      busqueda3_(nombre)
+    ];
+  }).filter(Boolean);
+
+  const lock=LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  let final=null;
+
+  try {
+    const p=props3_();
+    const libro=base3_();
+    const TEMPORAL='PACIENTES_CARGA';
+
+    if (parte===0) {
+      carga=Utilities.getUuid();
+
+      const previa=libro.getSheetByName(TEMPORAL);
+      if (previa) libro.deleteSheet(previa);
+
+      hojaPacientes3_(libro,TEMPORAL);
+
+      p.setProperties({
+        UGM3_PAC_CARGA:carga,
+        UGM3_PAC_CARGA_INV:'0'
+      });
+
+    } else if (
+      !carga ||
+      p.getProperty('UGM3_PAC_CARGA')!==String(carga)
+    ) {
+      throw Error(
+        'La carga de pacientes se interrumpió o fue '+
+        'reemplazada por otra. Vuelve a intentarlo.'
+      );
+    }
+
+    const sh=libro.getSheetByName(TEMPORAL);
+
+    if (!sh) {
+      throw Error('No existe la hoja temporal de carga.');
+    }
+
+    if (filas.length) {
+      sh.getRange(
+        sh.getLastRow()+1,1,
+        filas.length,filas[0].length
+      ).setValues(filas);
+    }
+
+    const acumulados=
+      Number(p.getProperty('UGM3_PAC_CARGA_INV')||0)+
+      invalidos;
+
+    p.setProperty(
+      'UGM3_PAC_CARGA_INV',String(acumulados)
+    );
+
+    if (parte===partes-1) {
+      SpreadsheetApp.flush();
+
+      const total=sh.getLastRow()-1;
+
+      if (total<1) {
+        libro.deleteSheet(sh);
+        throw Error(
+          'No se encontraron pacientes con nombre.'
+        );
+      }
+
+      const anterior=libro.getSheetByName('PACIENTES');
+      if (anterior) libro.deleteSheet(anterior);
+
+      sh.setName('PACIENTES');
+
+      p.setProperties({
+        UGM3_PAC_AT:ahora3_(),
+        UGM3_PAC_ARCHIVO:texto3_(archivo).slice(0,150),
+        UGM3_PAC_USUARIO:s.nombre,
+        UGM3_PAC_TOTAL:String(total),
+        UGM3_PAC_INVALIDOS:String(acumulados),
+        UGM3_PAC_CARGA:''
+      });
+
+      final={total,invalidos:acumulados};
+    }
+
+  } finally {
+    lock.releaseLock();
+  }
+
+  if (final) {
+    try {
+      auditar3_(
+        s.nombre,s.perfil,
+        'PACIENTES_IMPORTADOS','',
+        texto3_(archivo)+' · '+final.total+
+        ' pacientes · DUI inválidos: '+final.invalidos
+      );
+    } catch(e) {
+      console.error(e.message);
+    }
+  }
+
+  return {
+    ok:true,
+    carga,
+    final:Boolean(final),
+    total:final ? final.total : 0,
+    invalidos:final ? final.invalidos : 0
+  };
+}
+
+/**
+ * Busca pacientes por nombre (todas las palabras) o por
+ * DUI (inicio de los dígitos). Devuelve el DUI ya
+ * normalizado a nueve dígitos.
+ */
+function buscarPacientes(token,consulta) {
+  validar3_(token);
+
+  const texto=texto3_(consulta).slice(0,80);
+  const q=busqueda3_(texto);
+  const digitos=texto.replace(/\D/g,'');
+
+  const porDui=digitos.length>=4 &&
+    /^[0-9\s-]+$/.test(texto);
+
+  if (!porDui && q.replace(/ /g,'').length<3) {
+    return {resultados:[]};
+  }
+
+  const sh=base3_().getSheetByName('PACIENTES');
+
+  if (!sh || sh.getLastRow()<2) {
+    return {resultados:[],sinBase:true};
+  }
+
+  const matriz=sh.getRange(
+    2,1,sh.getLastRow()-1,
+    UGM3.HEADERS.PACIENTES.length
+  ).getValues();
+
+  const palabras=q.split(' ').filter(Boolean);
+  const inicio=palabras[0] || '';
+  const encontrados=[];
+
+  for (let i=0;i<matriz.length;i++) {
+    const r=matriz[i];
+    let coincide;
+
+    if (porDui) {
+      coincide=
+        String(r[1]).replace(/\D/g,'')
+          .startsWith(digitos) ||
+        String(r[2]).replace(/\D/g,'')
+          .startsWith(digitos);
+    } else {
+      const b=String(r[4]);
+      coincide=palabras.every(t=>b.includes(t));
+    }
+
+    if (!coincide) continue;
+
+    const original=String(r[2]);
+    const largo=original
+      .replace(/\.0+$/,'')
+      .replace(/\D/g,'').length;
+
+    encontrados.push({
+      nombre:String(r[0]),
+      documento:String(r[1]),
+      valido:Boolean(r[1]),
+      ajustado:Boolean(r[1]) && largo===8,
+      original,
+      expediente:String(r[3]),
+      prioridad:String(r[4]).startsWith(inicio) ? 0 : 1
+    });
+
+    if (encontrados.length>=200) break;
+  }
+
+  encontrados.sort((a,b)=>a.prioridad-b.prioridad);
+
+  return {
+    resultados:encontrados
+      .slice(0,UGM3.MAX_RESULTADOS)
+      .map(({prioridad,...r})=>r)
+  };
 }
