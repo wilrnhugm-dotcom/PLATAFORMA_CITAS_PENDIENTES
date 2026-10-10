@@ -1046,6 +1046,13 @@ function salir(token) {
 function importarAgenda(token, registros, archivo) {
   const usuario = validar3_(token);
 
+  // Solo supervisión carga la agenda del día.
+  if (usuario.perfil !== 'SUPERVISOR') {
+    throw Error(
+      'Solo supervisión puede cargar la agenda del día.'
+    );
+  }
+
   if (!Array.isArray(registros) ||
       registros.length === 0) {
     throw Error('El Excel no contiene registros.');

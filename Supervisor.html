@@ -534,8 +534,8 @@
  <section class="page hidden" id="actualizacion">
   <div class="panel glass">
    <h2><span data-ico="calendario"></span> Agenda del día (Reporte de Citas)</h2>
-   <p class="desc">La última carga se comparte con todos los
-    técnicos conectados.</p>
+   <p class="desc">Solo supervisión carga la agenda. La última
+    carga se comparte con todos los técnicos conectados.</p>
 
    <div class="guia">
     <div class="guia-ico" data-ico="calendario"></div>
@@ -570,11 +570,6 @@
    <input id="excelFile" type="file" class="hidden"
     accept=".xlsx,.xls,.csv">
 
-   <div class="buttons">
-    <button class="btn danger" id="btnUrgent" type="button">
-     Solicitar actualización extraordinaria a los técnicos
-    </button>
-   </div>
   </div>
  </section>
 
@@ -1938,6 +1933,7 @@ async function descargarReporte() {
 
  try {
   if(!window.ExcelJS)await cargarScript(EXCELJS_URL);
+  if(!window.ExcelJS)throw Error('ExcelJS no disponible.');
 
   const lista=d.consultas;
   const wb=new ExcelJS.Workbook();
@@ -1962,7 +1958,7 @@ async function descargarReporte() {
   aviso('Reporte descargado con resumen y gráficas.');
 
  }catch(e) {
-  console.error(e);
+  console.warn(e);
   aviso('No se pudieron generar las gráficas; se descarga el reporte simple.');
   descargarReporteSimple();
 
@@ -2328,7 +2324,7 @@ function iniciar() {
 
  montarZona($('patientsZone'),$('patientsFile'),importarPacientes);
 
- $('btnUrgent').addEventListener('click',alertaExtraordinaria);
+
 
  document.addEventListener('paste',ev=>{
   if(!UGM.token)return;
