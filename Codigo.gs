@@ -23,6 +23,8 @@
  *   Paliativos 5; Nutrición-PE 7). Al llenarse se bloquea
  *   por restricción médica. Supervisión puede cambiar el
  *   límite general o el de una fecha (LIMITES_FECHA).
+ * - No se agendan sobrecupos para el mismo día, salvo
+ *   solicitud médica (igual que entre semana).
  * - Toda solicitud entra como PENDIENTE (sin verificar) a
  *   la bandeja de supervisión. Procesarla no libera cupo;
  *   solo rechazar, anular o liberar lo hace.
@@ -1652,15 +1654,23 @@ function crearSolicitud(token,datos,archivos) {
   }
 
   const finDeSemana=dia3_(fecha)!=='SEMANA';
-  const medico=!finDeSemana;
+  const mismoDia=fecha===hoy3_();
+
+  // Entre semana o para el mismo día: solo si el médico
+  // lo exige (solicitud médica con ticket).
+  const medico=!finDeSemana || mismoDia;
 
   if (medico && datos.tipo!=='MEDICO') {
     fallo3_(
       'DIA_NO_HABILITADO',
-      'Los sobrecupos son solo sábado y domingo. '+
-      'Para otro día marca "Solicitud médica" y '+
-      'adjunta el ticket (frente y reverso sellado '+
-      'y firmado por el médico).'
+      mismoDia
+        ? 'No se agendan sobrecupos para el mismo día. '+
+          'Solo si el médico lo exige: marca "Solicitud '+
+          'médica" y adjunta el ticket sellado y firmado.'
+        : 'Los sobrecupos son solo sábado y domingo. '+
+          'Para otro día marca "Solicitud médica" y '+
+          'adjunta el ticket (frente y reverso sellado '+
+          'y firmado por el médico).'
     );
   }
 

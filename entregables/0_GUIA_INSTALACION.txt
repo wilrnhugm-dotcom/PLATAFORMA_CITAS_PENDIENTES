@@ -85,6 +85,8 @@ TÉCNICOS
      y firmado por el médico.
    * Entre semana: ALERTA con el día que se agenda; solo si
      el médico lo indicó.
+   * Para el MISMO DÍA (hoy): no se agenda, salvo que el
+     médico lo exija (misma alerta y solicitud médica).
    * Fechas bloqueadas de diciembre y enero: nunca.
  - Mis solicitudes, Buscar paciente, Actualizar agenda.
 

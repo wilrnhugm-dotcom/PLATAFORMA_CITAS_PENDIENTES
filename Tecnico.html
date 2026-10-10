@@ -305,7 +305,7 @@
       <label class="switch" for="medico">
        <input type="checkbox" id="medico">
        <span class="knob"></span>
-       <span class="txt">Solicitud médica (día entre semana)
+       <span class="txt">Solicitud médica (indicada por el médico)
         <small>Confirmo que el médico solicitó este sobrecupo
          y adjunto el ticket sellado y firmado.</small></span>
       </label>
@@ -973,6 +973,8 @@ function revisarFecha() {
  const bloqueada=fechaBloqueada(f);
  const pasada=f&&T.datos&&f<T.datos.hoy;
  const entreSemana=f&&!esFinDeSemana(f);
+ const hoyMismo=Boolean(f&&T.datos&&f===T.datos.hoy);
+ const requiereMedico=entreSemana||hoyMismo;
 
  $('date').classList.toggle('blocked',bloqueada||pasada);
 
@@ -980,11 +982,13 @@ function revisarFecha() {
   bloqueada?'No disponible: fecha bloqueada para '+
    'programaciones y cupos.':
   pasada?'No se pueden solicitar fechas pasadas.':
+  hoyMismo?'Hoy mismo: solo si el médico lo exige (solicitud '+
+   'médica y ticket sellado y firmado).':
   entreSemana?'Día entre semana: solo con solicitud médica '+
    'y ticket sellado y firmado.':
   f?'Sábado o domingo: sujeto a cupos disponibles.':
   'Fechas no disponibles:',
-  bloqueada||pasada?'bad':entreSemana?'':f?'ok':'');
+  bloqueada||pasada?'bad':requiereMedico?'':f?'ok':'');
 
  $('blockedList').innerHTML=FECHAS_BLOQUEADAS.map(x=>{
   const [y,m,d]=x.split('-');
@@ -992,7 +996,7 @@ function revisarFecha() {
    title="No disponible">${d}/${m}/${y}</span>`;
  }).join('');
 
- const mostrarMedico=Boolean(entreSemana&&!bloqueada);
+ const mostrarMedico=Boolean(requiereMedico&&!bloqueada&&!pasada);
  const wrap=$('medicoWrap');
 
  if(mostrarMedico&&wrap.classList.contains('hidden')) {
@@ -1148,19 +1152,25 @@ async function pintarCupos() {
 async function avisoEntreSemana() {
  const f=$('date').value;
 
- if(!f||esFinDeSemana(f)||fechaBloqueada(f)||
-    (T.datos&&f<T.datos.hoy))return;
+ const hoyMismo=Boolean(T.datos&&f===T.datos.hoy);
+
+ if(!f||fechaBloqueada(f)||(T.datos&&f<T.datos.hoy))return;
+ if(esFinDeSemana(f)&&!hoyMismo)return;
 
  const ok=await dialogo({
-  titulo:'SOBRECUPO EN DÍA DE SEMANA',
-  html:`<p>Estás agendando un sobrecupo para el</p>
+  titulo:hoyMismo?'SOBRECUPO PARA HOY':'SOBRECUPO EN DÍA DE SEMANA',
+  html:`<p>Estás agendando un sobrecupo para ${hoyMismo?'<b>HOY</b>,':'el'}</p>
    <div class="dia-grande">${esc(fechaLarga(f))}</div>
-   <p>Los sobrecupos se agendan <b>sábado y domingo</b>.</p>
+   <p>${hoyMismo
+    ?'Los sobrecupos se agendan para <b>fechas próximas</b>, no para el mismo día.'
+    :'Los sobrecupos se agendan <b>sábado y domingo</b>.'}</p>
    <ul class="aviso-lista">
-    <li>Continúa solo si el <b>médico indicó</b> esta fecha.</li>
+    <li>Continúa solo si el <b>médico lo ${hoyMismo?'exige':'indicó'}</b>.</li>
     <li>Adjunta el ticket: <b>frente</b> y <b>reverso sellado
      y firmado</b> por el médico.</li>
-    <li>No se calculan cupos: queda <b>pendiente de aprobación</b>
+    <li>${esFinDeSemana(f)
+     ?'Se respeta el cupo de la especialidad.'
+     :'No se calculan cupos.'} Queda <b>pendiente de aprobación</b>
      de supervisión.</li>
    </ul>`,
   ok:'El médico lo indicó · continuar',
@@ -1312,10 +1322,15 @@ async function enviar(ev) {
  }
 
  const entreSemana=!esFinDeSemana(datos.fecha);
+ const hoyMismo=Boolean(T.datos&&datos.fecha===T.datos.hoy);
+ const requiereMedico=entreSemana||hoyMismo;
 
- if(entreSemana&&!$('medico').checked) {
-  mostrarError('DIA_NO_HABILITADO|Los sobrecupos son solo '+
-   'sábado y domingo. Para otro día marca "Solicitud médica".');
+ if(requiereMedico&&!$('medico').checked) {
+  mostrarError('DIA_NO_HABILITADO|'+(hoyMismo
+   ?'No se agendan sobrecupos para el mismo día, salvo que el '+
+    'médico lo exija: marca "Solicitud médica".'
+   :'Los sobrecupos son solo sábado y domingo. Para otro día '+
+    'marca "Solicitud médica".'));
   return;
  }
 
@@ -1364,9 +1379,10 @@ async function enviar(ev) {
   }
  }
 
- if(entreSemana) {
+ if(requiereMedico) {
   const ok=await dialogo({
-   titulo:'CONFIRMAR SOBRECUPO ENTRE SEMANA',
+   titulo:hoyMismo?'CONFIRMAR SOBRECUPO PARA HOY':
+    'CONFIRMAR SOBRECUPO ENTRE SEMANA',
    html:`<div class="dia-grande">${esc(fechaLarga(datos.fecha))}</div>
     <p><b>${esc(datos.nombres)}</b> · DUI ${esc(datos.documento)}<br>
     ${esc(datos.especialidad)} · indicado por <b>${esc(datos.solicitadoPor)}</b></p>
