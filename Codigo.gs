@@ -304,6 +304,85 @@ function base3_() {
 }
 
 /**
+ * Crea una base nueva de Google Sheets en la cuenta que
+ * ejecuta, con todas las hojas y los límites por
+ * especialidad, y la vincula como UGM2_BASE_ID.
+ * Ejecutar desde el editor SOLO si no se puede usar la
+ * base anterior. No borra nada: si la base actual abre
+ * correctamente, no hace cambios.
+ */
+function crearBaseUGM() {
+  const p = props3_();
+  const actual = p.getProperty('UGM2_BASE_ID');
+
+  if (actual) {
+    let abre = false;
+    try {
+      SpreadsheetApp.openById(actual);
+      abre = true;
+    } catch(e) {}
+
+    if (abre) {
+      throw Error(
+        'La base actual abre correctamente; '+
+        'no se creó otra.'
+      );
+    }
+  }
+
+  const libro = SpreadsheetApp.create(
+    'UGM 2026 - Base de sobrecupos'
+  );
+
+  const crear = (nombre, cabeceras, hoja) => {
+    const sh = hoja || libro.insertSheet(nombre);
+    sh.setName(nombre);
+    sh.getRange(1,1,1,cabeceras.length)
+      .setValues([cabeceras])
+      .setBackground('#10456B')
+      .setFontColor('#FFFFFF')
+      .setFontWeight('bold');
+    sh.setFrozenRows(1);
+    return sh;
+  };
+
+  const sobrecupos = crear(
+    'SOBRECUPOS', UGM3.HEADERS.SOBRECUPOS,
+    libro.getSheets()[0]
+  );
+  sobrecupos.getRange('B:B').setNumberFormat('@');
+  sobrecupos.getRange('E:E').setNumberFormat('@');
+
+  const disponibilidad = crear(
+    'DISPONIBILIDAD', UGM3.HEADERS.DISPONIBILIDAD
+  );
+
+  const limites = [];
+  [['SABADO', UGM3.SABADO], ['DOMINGO', UGM3.DOMINGO]]
+    .forEach(([dia, tabla]) => {
+      Object.keys(tabla).forEach(esp => {
+        limites.push([
+          dia, esp, tabla[esp] === null ? 'N/A' : tabla[esp]
+        ]);
+      });
+    });
+
+  disponibilidad.getRange(2,1,limites.length,3)
+    .setValues(limites);
+
+  crear('AUDITORIA', UGM3.HEADERS.AUDITORIA);
+  crear('PERSONAL', UGM3.HEADERS.PERSONAL);
+
+  p.setProperty('UGM2_BASE_ID', libro.getId());
+  libro3_ = null;
+  garantizarAgenda3_();
+
+  const texto = 'Base creada y vinculada: ' + libro.getUrl();
+  console.log(texto);
+  return texto;
+}
+
+/**
  * Ejecutar desde el editor de Apps Script (botón
  * Ejecutar) para revisar la conexión con la base.
  * También solicita los permisos si faltan.
@@ -633,7 +712,14 @@ function validar3_(token) {
   return s;
 }
 
-function entrar(nombre, clave) {
+// Cada enlace (?vista=tecnico / ?vista=supervisor)
+// solo admite sus perfiles. Sin parámetro, admite todos.
+const VISTAS3 = {
+  tecnico: ['TECNICO','AUTORIZADO'],
+  supervisor: ['SUPERVISOR','AUTORIZADO']
+};
+
+function entrar(nombre, clave, vista) {
   nombre = texto3_(nombre).slice(0,70);
 
   if (nombre.length < 3 || nombre.includes('|')) {
@@ -649,6 +735,18 @@ function entrar(nombre, clave) {
   });
 
   if (!perfil) throw Error('Clave incorrecta.');
+
+  const v = texto3_(vista).toLowerCase();
+
+  if (VISTAS3[v] && !VISTAS3[v].includes(perfil)) {
+    throw Error(
+      v === 'tecnico'
+        ? 'Esta es la plataforma de técnicos. '+
+          'Ingresa por el enlace de supervisión.'
+        : 'Esta es la plataforma de supervisión. '+
+          'Ingresa por el enlace de técnicos.'
+    );
+  }
 
   base3_();
 

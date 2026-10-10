@@ -638,7 +638,7 @@ mark{
   </div>
 
   <h1>Unidad de Gestión Médica</h1>
-  <p>Control de sobrecupos · Acceso del personal</p>
+  <p>Control de sobrecupos · <span id="loginVista">Acceso del personal</span></p>
 
   <form id="loginForm" autocomplete="off">
    <div class="field">
@@ -674,7 +674,7 @@ mark{
   aria-label="Red Nacional de Hospitales · Nuevo Hospital Rosales"></div>
 
  <div class="unit">
-  UNIDAD DE GESTIÓN MÉDICA · UGM
+  UNIDAD DE GESTIÓN MÉDICA · UGM<span id="unitVista"></span>
  </div>
 
  <div class="top-actions">
@@ -1213,6 +1213,7 @@ const S = {
  cerrando:false,
  importando:false,
  cargandoPacientes:false,
+ vista:'',
  paciente:null,
  qResultados:[],
  archivo:null,
@@ -1625,7 +1626,8 @@ async function login(ev) {
   const r=await api(
    'entrar',
    $('loginName').value,
-   $('loginPass').value
+   $('loginPass').value,
+   S.vista
   );
 
   S.token=r.token;
@@ -3836,8 +3838,39 @@ async function alertaExtraordinaria() {
    INICIALIZACIÓN
    ===================================================== */
 
+// ?vista=tecnico o ?vista=supervisor en el enlace.
+function detectarVista() {
+ const nombres={
+  tecnico:'Plataforma de técnicos',
+  supervisor:'Plataforma de supervisión'
+ };
+
+ const aplicar=v=>{
+  v=String(v||'').toLowerCase();
+  if(!nombres[v])return;
+  S.vista=v;
+  $('loginVista').textContent=nombres[v];
+  $('unitVista').textContent=
+   v==='tecnico'?' · TÉCNICOS':' · SUPERVISIÓN';
+ };
+
+ try {
+  if(window.google&&google.script&&google.script.url) {
+   google.script.url.getLocation(
+    loc=>aplicar(loc.parameter&&loc.parameter.vista)
+   );
+   return;
+  }
+ }catch(e){}
+
+ try {
+  aplicar(new URLSearchParams(location.search).get('vista'));
+ }catch(e){}
+}
+
 function iniciar() {
  iniciarTema();
+ detectarVista();
 
  $('themeToggle').addEventListener(
   'click',()=>{

@@ -40,3 +40,14 @@ y una de DUI (`DUI`, `DOCUMENTO`…). Opcionales: `EXPEDIENTE`, `ESPECIALIDAD`. 
 ## Fechas bloqueadas
 
 Definidas en `UGM3.FECHAS_BLOQUEADAS` (`Codigo.gs`) y `FECHAS_BLOQUEADAS` (`Index.html`); mantener ambas iguales.
+
+## Dos plataformas (un solo código)
+
+Misma implementación, dos enlaces:
+- Técnicos: `URL_DE_LA_APP/exec?vista=tecnico` (acepta `UGM 2026` y `HNRUGM$`)
+- Supervisión: `URL_DE_LA_APP/exec?vista=supervisor` (acepta `SUP 1` y `HNRUGM$`)
+
+## Base nueva
+
+Si la hoja de `UGM2_BASE_ID` no es accesible y no se puede recuperar el permiso, ejecutar `crearBaseUGM()`
+desde el editor: crea una hoja nueva en la cuenta que ejecuta, con todas las hojas y límites, y la vincula.
