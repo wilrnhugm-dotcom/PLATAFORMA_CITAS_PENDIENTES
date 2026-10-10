@@ -988,7 +988,7 @@ function entrar(nombre, clave, vista) {
     console.error(e.message);
   }
 
-  return {token,nombre,perfil};
+  return {token,nombre,perfil,sesion:sesion.id};
 }
 
 function modificarSesion3_(s,actividad,cerrar) {

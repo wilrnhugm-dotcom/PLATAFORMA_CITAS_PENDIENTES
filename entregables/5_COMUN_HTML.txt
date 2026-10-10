@@ -1458,6 +1458,67 @@ function dialogo({titulo,html,ok,cancelar,tipo,icono:icono_,campo}) {
 }
 
 /* =====================================================
+   CONFIRMACIÓN PROPIA (reemplaza al confirm() del
+   navegador, que en Apps Script muestra "Una página
+   incorporada en ...googleusercontent.com dice").
+   Va en su propia capa, así no cierra la ventana que
+   esté abierta debajo (por ejemplo, el detalle de una
+   solicitud).
+   ===================================================== */
+
+function confirmar({titulo,html,ok,cancelar,tipo,icono:icono_}) {
+ return new Promise(resolver=>{
+  const capa=document.createElement('div');
+  capa.className='overlay confirma';
+  capa.setAttribute('role','dialog');
+  capa.setAttribute('aria-modal','true');
+  capa.innerHTML=`
+   <div class="modal glass confirma-caja">
+    <div class="aviso-dia ${tipo||'bloqueo'}">
+     <div class="aviso-ico">${icono(icono_||'alerta')}</div>
+     <h2>${titulo}</h2>
+     ${html||''}
+     <div class="buttons">
+      <button class="btn" type="button" data-r="no">${cancelar||'Cancelar'}</button>
+      <button class="btn ${tipo==='info'?'primary':'danger'}" type="button" data-r="si">${ok||'Aceptar'}</button>
+     </div>
+    </div>
+   </div>`;
+
+  document.body.appendChild(capa);
+
+  const fin=v=>{
+   document.removeEventListener('keydown',tecla,true);
+   const quitar=()=>{capa.remove();resolver(v);};
+   if(!MOV.ok){quitar();return;}
+   gsap.to(capa,{opacity:0,duration:.18,onComplete:quitar});
+  };
+
+  const tecla=ev=>{
+   if(ev.key==='Escape'){ev.stopPropagation();fin(false);}
+  };
+  document.addEventListener('keydown',tecla,true);
+
+  capa.addEventListener('click',ev=>{
+   if(ev.target===capa){fin(false);return;}
+   const b=ev.target.closest('[data-r]');
+   if(b)fin(b.dataset.r==='si');
+  });
+
+  if(MOV.ok) {
+   gsap.fromTo(capa,{opacity:0},{opacity:1,duration:.2});
+   gsap.fromTo(capa.querySelector('.confirma-caja'),
+    {y:20,scale:.94,opacity:0},
+    {y:0,scale:1,opacity:1,duration:.38,ease:'back.out(1.7)'});
+   gsap.fromTo(capa.querySelector('.aviso-ico'),{scale:.4,rotate:-30},
+    {scale:1,rotate:0,duration:.7,ease:'elastic.out(1,.45)'});
+  }
+
+  capa.querySelector('[data-r="no"]').focus();
+ });
+}
+
+/* =====================================================
    ZONAS DE ARCHIVO (arrastrar, clic o pegar)
    ===================================================== */
 
@@ -1596,6 +1657,7 @@ function salirLocal(mensaje,alSalir) {
  UGM.token='';
  UGM.nombre='';
  UGM.perfil='';
+ UGM.sesion='';
  UGM.generacion++;
 
  if(alSalir)alSalir();
@@ -1645,6 +1707,7 @@ function montarAcceso(vista,alEntrar,alSalir) {
    UGM.token=r.token;
    UGM.nombre=r.nombre;
    UGM.perfil=r.perfil;
+   UGM.sesion=r.sesion||'';
    UGM.cerrando=false;
    UGM.generacion++;
 

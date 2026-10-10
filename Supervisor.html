@@ -1099,7 +1099,12 @@ function pintarPersonal(cont,limite) {
   return;
  }
 
- const propia=p=>p.Nombre===UGM.nombre&&p.Perfil===UGM.perfil;
+ // La propia se reconoce por el ID de sesión: así una
+ // sesión vieja "pegada" con el mismo nombre sí se puede
+ // cerrar desde aquí.
+ const propia=p=>UGM.sesion
+  ?p.Sesion===UGM.sesion
+  :p.Nombre===UGM.nombre&&p.Perfil===UGM.perfil;
 
  cont.innerHTML=lista.map(p=>`
   <div class="user" data-s="${esc(p.Sesion)}">
@@ -1183,7 +1188,22 @@ function pintarFeed(cont,limite) {
 }
 
 async function cerrarSesion(sesion,nombre) {
- if(!confirm('¿Cerrar la sesión de '+nombre+'?'))return;
+ const p=(V.datos.personal||[]).find(x=>x.Sesion===sesion)||{};
+
+ const ok=await confirmar({
+  titulo:'CERRAR SESIÓN',
+  icono:'apagar',
+  html:`<p>Vas a cerrar la sesión de</p>
+   <div class="dia-grande">${esc(nombre)}</div>
+   <p>${esc(ROLES[p.Perfil]||p.Perfil||'')}${p.Ingreso
+    ?' · ingresó '+esc(fechaHora(p.Ingreso)):''}</p>
+   <p class="muted">Úsalo cuando una sesión quedó abierta o pegada.
+    La persona tendrá que volver a ingresar con su clave.</p>`,
+  ok:'Cerrar sesión',
+  cancelar:'Cancelar'
+ });
+
+ if(!ok)return;
 
  try {
   await api('cerrarSesionRemota',UGM.token,sesion);
@@ -1419,8 +1439,16 @@ async function gestionar(id,forzado) {
    aviso('Indica el motivo para liberar el cupo.');
    return;
   }
-  if(!confirm('Esto liberará 1 cupo de '+r.Especialidad+' para el '+
-    r.FechaSobrecupo+'. ¿Continuar?'))return;
+  const ok=await confirmar({
+   titulo:estado==='RECHAZADO'?'RECHAZAR SOLICITUD':'ANULAR Y LIBERAR CUPO',
+   html:`<p>Esto liberará <b>1 cupo</b> de
+    <b>${esc(r.Especialidad)}</b> para el</p>
+    <div class="dia-grande">${esc(fechaLarga(r.FechaSobrecupo))}</div>
+    <p>Paciente: <b>${esc(r.Nombres)}</b></p>`,
+   ok:estado==='RECHAZADO'?'Rechazar':'Anular y liberar',
+   cancelar:'Volver'
+  });
+  if(!ok)return;
  }
 
  boton.disabled=true;
@@ -2135,8 +2163,16 @@ async function guardarLimites(fila,alcance,restablecer) {
  const nuevo=cambios[0].limite;
 
  if(alcance==='FECHA'&&r&&nuevo!==''&&Number(nuevo)<r.ocupados&&
-    !confirm('Ya hay '+r.ocupados+' agendados. El nuevo límite ('+nuevo+
-     ') es menor: no se cancelan, pero no habrá cupos. ¿Continuar?')) {
+    !await confirmar({
+     titulo:'LÍMITE MENOR A LO AGENDADO',
+     tipo:'urgente',
+     html:`<p><b>${esc(esp)}</b> ya tiene <b>${r.ocupados}</b>
+      agendados y el nuevo límite es <b>${esc(nuevo)}</b>.</p>
+      <p>No se cancela a nadie, pero ya no habrá cupos
+      disponibles para esa fecha.</p>`,
+     ok:'Guardar de todos modos',
+     cancelar:'Volver'
+    })) {
   return;
  }
 
