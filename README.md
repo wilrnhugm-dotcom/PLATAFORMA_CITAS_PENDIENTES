@@ -7,7 +7,13 @@ Aplicación web en Google Apps Script.
 | `Codigo.gs` | `Código.gs` |
 | `Index.html` | archivo HTML llamado `Index` |
 
-## Despliegue
+## Instalación desde cero (recomendada)
+
+Seguir `entregables/0_GUIA_INSTALACION.txt`: hoja de cálculo nueva → Extensiones → Apps Script →
+pegar código → ejecutar `instalarUGM()` una vez → implementar como aplicación web (Ejecutar como "Yo").
+La hoja de cálculo queda como base de datos.
+
+## Despliegue (proyecto existente)
 
 1. Copiar `Codigo.gs` e `Index.html` al proyecto de Apps Script (reemplazando el contenido).
 2. Guardar y **Implementar → Gestionar implementaciones → Editar → Nueva versión**.

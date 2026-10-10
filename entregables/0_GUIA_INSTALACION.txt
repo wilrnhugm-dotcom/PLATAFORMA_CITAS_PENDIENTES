@@ -1,0 +1,107 @@
+==========================================================
+ UGM 2026 - INSTALACIÓN DE LA PLATAFORMA NUEVA
+ Nuevo Hospital Rosales · Unidad de Gestión Médica
+==========================================================
+
+Todo se hace con la cuenta que será DUEÑA de la plataforma
+(por ejemplo wil.rnh.ugm@gmail.com). La plataforma anterior
+y su base NO se tocan.
+
+----------------------------------------------------------
+PASO 1 · Crear la base de datos (hoja de cálculo)
+----------------------------------------------------------
+1. Entrar a https://sheets.new
+2. Ponerle nombre arriba a la izquierda, por ejemplo:
+   UGM 2026 - Base de sobrecupos
+
+----------------------------------------------------------
+PASO 2 · Crear el proyecto dentro de esa hoja
+----------------------------------------------------------
+1. En la hoja: menú Extensiones > Apps Script.
+2. Se abre el editor con un archivo "Código.gs".
+   Borrar todo su contenido y pegar COMPLETO el archivo
+   1_CODIGO_GS.txt
+3. Botón "+" (junto a Archivos) > HTML.
+   Nombre: Index   (I mayúscula, sin ".html")
+   Borrar su contenido y pegar COMPLETO 2_INDEX_HTML.txt
+4. Guardar (Ctrl+S). Opcional: renombrar el proyecto
+   arriba como "UGM 2026".
+
+----------------------------------------------------------
+PASO 3 · Instalar (una sola vez)
+----------------------------------------------------------
+1. En la barra superior del editor, en el selector de
+   funciones, elegir:  instalarUGM
+2. Pulsar  ▶ Ejecutar
+3. Google pide permisos:
+   Revisar permisos > elegir la cuenta >
+   "Configuración avanzada" > "Ir a UGM 2026 (no seguro)"
+   > Permitir.
+   (Es normal: el script es propio, no está publicado.)
+4. En el Registro de ejecución debe aparecer:
+   "Plataforma instalada. Base de datos: ..."
+5. Volver a la hoja: ya tiene las pestañas SOBRECUPOS,
+   DISPONIBILIDAD (con los cupos por especialidad),
+   AUDITORIA, PERSONAL y AGENDA_EXCEL.
+
+   Comprobación opcional: elegir  diagnosticoUGM  y
+   Ejecutar. Debe decir  "Base: OK".
+
+----------------------------------------------------------
+PASO 4 · Publicar la aplicación web
+----------------------------------------------------------
+1. Botón azul  Implementar > Nueva implementación
+2. Engranaje (Seleccionar tipo) > Aplicación web
+3. Descripción: UGM 2026 v1
+4. Ejecutar como:  Yo (tu correo)        <-- IMPORTANTE
+5. Quién tiene acceso: según la política del hospital
+   ("Cualquier persona con una cuenta de Google" o
+   "Cualquier persona").
+6. Implementar > copiar la URL que termina en /exec
+
+----------------------------------------------------------
+PASO 5 · Enlaces para cada plataforma
+----------------------------------------------------------
+Agregar al final de la URL copiada:
+
+  Técnicos:     URL/exec?vista=tecnico
+                Clave: UGM 2026
+
+  Supervisión:  URL/exec?vista=supervisor
+                Clave: SUP 1
+
+  (Técnico autorizado HNRUGM$ entra por cualquiera.)
+
+----------------------------------------------------------
+PASO 6 · Primer uso (supervisor)
+----------------------------------------------------------
+1. Entrar por el enlace de supervisión.
+2. Menú "Base de pacientes": arrastrar, adjuntar o pegar
+   la base de Marcela (columnas de nombre y DUI;
+   expediente y especialidad opcionales).
+3. Menú "Actualizar agenda": cargar el Excel de la agenda.
+4. Los técnicos ya pueden buscar pacientes en
+   "Buscar paciente" y registrar sobrecupos.
+
+----------------------------------------------------------
+CUANDO SE HAGAN CAMBIOS AL CÓDIGO
+----------------------------------------------------------
+Pegar el código nuevo, guardar y luego:
+Implementar > Gestionar implementaciones > ✏️ Editar >
+Versión: Nueva versión > Implementar.
+(Así la URL y los enlaces NO cambian.)
+
+NO usar "Nueva implementación" para actualizar: crea una
+URL distinta.
+
+----------------------------------------------------------
+SI ALGO FALLA
+----------------------------------------------------------
+- "Clave incorrecta": revisar mayúsculas y el espacio
+  (SUP 1 · UGM 2026).
+- "No cuentas con el permiso...": la implementación no
+  está en "Ejecutar como: Yo", o el proyecto no es el de
+  esta hoja. Ejecutar diagnosticoUGM y revisar.
+- "Esta es la plataforma de técnicos/supervisión": se usó
+  el enlace equivocado para esa clave.
+==========================================================

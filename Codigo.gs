@@ -304,12 +304,120 @@ function base3_() {
 }
 
 /**
- * Crea una base nueva de Google Sheets en la cuenta que
- * ejecuta, con todas las hojas y los límites por
- * especialidad, y la vincula como UGM2_BASE_ID.
- * Ejecutar desde el editor SOLO si no se puede usar la
- * base anterior. No borra nada: si la base actual abre
- * correctamente, no hace cambios.
+ * Crea en el libro las hojas que falten, con sus
+ * encabezados y los límites por especialidad. No borra
+ * ni modifica hojas existentes.
+ */
+function prepararHojas3_(libro) {
+  const creadas = [];
+
+  const crear = (nombre, cabeceras) => {
+    if (libro.getSheetByName(nombre)) return null;
+
+    // Reutiliza la hoja vacía inicial del libro nuevo.
+    const vacia = libro.getSheets().find(h =>
+      h.getLastRow() === 0 &&
+      !Object.keys(UGM3.HEADERS).includes(h.getName())
+    );
+
+    const sh = vacia || libro.insertSheet(nombre);
+    sh.setName(nombre);
+    sh.getRange(1,1,1,cabeceras.length)
+      .setValues([cabeceras])
+      .setBackground('#10456B')
+      .setFontColor('#FFFFFF')
+      .setFontWeight('bold');
+    sh.setFrozenRows(1);
+    creadas.push(nombre);
+    return sh;
+  };
+
+  const sobrecupos = crear(
+    'SOBRECUPOS', UGM3.HEADERS.SOBRECUPOS
+  );
+
+  if (sobrecupos) {
+    sobrecupos.getRange('B:B').setNumberFormat('@');
+    sobrecupos.getRange('E:E').setNumberFormat('@');
+  }
+
+  const disponibilidad = crear(
+    'DISPONIBILIDAD', UGM3.HEADERS.DISPONIBILIDAD
+  );
+
+  if (disponibilidad) {
+    const limites = [];
+
+    [['SABADO', UGM3.SABADO], ['DOMINGO', UGM3.DOMINGO]]
+      .forEach(([dia, tabla]) => {
+        Object.keys(tabla).forEach(esp => {
+          limites.push([
+            dia, esp,
+            tabla[esp] === null ? 'N/A' : tabla[esp]
+          ]);
+        });
+      });
+
+    disponibilidad.getRange(2,1,limites.length,3)
+      .setValues(limites);
+  }
+
+  crear('AUDITORIA', UGM3.HEADERS.AUDITORIA);
+  crear('PERSONAL', UGM3.HEADERS.PERSONAL);
+
+  return creadas;
+}
+
+/**
+ * INSTALACIÓN DE LA PLATAFORMA NUEVA.
+ * 1. Crear una hoja de cálculo nueva.
+ * 2. Extensiones > Apps Script, pegar Código.gs e Index.
+ * 3. Elegir instalarUGM y pulsar Ejecutar (una vez).
+ * Esa hoja de cálculo queda como base de datos.
+ */
+function instalarUGM() {
+  const libro = SpreadsheetApp.getActiveSpreadsheet();
+
+  if (!libro) {
+    throw Error(
+      'Abre Apps Script desde la hoja de cálculo '+
+      '(Extensiones > Apps Script) y vuelve a ejecutar. '+
+      'Si el proyecto no está dentro de una hoja, '+
+      'usa crearBaseUGM().'
+    );
+  }
+
+  const creadas = prepararHojas3_(libro);
+  const p = props3_();
+
+  p.setProperty('UGM2_BASE_ID', libro.getId());
+
+  if (!p.getProperty('UGM2_SECRET')) {
+    p.setProperty(
+      'UGM2_SECRET',
+      Utilities.getUuid() + Utilities.getUuid()
+    );
+  }
+
+  libro3_ = null;
+  garantizarAgenda3_();
+
+  const texto =
+    'Plataforma instalada. Base de datos: ' +
+    libro.getName() + ' (' + libro.getUrl() + ')' +
+    '\nHojas creadas: ' +
+    (creadas.length ? creadas.join(', ') : 'ninguna (ya existían)') +
+    '\nSiguiente paso: Implementar > Nueva implementación' +
+    ' > Aplicación web > Ejecutar como "Yo".';
+
+  console.log(texto);
+  return texto;
+}
+
+/**
+ * Para proyectos que NO están dentro de una hoja:
+ * crea una base nueva en la cuenta que ejecuta y la
+ * vincula. Si la base actual abre, no hace cambios.
  */
 function crearBaseUGM() {
   const p = props3_();
@@ -334,44 +442,7 @@ function crearBaseUGM() {
     'UGM 2026 - Base de sobrecupos'
   );
 
-  const crear = (nombre, cabeceras, hoja) => {
-    const sh = hoja || libro.insertSheet(nombre);
-    sh.setName(nombre);
-    sh.getRange(1,1,1,cabeceras.length)
-      .setValues([cabeceras])
-      .setBackground('#10456B')
-      .setFontColor('#FFFFFF')
-      .setFontWeight('bold');
-    sh.setFrozenRows(1);
-    return sh;
-  };
-
-  const sobrecupos = crear(
-    'SOBRECUPOS', UGM3.HEADERS.SOBRECUPOS,
-    libro.getSheets()[0]
-  );
-  sobrecupos.getRange('B:B').setNumberFormat('@');
-  sobrecupos.getRange('E:E').setNumberFormat('@');
-
-  const disponibilidad = crear(
-    'DISPONIBILIDAD', UGM3.HEADERS.DISPONIBILIDAD
-  );
-
-  const limites = [];
-  [['SABADO', UGM3.SABADO], ['DOMINGO', UGM3.DOMINGO]]
-    .forEach(([dia, tabla]) => {
-      Object.keys(tabla).forEach(esp => {
-        limites.push([
-          dia, esp, tabla[esp] === null ? 'N/A' : tabla[esp]
-        ]);
-      });
-    });
-
-  disponibilidad.getRange(2,1,limites.length,3)
-    .setValues(limites);
-
-  crear('AUDITORIA', UGM3.HEADERS.AUDITORIA);
-  crear('PERSONAL', UGM3.HEADERS.PERSONAL);
+  prepararHojas3_(libro);
 
   p.setProperty('UGM2_BASE_ID', libro.getId());
   libro3_ = null;
