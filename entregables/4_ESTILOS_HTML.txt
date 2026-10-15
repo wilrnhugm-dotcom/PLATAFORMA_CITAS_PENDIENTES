@@ -1,6 +1,6 @@
 <style>
 :root{
- --ugm-version:"2026.10.10-6";
+ --ugm-version:"2026.10.15-1";
  --bg:#031423;
  --bg2:#092d49;
  --panel:#0a3250;
@@ -1167,102 +1167,132 @@ svg.ico-svg{
    ANIMACIONES V2
    ========================================================= */
 
-/* Constelación de fondo */
-#fxCanvas{position:absolute;inset:0;opacity:.9}
-body.light #fxCanvas{opacity:.6}
+/* =========================================================
+   SISTEMA DE MOVIMIENTO V3
+   Una sola curva y tres duraciones para toda la plataforma.
+   Solo se animan transform y opacity; sin desenfoques en
+   vivo, sin bucles decorativos.
+   ========================================================= */
+:root{
+ --ease:cubic-bezier(.16,1,.3,1);
+ --t1:.16s;--t2:.28s;--t3:.46s;
+ --rep:#9fb2ff;--rep-bg:rgba(159,178,255,.13);--rep-borde:rgba(159,178,255,.55);
+ --adi:#ffd06a;--adi-bg:rgba(255,208,106,.11)
+}
+body.light{
+ --rep:#3b54c4;--rep-bg:rgba(59,84,196,.08);--rep-borde:rgba(59,84,196,.45);
+ --adi:#9a6400;--adi-bg:rgba(160,106,0,.08)
+}
 
-/* Luz que sigue al cursor en tarjetas */
-.kpi,.card,.panel,.login-card{position:relative}
-.kpi::after,.card::after,.panel::after,.login-card::after{
- content:"";position:absolute;inset:0;border-radius:inherit;
- pointer-events:none;opacity:0;transition:opacity .35s;
- background:radial-gradient(420px circle at var(--mx,50%) var(--my,50%),
-  rgba(19,201,245,.13),transparent 45%)
+/* Fondo: una sola capa con degradados ya suaves (sin
+   filter:blur) que se desplaza muy despacio. */
+.orb{display:none}
+.bg-orbs{
+ inset:-12%;
+ background:
+  radial-gradient(38% 34% at 18% 12%,rgba(10,166,216,.22),transparent 70%),
+  radial-gradient(34% 30% at 84% 88%,rgba(27,93,143,.32),transparent 70%),
+  radial-gradient(26% 24% at 62% 46%,rgba(19,201,245,.08),transparent 70%);
+ animation:deriva 48s var(--ease) infinite alternate;
+ will-change:transform
+}
+body.light .bg-orbs{opacity:.55}
+@keyframes deriva{
+ from{transform:translate3d(0,0,0)}
+ to{transform:translate3d(-3%,2%,0)}
+}
+
+/* Encabezado y ventanas: color sólido translúcido en lugar
+   de desenfoque en vivo (era lo que más costaba al hacer
+   scroll en equipos modestos). */
+.top,.top.scrolled{backdrop-filter:none;-webkit-backdrop-filter:none}
+.top{background:color-mix(in srgb,var(--bg) 92%,transparent)}
+.top.scrolled{background:color-mix(in srgb,var(--bg) 97%,transparent)}
+.overlay,.error-overlay{backdrop-filter:none;-webkit-backdrop-filter:none}
+.overlay{background:rgba(1,10,20,.86)}
+body.light .overlay{background:rgba(16,43,64,.55)}
+
+/* Línea de sincronización: cruza una vez cuando llegan
+   datos nuevos del servidor. */
+.top{position:sticky}
+.sync-line{
+ position:absolute;left:0;right:0;bottom:-1px;height:1px;
+ transform-origin:left center;transform:scaleX(0);opacity:0;
+ background:linear-gradient(90deg,transparent,var(--cyan) 30%,var(--cyan) 70%,transparent);
+ pointer-events:none
+}
+.sync-line.on{animation:sincroniza 1.1s var(--ease)}
+@keyframes sincroniza{
+ 0%{transform:scaleX(0);opacity:.9}
+ 70%{transform:scaleX(1);opacity:.7}
+ 100%{transform:scaleX(1);opacity:0}
+}
+
+/* Respuesta táctil de botones */
+.btn,.asis button,.chip-btn,.seg button,.pac-dia{
+ transition:transform var(--t1) var(--ease),background var(--t2),
+  color var(--t2),border-color var(--t2),box-shadow var(--t2)
+}
+.btn:active:not(:disabled),.asis button:active:not(:disabled),
+.seg button:active,.chip-btn:active,.pac-dia:active{transform:scale(.97)}
+.btn.primary:not(:disabled){box-shadow:0 6px 18px rgba(19,201,245,.22)}
+.btn.primary:hover:not(:disabled){box-shadow:0 10px 26px rgba(19,201,245,.32)}
+:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+
+/* Tarjetas: elevación mínima y luz que sigue al cursor */
+.kpi,.card{transition:transform var(--t2) var(--ease),border-color var(--t2),background var(--t2)}
+.kpi:hover,.card:hover{transform:translateY(-2px)}
+.kpi,.card,.cita,.pac-dia,.login-card{position:relative}
+.kpi::after,.card::after,.cita::after,.pac-dia::after,.login-card::after{
+ content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+ opacity:0;transition:opacity var(--t2);
+ background:radial-gradient(260px circle at var(--mx,50%) var(--my,50%),
+  rgba(19,201,245,.10),transparent 60%)
 }
 .luz::after{opacity:1}
-.kpi.luz,.card.luz,.panel.luz{
- transition:background .3s,border-color .3s,box-shadow .25s;
- border-color:rgba(19,201,245,.45);
- box-shadow:0 18px 44px var(--shadow),0 0 0 1px rgba(19,201,245,.12),
-  0 0 34px rgba(19,201,245,.12)
-}
+.kpi.luz,.card.luz{border-color:color-mix(in srgb,var(--cyan) 45%,var(--border))}
 
-/* Borde de luz que gira en los indicadores */
-@property --ang{syntax:'<angle>';inherits:false;initial-value:0deg}
-.kpi::before{
- content:"";position:absolute;inset:-1px;border-radius:inherit;padding:1px;
- background:conic-gradient(from var(--ang),transparent 0 70%,
-  rgba(19,201,245,.85) 82%,transparent 92%);
- -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
- -webkit-mask-composite:xor;mask-composite:exclude;
- animation:girarBorde 6s linear infinite;pointer-events:none;opacity:.7
-}
-.kpi.verde::before{background:conic-gradient(from var(--ang),transparent 0 70%,rgba(56,223,173,.85) 82%,transparent 92%)}
-.kpi.amarillo::before{background:conic-gradient(from var(--ang),transparent 0 70%,rgba(255,208,106,.85) 82%,transparent 92%)}
-.kpi:nth-child(2)::before{animation-delay:-1.5s}
-.kpi:nth-child(3)::before{animation-delay:-3s}
-.kpi:nth-child(4)::before{animation-delay:-4.5s}
-@keyframes girarBorde{to{--ang:360deg}}
-
-/* Destello cuando cambia un número */
-.kpi.destello{animation:destello .9s ease-out}
+/* Indicador cuyo número cambió */
+.kpi.destello{animation:destello .9s var(--ease)}
 @keyframes destello{
- 0%{box-shadow:0 0 0 0 rgba(19,201,245,.55),0 13px 38px var(--shadow)}
- 100%{box-shadow:0 0 0 18px rgba(19,201,245,0),0 13px 38px var(--shadow)}
+ 0%{border-color:var(--cyan)}
+ 100%{border-color:var(--border)}
 }
 
-/* Halo pulsante del ícono de cada indicador */
-.kpi-icon{position:relative}
-.kpi-icon::after{
- content:"";position:absolute;inset:-4px;border-radius:50%;
- border:1px solid currentColor;opacity:0;
- animation:halo 2.8s ease-out infinite
-}
-@keyframes halo{0%{transform:scale(.85);opacity:.55}100%{transform:scale(1.45);opacity:0}}
+/* Menú */
+.nav i,.nav svg{transition:transform var(--t2) var(--ease)}
+.nav:hover i,.nav:hover svg{transform:translateX(2px)}
 
-/* Títulos letra por letra */
-.letra{display:inline-block;transform-origin:50% 100%;will-change:transform}
+/* Tablas */
+tbody tr{transition:background var(--t1)}
+tbody tr:hover{background:rgba(19,201,245,.06);box-shadow:inset 2px 0 0 var(--cyan)}
 
-/* Confeti */
-.confeti{
- position:fixed;width:9px;height:14px;z-index:9999;
- pointer-events:none;border-radius:2px;margin:-7px 0 0 -4px
-}
-
-/* Botones: brillo que cruza al pasar el cursor */
-.btn.primary::after{
- content:"";position:absolute;top:0;bottom:0;left:-60%;width:40%;
- background:linear-gradient(100deg,transparent,rgba(255,255,255,.35),transparent);
- transform:skewX(-18deg);transition:left .7s ease;pointer-events:none
-}
-.btn.primary:hover:not(:disabled)::after{left:130%}
-.btn.primary:not(:disabled){box-shadow:0 8px 22px rgba(19,201,245,.25)}
-
-/* Menú: ícono que salta al pasar */
-.nav i,.nav svg{transition:transform .35s cubic-bezier(.34,1.56,.64,1)}
-.nav:hover i,.nav:hover svg{transform:translateX(3px) scale(1.15) rotate(-6deg)}
-
-/* Filas de tablas con barra de luz */
-tbody tr{transition:background .25s,transform .25s}
-tbody tr:hover{background:rgba(19,201,245,.07);transform:translateX(3px);
- box-shadow:inset 3px 0 0 var(--cyan)}
-
-/* Campos con foco luminoso */
+/* Campos */
 input:focus,select:focus,textarea:focus{
- box-shadow:0 0 0 3px rgba(19,201,245,.18),0 0 18px rgba(19,201,245,.15);
- transition:box-shadow .3s,border-color .3s
+ box-shadow:0 0 0 3px rgba(19,201,245,.16);
+ transition:box-shadow var(--t2),border-color var(--t2)
 }
 
-/* Cupo de urgencia en técnicos */
-.cupo-box.urgencia{
- border-color:var(--yellow)!important;
- animation:latidoUrgencia 1.8s ease-in-out infinite
+/* Tickets: el ícono sube una vez al pasar, sin bucle */
+.ticket:hover .ico{animation:none;transform:translateY(-3px)}
+
+/* Datos en vivo: la fila que cambió por otra persona */
+.cambio-vivo{position:relative}
+.cambio-vivo::before{
+ content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+ background:linear-gradient(90deg,transparent,rgba(19,201,245,.20),transparent);
+ transform:translateX(-100%);animation:barrido 1.4s var(--ease) forwards
 }
+@keyframes barrido{to{transform:translateX(100%)}}
+
+/* Cupo de urgencia: anillo que respira (solo opacity) */
+.cupo-box.urgencia{border-color:var(--yellow)!important;position:relative}
 .cupo-box.urgencia .num{color:var(--yellow)}
-@keyframes latidoUrgencia{
- 0%,100%{box-shadow:0 0 0 0 rgba(255,208,106,.35)}
- 50%{box-shadow:0 0 0 10px rgba(255,208,106,0),0 0 28px rgba(255,208,106,.2)}
+.cupo-box.urgencia::after{
+ content:"";position:absolute;inset:-4px;border-radius:inherit;pointer-events:none;
+ border:2px solid var(--yellow);opacity:0;animation:respira 2.4s ease-in-out infinite
 }
+@keyframes respira{50%{opacity:.45}}
 
 /* Campo de texto dentro de un diálogo */
 .dlg-campo{text-align:left;margin:14px 0 4px}
@@ -1278,13 +1308,73 @@ input:focus,select:focus,textarea:focus{
  grid-column:1/-1;padding:10px 12px!important;border-radius:12px;
  border:1px solid var(--yellow);background:rgba(255,208,106,.1)
 }
-.tag.urgente{animation:parpadeo 1.6s ease-in-out infinite}
-@keyframes parpadeo{50%{box-shadow:0 0 14px rgba(255,121,136,.6)}}
+.tag.urgente{position:relative;padding-left:16px}
+.tag.urgente::before{
+ content:"";position:absolute;left:6px;top:50%;width:6px;height:6px;margin-top:-3px;
+ border-radius:50%;background:#fff;animation:respira 1.6s ease-in-out infinite
+}
+
+/* =========================================================
+   ORIGEN DEL PACIENTE: Reportería, adicional, agenda,
+   sobrecupo. Mismo lenguaje en técnicos y supervisión.
+   ========================================================= */
+.origen{
+ display:inline-flex;align-items:center;gap:5px;
+ padding:2px 9px 2px 7px;border-radius:999px;white-space:nowrap;
+ font-size:10.5px;font-weight:800;letter-spacing:.01em;
+ border:1px solid var(--border);color:var(--muted);background:transparent
+}
+.origen svg{width:12px;height:12px;flex:none}
+.origen.o-reporteria{color:var(--rep);border-color:var(--rep-borde);background:var(--rep-bg)}
+.origen.o-adicional{color:#2a1d00;background:var(--adi);border-color:var(--adi)}
+body.light .origen.o-adicional{color:#fff}
+.origen.o-sobrecupo{color:var(--cyan);border-color:var(--cyan)}
+.origen.o-agenda{color:var(--muted)}
+
+/* Tarjeta del paciente: anillo en el avatar según origen
+   (el borde izquierdo sigue indicando la asistencia). */
+.cita[data-origen="REPORTERIA"] .avatar,
+.cita[data-origen="ADICIONAL"] .avatar{box-shadow:0 0 0 2px var(--panel2),0 0 0 4px var(--rep)}
+.cita[data-origen="ADICIONAL"] .avatar{box-shadow:0 0 0 2px var(--panel2),0 0 0 4px var(--adi)}
+.cita[data-origen="ADICIONAL"]{background:linear-gradient(90deg,var(--adi-bg),transparent 55%),var(--panel2)}
+
+/* Filtro por origen con composición del día */
+.origen-bar{margin:12px 0 14px}
+.origen-filtro{display:flex;flex-wrap:wrap;gap:8px}
+.of-btn{
+ display:inline-flex;align-items:center;gap:8px;min-height:36px;padding:6px 12px;
+ border-radius:10px;border:1px solid var(--border);background:var(--panel2);color:var(--text);
+ font-weight:700;font-size:12.5px;cursor:pointer;
+ transition:transform var(--t1) var(--ease),border-color var(--t2),background var(--t2)
+}
+.of-btn:active{transform:scale(.97)}
+.of-btn i{width:9px;height:9px;border-radius:3px;background:var(--muted);flex:none}
+.of-btn b{font-variant-numeric:tabular-nums;color:var(--muted);font-weight:800}
+.of-btn.on{border-color:var(--cyan);background:color-mix(in srgb,var(--cyan) 14%,var(--panel2))}
+.of-btn.on b{color:var(--text)}
+.of-btn[data-o="REPORTERIA_TODO"] i,.of-btn[data-o="REPORTERIA"] i{background:var(--rep)}
+.of-btn[data-o="ADICIONAL"] i{background:var(--adi)}
+.of-btn[data-o="AGENDA"] i{background:var(--muted)}
+.of-btn[data-o="SOBRECUPO"] i{background:var(--cyan)}
+.composicion{
+ display:flex;height:6px;margin-top:10px;border-radius:999px;overflow:hidden;
+ background:color-mix(in srgb,var(--border) 60%,transparent)
+}
+.composicion span{display:block;height:100%;width:0;flex:none;transition:width .7s var(--ease)}
+.composicion span+span{box-shadow:inset 2px 0 0 var(--panel)}
+.composicion .c-reporteria{background:var(--rep)}
+.composicion .c-adicional{background:var(--adi)}
+.composicion .c-agenda{background:color-mix(in srgb,var(--muted) 55%,transparent)}
+.composicion .c-sobrecupo{background:var(--cyan)}
+.composicion-leyenda{margin-top:6px;font-size:11px;color:var(--muted)}
+
+.item-base{display:block;margin-top:5px}
+.ficha .fuente .origen{font-size:11px}
 
 @media(prefers-reduced-motion:reduce){
- .kpi::before,.kpi-icon::after,.cupo-box.urgencia,.tag.urgente,.kpi.destello{animation:none}
- #fxCanvas{display:none}
- tbody tr:hover{transform:none}
+ .bg-orbs,.sync-line.on,.kpi.destello,.cambio-vivo::before,
+ .cupo-box.urgencia::after,.tag.urgente::before{animation:none!important}
+ .cambio-vivo::before{display:none}
 }
 
 /* Confirmación propia: por encima de cualquier ventana */

@@ -60,7 +60,7 @@ const UGM3 = {
   // Debe coincidir con la versión de Tecnico, Supervisor,
   // Estilos y Comun: así la pantalla avisa si falta
   // actualizar algún archivo.
-  VERSION: '2026.10.10-6',
+  VERSION: '2026.10.15-1',
 
   TZ: 'America/El_Salvador',
 
@@ -2586,7 +2586,10 @@ function descargarPacientes(token,version,desde) {
       v(r,c.documento),
       v(r,c.original),
       v(r,c.expediente),
-      v(r,c.especialidad)
+      v(r,c.especialidad),
+      v(r,c.fecha),
+      v(r,c.hora),
+      v(r,c.aumento)
     ]);
 
   return {
@@ -2701,6 +2704,11 @@ function buscarPacientes(token,consulta) {
       expediente:v(r,c.expediente),
       especialidades:v(r,c.especialidad)
         .split(' | ').filter(Boolean),
+      cita:c.fecha>=0 && v(r,c.fecha) ? {
+        fecha:v(r,c.fecha),
+        hora:v(r,c.hora),
+        aumento:v(r,c.aumento)==='SI'
+      } : null,
       prioridad:b.startsWith(inicio) ? 0 : 1
     });
 

@@ -60,6 +60,7 @@
 <div id="app" class="hidden">
 
 <header class="top">
+ <span class="sync-line" aria-hidden="true"></span>
  <div class="brand-logo" role="img"
   aria-label="Red Nacional de Hospitales · Nuevo Hospital Rosales"></div>
 
@@ -1734,8 +1735,7 @@ function pintarDetalle(animar) {
    <td><b>${esc(c.paciente)}</b></td>
    <td>${esc(c.documento)}</td>
    <td>${esc(c.especialidad)}</td>
-   <td>${esc(GRUPOS[grupoReporte(c)].corto)}${c.aumento&&grupoReporte(c)==='ADICIONAL'
-    ?' <span class="tag aumento">Aumento 10%</span>':''}</td>
+   <td>${pildoraOrigen(c)}</td>
    <td style="color:${c.asistencia==='ASISTIO'?'var(--green)':
     c.asistencia==='NO_ASISTIO'?'var(--red)':'var(--yellow)'}">
     <b>${textoAsistencia(c.asistencia)}</b></td>
@@ -2474,7 +2474,7 @@ async function alEntrar() {
  aviso('Bienvenido al centro de control, '+UGM.nombre+'.');
 }
 
-const VERSION_PANTALLA='2026.10.10-6';
+const VERSION_PANTALLA='2026.10.15-1';
 
 /* =====================================================
    VERIFICACIÓN DE ARCHIVOS
