@@ -61,6 +61,7 @@
 <div id="app" class="hidden">
 
 <header class="top">
+ <span class="sync-line" aria-hidden="true"></span>
  <div class="brand-logo" role="img"
   aria-label="Red Nacional de Hospitales · Nuevo Hospital Rosales"></div>
 
@@ -197,6 +198,13 @@
     </div>
    </div>
 
+   <div class="origen-bar" id="cOrigenBar">
+    <div class="origen-filtro" id="cOrigen" role="group"
+     aria-label="Filtrar por origen del paciente"></div>
+    <div class="composicion" id="cComposicion" aria-hidden="true"></div>
+    <div class="composicion-leyenda" id="cLeyenda"></div>
+   </div>
+
    <div class="tabs" id="cTabs">
     <span class="tab-ink"></span>
    </div>
@@ -254,7 +262,7 @@
       </div>
       <div class="dui-helper" id="patientHelper">
        Escribe el nombre o el DUI: los datos se completan desde la
-       base de pacientes.
+       base de Reportería.
       </div>
       <div id="ficha"></div>
      </div>
@@ -360,7 +368,7 @@
  <section class="page hidden" id="buscar">
   <div class="panel glass">
    <h2><span data-ico="buscar"></span> Buscar paciente</h2>
-   <p class="desc">Busca en la base de pacientes por nombre, DUI o
+   <p class="desc">Busca en la base de Reportería por nombre, DUI o
     expediente y filtra por especialidad.</p>
    <div class="search-grid">
     <div class="field">
@@ -376,7 +384,7 @@
     </div>
    </div>
    <div class="search-meta">
-    <span id="baseInfo">Base de pacientes: sin datos.</span>
+    <span id="baseInfo">Base de Reportería: sin datos.</span>
     <span id="qCount"></span>
    </div>
    <div class="tablebox">
@@ -439,6 +447,11 @@ const T={
  datos:null,
  tab:'',
  filtro:'todos',
+ origen:'todos',
+ // Estado anterior de cada cita (para resaltar lo que
+ // cambió por la acción de otro técnico).
+ previo:null,
+ previoFecha:'',
  consultando:false,
  timer:null,
  guardando:false,
@@ -464,7 +477,7 @@ const TITULOS={
  consultas:['Consultas del día','Asistencia de pacientes por especialidad'],
  solicitud:['Solicitud de sobrecupo','Sábado y domingo · solicitudes médicas con ticket'],
  missolicitudes:['Mis solicitudes','Seguimiento de tus solicitudes'],
- buscar:['Buscar paciente','Base de pacientes'],
+ buscar:['Buscar paciente','Base de Reportería'],
 
 };
 
@@ -666,6 +679,7 @@ function filtrarConsultas() {
 
  return consultas().filter(c=>{
   if(T.tab&&c.especialidad!==T.tab)return false;
+  if(!coincideOrigen(c))return false;
 
   if(T.filtro==='pendientes'&&c.asistencia)return false;
   if(['ASISTIO','NO_ASISTIO'].includes(T.filtro)&&
@@ -683,28 +697,89 @@ function filtrarConsultas() {
  });
 }
 
-function etiquetaCita(c) {
- const hora=c.horaCita
-  ?'<span class="tag hora">'+icono('reloj')+' '+esc(c.horaCita)+'</span> ':'';
+// Filtro por origen: "Base Reportería" incluye a los
+// adicionales; los demás son excluyentes.
+function coincideOrigen(c) {
+ if(T.origen==='todos')return true;
+ if(T.origen==='REPORTERIA_TODO')return deReporteria(c);
+ return origenCita(c)===T.origen;
+}
 
- if(c.estadoCita==='SOBRECUPO') {
-  return hora+'<span class="tag sobrecupo">Sobrecupo · '+
-   esc(textoEstado(c.sobrecupo))+'</span>';
+function etiquetaCita(c) {
+ const partes=[];
+
+ if(c.horaCita) {
+  partes.push('<span class="tag hora">'+icono('reloj')+' '+esc(c.horaCita)+'</span>');
  }
 
- const tag=hora+(c.aumento
-  ?'<span class="tag aumento">Aumento 10%</span> ':'')+
-  (c.origen==='REPORTERIA'
-  ?'<span class="tag activa">Agendado · Reportería</span>':
-  c.estadoCita==='ACTIVA'
-  ?'<span class="tag activa">Cita activa</span>'
-  :c.estadoCita==='PENDIENTE'
-   ?'<span class="tag pendiente">Cita pendiente</span>'
-   :'<span class="tag">Registrada</span>');
+ partes.push(pildoraOrigen(c));
 
- return tag+(c.sobrecupo
-  ?' <span class="tag sobrecupo">Sobrecupo · '+
-    esc(textoEstado(c.sobrecupo))+'</span>':'');
+
+ if(c.sobrecupo) {
+  partes.push('<span class="tag sobrecupo">'+esc(textoEstado(c.sobrecupo))+'</span>');
+ } else if(c.estadoCita==='PENDIENTE') {
+  partes.push('<span class="tag pendiente">Cita pendiente</span>');
+ } else if(c.estadoCita==='REGISTRADA') {
+  partes.push('<span class="tag">Registrada</span>');
+ }
+
+ return partes.join(' ');
+}
+
+// Botones de origen con su conteo y la composición del
+// día (según la especialidad elegida).
+function pintarOrigenes() {
+ const base=consultas().filter(c=>!T.tab||c.especialidad===T.tab);
+ const n={todos:base.length,REPORTERIA_TODO:0,REPORTERIA:0,ADICIONAL:0,AGENDA:0,SOBRECUPO:0};
+
+ base.forEach(c=>{
+  n[origenCita(c)]++;
+  if(deReporteria(c))n.REPORTERIA_TODO++;
+ });
+
+ const botones=[
+  ['todos','Todos'],
+  ['REPORTERIA_TODO','Base Reportería'],
+  ['ADICIONAL','Adicionales'],
+  ['AGENDA','Solo agenda'],
+  ['SOBRECUPO','Sobrecupos']
+ ];
+
+ const firma=T.origen+'|'+T.tab+'|'+JSON.stringify(n);
+ if(firma===T.firmaOrigen)return;
+ T.firmaOrigen=firma;
+
+ $('cOrigenBar').classList.toggle('hidden',!base.length);
+
+ $('cOrigen').innerHTML=botones
+  .filter(([k])=>k==='todos'||k==='REPORTERIA_TODO'||n[k]>0||T.origen===k)
+  .map(([k,t])=>`<button type="button" class="of-btn${T.origen===k?' on':''}"
+    data-o="${k}" aria-pressed="${T.origen===k}"
+    title="${k==='todos'?'Todos los pacientes del día':
+     k==='REPORTERIA_TODO'?'Pacientes que vienen en la base de Reportería (incluye adicionales)':
+     esc(ORIGENES[k].detalle)}">
+    ${k==='todos'?'':'<i></i>'}${t} <b>${n[k]}</b></button>`).join('');
+
+ const total=Math.max(1,base.length);
+ $('cComposicion').innerHTML=ORDEN_ORIGENES.map(k=>
+  `<span class="c-${k.toLowerCase()}" data-p="${n[k]/total}"
+    title="${esc(ORIGENES[k].nombre)}: ${n[k]}"></span>`).join('');
+ MOV.composicion($('cComposicion'));
+
+ const pct=Math.round(n.REPORTERIA_TODO/total*100);
+ $('cLeyenda').textContent=base.length
+  ?pct+' % de los pacientes'+(T.tab?' de '+T.tab:' del día')+
+   ' vienen en la base de Reportería ('+n.REPORTERIA_TODO+' de '+base.length+
+   (n.ADICIONAL?'; '+n.ADICIONAL+' adicionales':'')+').'
+  :'';
+}
+
+function elegirOrigen(o) {
+ if(!o||o===T.origen)return;
+ T.origen=o;
+ T.firmaOrigen='';
+ pintarOrigenes();
+ pintarConsultas(true);
 }
 
 function htmlCita(c,texto) {
@@ -713,7 +788,7 @@ function htmlCita(c,texto) {
   c.asistencia==='NO_ASISTIO'?' no':'';
 
  return `
-  <div class="cita${clase}" data-k="${esc(c.clave)}">
+  <div class="cita${clase}" data-k="${esc(c.clave)}" data-origen="${origenCita(c)}">
    <div class="avatar">${esc(iniciales(c.paciente))}</div>
    <div class="info" style="min-width:0">
     <h4>${resaltar(c.paciente||'Sin nombre',texto)}</h4>
@@ -745,9 +820,27 @@ function pintarConsultas(animar) {
  const texto=$('cBuscar').value.trim();
  const visibles=lista.slice(0,300);
 
- const firma=T.fecha+'|'+T.tab+'|'+T.filtro+'|'+texto+'|'+
-  visibles.map(c=>c.clave+c.asistencia+c.marcadoPor+c.sobrecupo)
+ pintarOrigenes();
+
+ const firma=T.fecha+'|'+T.tab+'|'+T.filtro+'|'+T.origen+'|'+texto+'|'+
+  visibles.map(c=>c.clave+c.asistencia+c.marcadoPor+c.sobrecupo+
+   (c.reporteria?'r':'')+(c.aumento?'a':''))
    .join(',');
+
+ // Citas que cambiaron desde la última vez por la acción
+ // de otra persona (mismo día): se resaltan al redibujar.
+ const cambiadas=new Set();
+ const ahora=new Map(consultas().map(c=>[c.clave,
+  (c.asistencia||'')+'|'+(c.sobrecupo||'')]));
+ if(T.previo&&T.previoFecha===T.fecha) {
+  ahora.forEach((v,k)=>{
+   const antes=T.previo.get(k);
+   const c=consultas().find(x=>x.clave===k);
+   if(antes!==undefined&&antes!==v&&c&&c.marcadoPor!==UGM.nombre)cambiadas.add(k);
+  });
+ }
+ T.previo=ahora;
+ T.previoFecha=T.fecha;
 
  if(!animar&&firma===T.firma)return;
 
@@ -776,6 +869,12 @@ function pintarConsultas(animar) {
  }
 
  cont.innerHTML=visibles.map(c=>htmlCita(c,texto)).join('');
+
+ if(cambiadas.size) {
+  cont.querySelectorAll('.cita').forEach(el=>{
+   if(cambiadas.has(el.dataset.k))MOV.vivo(el);
+  });
+ }
 
  $('cPie').textContent=lista.length>300
   ?'Mostrando 300 de '+lista.length+'. Usa el buscador para encontrar al paciente.'
@@ -847,6 +946,9 @@ function actualizarFila(c,boton) {
  pintarPestanas();
 
  if(!fila)return;
+
+ // Mi propia marca no debe resaltarse como cambio ajeno.
+ if(T.previo)T.previo.set(c.clave,(c.asistencia||'')+'|'+(c.sobrecupo||''));
 
  // Si el filtro ya no incluye la fila, se redibuja.
  if(T.filtro!=='todos') {
@@ -1235,7 +1337,7 @@ function limpiarFormulario() {
  cerrarResultados();
 
  ayuda('patientHelper',
-  'Escribe al menos 3 letras para buscar en la base de pacientes.');
+  'Escribe al menos 3 letras para buscar en la base de Reportería.');
 
  revisarDUI();
  revisarFecha();
@@ -1463,7 +1565,8 @@ function pintarFicha(p) {
      ${p.expediente?' · Exp. '+esc(p.expediente):''}
      ${(p.especialidades||[]).length?' · '+esc(p.especialidades.join(', ')):''}</small>
    </div>
-   <span class="fuente">${icono('base')} Base de pacientes</span>
+   <span class="fuente">${p.cita?pildoraBase(p.cita)
+    :'<span class="origen o-reporteria">'+icono('llamada')+'<span>Base Reportería</span></span>'}</span>
   </div>`;
 
  if(MOV.ok) {
@@ -1638,7 +1741,7 @@ async function alEntrar() {
  aviso('Bienvenido, '+UGM.nombre+'.');
 }
 
-const VERSION_PANTALLA='2026.10.10-6';
+const VERSION_PANTALLA='2026.10.15-1';
 
 /* =====================================================
    VERIFICACIÓN DE ARCHIVOS
@@ -1720,6 +1823,11 @@ function iniciar() {
    x.classList.toggle('on',x===b);
   });
   pintarConsultas(true);
+ });
+
+ $('cOrigen').addEventListener('click',ev=>{
+  const b=ev.target.closest('.of-btn');
+  if(b)elegirOrigen(b.dataset.o);
  });
 
  $('cTabs').addEventListener('click',ev=>{
@@ -1819,7 +1927,7 @@ function reiniciarBase() {
 }
 
 function crearRegistro(f) {
- const [nombre,dui,original,expediente,esp]=f;
+ const [nombre,dui,original,expediente,esp,fecha,hora,aumento]=f;
  const od=String(original||'')
   .replace(/\.0+$/,'').replace(/\D/g,'');
 
@@ -1837,7 +1945,8 @@ function crearRegistro(f) {
   ex:alfaNum(expediente),
   sb,
   s:sb,
-  sn:sb.map(normTexto)
+  sn:sb.map(normTexto),
+  cita:fecha?{fecha,hora:hora||'',aumento:aumento==='SI'}:null
  };
 }
 
@@ -2000,10 +2109,10 @@ function pintarEstadoBase() {
  let texto;
 
  if(P.cargando) {
-  texto='Cargando base de pacientes... '+
+  texto='Cargando base de Reportería... '+
    P.progreso+'%';
  } else if(P.listo) {
-  texto='Base de pacientes: <b>'+P.lista.length+
+  texto='Base de Reportería: <b>'+P.lista.length+
    '</b> registros · búsqueda instantánea';
  } else if(P.error) {
   texto='No se pudo descargar la base: '+
@@ -2012,7 +2121,7 @@ function pintarEstadoBase() {
   texto='El supervisor aún no ha cargado la base '+
    'de pacientes.';
  } else {
-  texto='Preparando base de pacientes...';
+  texto='Preparando base de Reportería...';
  }
 
  $('baseInfo').innerHTML=texto;
@@ -2081,7 +2190,8 @@ function vistaPaciente(r) {
   ajustado:Boolean(r.d)&&r.od.length===8,
   original:r.o,
   expediente:r.e,
-  especialidades:r.s
+  especialidades:r.s,
+  cita:r.cita
  };
 }
 
@@ -2097,8 +2207,8 @@ function pintarBusqueda() {
   $('qCount').textContent='';
   tbody.innerHTML=`<tr><td colspan="5">${
    P.cargando
-    ?'Cargando base de pacientes, un momento...'
-    :'La base de pacientes no está disponible.'
+    ?'Cargando base de Reportería, un momento...'
+    :'La base de Reportería no está disponible.'
   }</td></tr>`;
   return;
  }
@@ -2140,7 +2250,7 @@ function pintarBusqueda() {
     p.valido?esc(p.documento)
      :'Inválido ('+esc(p.original||'vacío')+')'
    }</td>
-   <td>${esc(p.expediente)||'—'}</td>
+   <td>${esc(p.expediente)||'—'}${p.cita?'<br>'+pildoraBase(p.cita):''}</td>
    <td>${p.especialidades.length
     ?p.especialidades.map(e=>
       `<span class="chip">${esc(e)}</span>`).join('')
@@ -2214,8 +2324,8 @@ function dibujarResultados(r,consulta) {
  if(!B.resultados.length) {
   mostrarResultados(`<div class="search-empty">${
    r&&r.sinBase
-    ?'La base de pacientes aún no está cargada.'
-    :'Sin coincidencias en la base de pacientes.'
+    ?'La base de Reportería aún no está cargada.'
+    :'Sin coincidencias en la base de Reportería.'
   }</div>`);
   return;
  }
@@ -2233,7 +2343,7 @@ function dibujarResultados(r,consulta) {
      ?' · Exp. '+esc(p.expediente):''}${
     (p.especialidades||[]).length
      ?' · '+esc(p.especialidades.join(', ')):''
-   }</small>
+   }</small>${p.cita?'<span class="item-base">'+pildoraBase(p.cita)+'</span>':''}
   </div>
  `).join(''));
 }
@@ -2353,7 +2463,7 @@ function montarBuscador() {
    pintarFicha(null);
    ayuda('patientHelper',
     'Escribe al menos 3 letras para buscar en la '+
-    'base de pacientes.');
+    'base de Reportería.');
    revisarDUI();
   }
 
