@@ -890,8 +890,10 @@ function firmar3_(sesion) {
       ('0'+(b & 255).toString(16)).slice(-2)
     ).join('');
 
+  // UTF-8 explícito: nombres con tildes o ñ (José, Peña)
+  // deben producir el mismo token al validarlo.
   return Utilities.base64EncodeWebSafe(
-    cuerpo+'|'+firma
+    cuerpo+'|'+firma, Utilities.Charset.UTF_8
   );
 }
 
@@ -903,7 +905,7 @@ function validar3_(token) {
   try {
     partes = Utilities.newBlob(
       Utilities.base64DecodeWebSafe(token)
-    ).getDataAsString().split('|');
+    ).getDataAsString('UTF-8').split('|');
   } catch(e) {
     throw Error('Sesión inválida.');
   }
