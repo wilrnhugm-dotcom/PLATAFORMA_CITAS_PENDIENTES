@@ -44,8 +44,10 @@
 
    <div class="field">
     <label>Clave de acceso</label>
-    <input id="loginPass" type="password" required
-     autocomplete="new-password" placeholder="Clave de acceso">
+    <input id="loginPass" type="text" required class="clave-oculta"
+     autocomplete="off" autocapitalize="off" spellcheck="false"
+     data-lpignore="true" data-1p-ignore data-form-type="other"
+     style="-webkit-text-security:disc" placeholder="Clave de acceso">
    </div>
 
    <button id="btnLogin" class="btn primary"
@@ -2519,7 +2521,23 @@ async function verificarArchivos() {
  console.warn('UGM: archivos desactualizados',faltan,VERSION_PANTALLA);
 }
 
+// La clave compartida no debe ofrecerse para guardar ni
+// reemplazarse por una "contraseña segura" del navegador:
+// el campo es de texto con los caracteres ocultos. Si el
+// navegador no sabe ocultarlos, se usa type=password.
+function protegerClave() {
+ const c=document.getElementById('loginPass');
+ if(!c)return;
+ const oculta=window.CSS&&CSS.supports&&
+  CSS.supports('-webkit-text-security','disc');
+ if(!oculta) {
+  c.type='password';
+  c.setAttribute('autocomplete','current-password');
+ }
+}
+
 function iniciar() {
+ protegerClave();
  verificarArchivos();
  montarComun();
  montarAcceso('supervisor',alEntrar,limpiarTodo);
