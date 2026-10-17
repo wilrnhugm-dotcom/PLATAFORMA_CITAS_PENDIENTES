@@ -699,11 +699,10 @@ function filtrarConsultas() {
  });
 }
 
-// Filtro por origen: "Base Reportería" incluye a los
-// adicionales; los demás son excluyentes.
+// Filtro por origen: los grupos son excluyentes, así cada
+// paciente cae en uno solo y los botones suman el total.
 function coincideOrigen(c) {
  if(T.origen==='todos')return true;
- if(T.origen==='REPORTERIA_TODO')return deReporteria(c);
  return origenCita(c)===T.origen;
 }
 
@@ -732,16 +731,13 @@ function etiquetaCita(c) {
 // día (según la especialidad elegida).
 function pintarOrigenes() {
  const base=consultas().filter(c=>!T.tab||c.especialidad===T.tab);
- const n={todos:base.length,REPORTERIA_TODO:0,REPORTERIA:0,ADICIONAL:0,AGENDA:0,SOBRECUPO:0};
+ const n={todos:base.length,REPORTERIA:0,ADICIONAL:0,AGENDA:0,SOBRECUPO:0};
 
- base.forEach(c=>{
-  n[origenCita(c)]++;
-  if(deReporteria(c))n.REPORTERIA_TODO++;
- });
+ base.forEach(c=>{ n[origenCita(c)]++; });
 
  const botones=[
   ['todos','Todos'],
-  ['REPORTERIA_TODO','Base Reportería'],
+  ['REPORTERIA','Reportería con cita'],
   ['ADICIONAL','Adicionales'],
   ['AGENDA','Solo agenda'],
   ['SOBRECUPO','Sobrecupos']
@@ -754,11 +750,10 @@ function pintarOrigenes() {
  $('cOrigenBar').classList.toggle('hidden',!base.length);
 
  $('cOrigen').innerHTML=botones
-  .filter(([k])=>k==='todos'||k==='REPORTERIA_TODO'||n[k]>0||T.origen===k)
+  .filter(([k])=>k==='todos'||k==='REPORTERIA'||n[k]>0||T.origen===k)
   .map(([k,t])=>`<button type="button" class="of-btn${T.origen===k?' on':''}"
     data-o="${k}" aria-pressed="${T.origen===k}"
     title="${k==='todos'?'Todos los pacientes del día':
-     k==='REPORTERIA_TODO'?'Pacientes que vienen en la base de Reportería (incluye adicionales)':
      esc(ORIGENES[k].detalle)}">
     ${k==='todos'?'':'<i></i>'}${t} <b>${n[k]}</b></button>`).join('');
 
@@ -768,11 +763,13 @@ function pintarOrigenes() {
     title="${esc(ORIGENES[k].nombre)}: ${n[k]}"></span>`).join('');
  MOV.composicion($('cComposicion'));
 
- const pct=Math.round(n.REPORTERIA_TODO/total*100);
+ const rep=n.REPORTERIA+n.ADICIONAL;
+ const pct=Math.round(rep/total*100);
  $('cLeyenda').textContent=base.length
-  ?pct+' % de los pacientes'+(T.tab?' de '+T.tab:' del día')+
-   ' vienen en la base de Reportería ('+n.REPORTERIA_TODO+' de '+base.length+
-   (n.ADICIONAL?'; '+n.ADICIONAL+' adicionales':'')+').'
+  ?n.REPORTERIA+' con cita + '+n.ADICIONAL+' adicionales + '+n.AGENDA+' solo agenda'+
+   (n.SOBRECUPO?' + '+n.SOBRECUPO+' sobrecupo'+(n.SOBRECUPO>1?'s':''):'')+
+   ' = '+base.length+' pacientes'+(T.tab?' de '+T.tab:' del día')+
+   '. Reportería envió '+rep+' ('+pct+' %).'
   :'';
 }
 
