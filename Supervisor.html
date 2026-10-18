@@ -335,10 +335,11 @@
    <div class="toolbar">
     <div>
      <h2>Reporte de asistencia</h2>
-     <p class="desc" style="margin:0">Hojas del Excel: <b>Agendados</b>
-      (agenda del sistema), <b>Adicionales Reportería</b> (no estaban en
-      la agenda + Aumento 10%) y <b>Sobrecupos técnicos</b>, con resumen
-      y gráficas.</p>
+     <p class="desc" style="margin:0">Hojas del Excel: <b>Base HIS</b>
+      (citas previas, creadas antes del 1 de octubre), <b>Extraordinarios</b>
+      (Reportería los agendó o reagendó para fin de semana: citas creadas
+      desde el 1 de octubre, Aumento 10% o sin cita en el HIS) y
+      <b>Sobrecupos técnicos</b>, con resumen y gráficas.</p>
     </div>
     <button class="btn primary" id="btnReporte" type="button">
      <i data-ico="descargar"></i> Descargar reporte Excel
@@ -1629,18 +1630,18 @@ const ORDEN_GRUPOS=['AGENDA','ADICIONAL','SOBRECUPO'];
 
 const GRUPOS={
  AGENDA:{
-  nombre:'Pacientes agendados',
-  corto:'Agendado',
-  hoja:'Agendados',
-  color:'FF0A9FD0',
-  detalle:'Pacientes que ya tenían su cita en la agenda del sistema hospitalario (Reporte de Citas).'
+  nombre:'Base HIS (citas previas)',
+  corto:'Base HIS',
+  hoja:'Base HIS',
+  color:'FF3B54C4',
+  detalle:'Pacientes que ya tenían su cita en el HIS desde antes del 1 de octubre.'
  },
  ADICIONAL:{
-  nombre:'Pacientes adicionales (Reportería)',
-  corto:'Adicional Reportería',
-  hoja:'Adicionales Reportería',
+  nombre:'Extraordinarios (Reportería)',
+  corto:'Extraordinario',
+  hoja:'Extraordinarios',
   color:'FFE0A526',
-  detalle:'Pacientes enviados por Reportería que no estaban en la agenda del sistema, más los del "Aumento 10%".'
+  detalle:'Pacientes que Reportería agendó o reagendó para fin de semana: cita creada en el HIS desde el 1 de octubre, "Aumento 10%" o sin cita en la agenda del HIS.'
  },
  SOBRECUPO:{
   nombre:'Sobrecupos de técnicos',
@@ -1653,10 +1654,16 @@ const GRUPOS={
 
 // Tipo de cita para pantallas y reportes.
 function tipoCita(c) {
- if(grupoReporte(c)==='SOBRECUPO')return 'Sobrecupo técnico';
- if(c.aumento)return 'Aumento 10%';
- if(c.origen==='REPORTERIA')return 'Reportería (no estaba en agenda)';
- return 'Agenda del sistema';
+ const g=grupoReporte(c);
+ if(g==='SOBRECUPO')return 'Sobrecupo técnico';
+ if(g==='ADICIONAL')return 'Extraordinario';
+ return 'Base HIS';
+}
+
+// Fecha de creación de la cita en el HIS (dd/mm/aaaa).
+function creacionCita(c) {
+ const f=String(c.creacion||'').slice(0,10);
+ return /^\d{4}-\d{2}-\d{2}$/.test(f)?f.slice(8,10)+'/'+f.slice(5,7)+'/'+f.slice(0,4):'';
 }
 
 // 1) Sobrecupo registrado por un técnico -> SOBRECUPO
@@ -1665,16 +1672,14 @@ function tipoCita(c) {
 //    "Aumento 10%" -> ADICIONAL.
 // 3) El resto (agenda del sistema) -> AGENDA.
 function grupoReporte(c) {
- if(c.origen==='SOBRECUPO'||c.sobrecupo)return 'SOBRECUPO';
- if(c.origen==='REPORTERIA'||c.aumento)return 'ADICIONAL';
- return 'AGENDA';
+ return origenCita(c);
 }
 
 function filasGrupos(lista) {
  return [
   ...ORDEN_GRUPOS.map(g=>[GRUPOS[g].hoja,
    conteo(lista.filter(c=>grupoReporte(c)===g))]),
-  ['   · adicionales del aumento 10%',
+  ['   · extraordinarios del aumento 10%',
    conteo(lista.filter(c=>grupoReporte(c)==='ADICIONAL'&&c.aumento))],
   ['TOTAL',conteo(lista)]
  ];
@@ -1941,7 +1946,8 @@ function hojaGrupo(wb,grupo,lista,d) {
  const ws=wb.addWorksheet(G.hoja,{properties:{tabColor:{argb:G.color}}});
 
  ws.columns=[{width:30},{width:46},{width:16},{width:16},
-  {width:16},{width:24},{width:10},{width:18},{width:10}];
+  {width:16},{width:24},{width:10},{width:18},{width:10},
+  {width:14},{width:30}];
  paraImprimir(ws);
 
  ws.mergeCells('A1:G1');
@@ -1972,7 +1978,8 @@ function hojaGrupo(wb,grupo,lista,d) {
 
  const cab=ws.getRow(inicio+1);
  cab.values=['Especialidad','Paciente','Documento','Asistencia',
-  'Marcado por','Hora marca','Estado','Tipo','Hora cita'];
+  'Marcado por','Hora marca','Estado','Tipo','Hora cita',
+  'Cita creada','Motivo extraordinario'];
  encabezados(cab);
 
  lista.slice().sort((a,b)=>
@@ -1985,7 +1992,7 @@ function hojaGrupo(wb,grupo,lista,d) {
    textoAsistencia(c.asistencia),c.marcadoPor||'',
    c.hora?horaCorta(c.hora):'',
    c.sobrecupo?textoEstado(c.sobrecupo):(c.estadoCita||''),
-   tipoCita(c),c.horaCita||''];
+   tipoCita(c),c.horaCita||'',creacionCita(c),motivoExtra(c)];
   if(c.aumento&&grupoReporte(c)==='ADICIONAL') {
    r.getCell(8).font={bold:true,color:{argb:'FFB7791F'}};
   }
@@ -1997,7 +2004,7 @@ function hojaGrupo(wb,grupo,lista,d) {
  });
 
  ws.autoFilter={from:{row:inicio+1,column:1},
-  to:{row:inicio+1,column:9}};
+  to:{row:inicio+1,column:11}};
 }
 
 function hojaResumen(wb,d,lista) {
@@ -2043,7 +2050,7 @@ function hojaResumen(wb,d,lista) {
  ws.addImage(dona,{tl:{col:0,row:base+.4},ext:{width:560,height:300}});
 
  const comp=graficaBarras(grupos.slice(0,ORDEN_GRUPOS.length).map(([n,t])=>
-  Object.assign({especialidad:n},t)),'Agendados, adicionales y sobrecupos');
+  Object.assign({especialidad:n},t)),'Base HIS, extraordinarios y sobrecupos');
  const compId=wb.addImage({base64:comp.url,extension:'png'});
  ws.addImage(compId,{tl:{col:0,row:base+16.4},ext:{width:760,height:comp.alto}});
 
@@ -2170,10 +2177,10 @@ function descargarReporteSimple(datos) {
  const fila=c=>[c.especialidad,c.paciente,c.documento,
   tipoCita(c),c.horaCita||'',
   textoAsistencia(c.asistencia),c.marcadoPor,
-  c.hora?horaCorta(c.hora):''];
+  c.hora?horaCorta(c.hora):'',creacionCita(c),motivoExtra(c)];
 
  const cab=['Especialidad','Paciente','Documento','Tipo','Hora cita',
-  'Asistencia','Marcado por','Hora marca'];
+  'Asistencia','Marcado por','Hora marca','Cita creada','Motivo extraordinario'];
 
  const hoja=(filas,anchos)=>{
   const h=XLSX.utils.aoa_to_sheet(filas);
@@ -2181,7 +2188,7 @@ function descargarReporteSimple(datos) {
   return h;
  };
 
- const anchos=[30,38,16,20,10,14,26,10];
+ const anchos=[30,38,16,20,10,14,26,10,12,30];
  const wb=XLSX.utils.book_new();
 
  XLSX.utils.book_append_sheet(wb,
@@ -2204,7 +2211,8 @@ function descargarReporteSimple(datos) {
   hoja([cab,...d.consultas.map(fila)],anchos),'Detalle completo');
 
  try {
-  XLSX.writeFile(wb,'Reporte_Asistencia_'+d.fecha+'.xlsx');
+  XLSX.writeFile(wb,'Reporte_Asistencia_'+d.fecha+'_'+
+   new Date().toTimeString().slice(0,5).replace(':','h')+'.xlsx');
   MOV.exito();
   aviso('Reporte descargado.');
  }catch(e) {
@@ -2429,8 +2437,12 @@ function pintarAgenda() {
       <strong>${a.porFecha[f]}</strong>
       <small>citas activas o pendientes</small>
      </button>`).join('')}</div>`:''}
-    <p class="muted small" style="margin:10px 0 0">Solo súbela otra vez si el
-     sistema hospitalario tiene cambios nuevos: la nueva <b>reemplaza</b> a esta.</p>`
+    ${a.total&&!a.conCreacion?`<div class="carga-falta" style="margin-top:10px">
+     <b>Vuelve a subir esta agenda una vez.</b>
+     <small>Se cargó antes de la actualización y no trae la "Fecha Creación" de
+      cada cita: sin ella no se puede separar Base HIS de Extraordinarios.</small>
+    </div>`:`<p class="muted small" style="margin:10px 0 0">Solo súbela otra vez si el
+     sistema hospitalario tiene cambios nuevos: la nueva <b>reemplaza</b> a esta.</p>`}`
   :`<div class="carga-falta">
      <b>Todavía no se ha cargado la agenda del día.</b>
      <small>Descarga el Reporte de Citas del sistema hospitalario y súbelo aquí.</small>
@@ -2510,7 +2522,7 @@ async function alEntrar() {
  aviso('Bienvenido al centro de control, '+UGM.nombre+'.');
 }
 
-const VERSION_PANTALLA='2026.10.15-1';
+const VERSION_PANTALLA='2026.10.17-1';
 
 /* =====================================================
    VERIFICACIÓN DE ARCHIVOS

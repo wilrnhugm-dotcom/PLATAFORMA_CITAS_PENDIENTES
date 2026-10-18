@@ -731,15 +731,14 @@ function etiquetaCita(c) {
 // día (según la especialidad elegida).
 function pintarOrigenes() {
  const base=consultas().filter(c=>!T.tab||c.especialidad===T.tab);
- const n={todos:base.length,REPORTERIA:0,ADICIONAL:0,AGENDA:0,SOBRECUPO:0};
+ const n={todos:base.length,AGENDA:0,ADICIONAL:0,SOBRECUPO:0};
 
  base.forEach(c=>{ n[origenCita(c)]++; });
 
  const botones=[
   ['todos','Todos'],
-  ['REPORTERIA','Reportería con cita'],
-  ['ADICIONAL','Adicionales'],
-  ['AGENDA','Solo agenda'],
+  ['AGENDA','Base HIS'],
+  ['ADICIONAL','Extraordinarios'],
   ['SOBRECUPO','Sobrecupos']
  ];
 
@@ -750,7 +749,7 @@ function pintarOrigenes() {
  $('cOrigenBar').classList.toggle('hidden',!base.length);
 
  $('cOrigen').innerHTML=botones
-  .filter(([k])=>k==='todos'||k==='REPORTERIA'||n[k]>0||T.origen===k)
+  .filter(([k])=>k!=='SOBRECUPO'||n[k]>0||T.origen===k)
   .map(([k,t])=>`<button type="button" class="of-btn${T.origen===k?' on':''}"
     data-o="${k}" aria-pressed="${T.origen===k}"
     title="${k==='todos'?'Todos los pacientes del día':
@@ -763,13 +762,12 @@ function pintarOrigenes() {
     title="${esc(ORIGENES[k].nombre)}: ${n[k]}"></span>`).join('');
  MOV.composicion($('cComposicion'));
 
- const rep=n.REPORTERIA+n.ADICIONAL;
- const pct=Math.round(rep/total*100);
+ const pct=Math.round(n.ADICIONAL/total*100);
  $('cLeyenda').textContent=base.length
-  ?n.REPORTERIA+' con cita + '+n.ADICIONAL+' adicionales + '+n.AGENDA+' solo agenda'+
+  ?n.AGENDA+' base HIS + '+n.ADICIONAL+' extraordinarios'+
    (n.SOBRECUPO?' + '+n.SOBRECUPO+' sobrecupo'+(n.SOBRECUPO>1?'s':''):'')+
    ' = '+base.length+' pacientes'+(T.tab?' de '+T.tab:' del día')+
-   '. Reportería envió '+rep+' ('+pct+' %).'
+   '. Extraordinarios: '+pct+' % (citas creadas desde el 1 de octubre, Aumento 10% o sin cita en el HIS).'
   :'';
 }
 
@@ -1740,7 +1738,7 @@ async function alEntrar() {
  aviso('Bienvenido, '+UGM.nombre+'.');
 }
 
-const VERSION_PANTALLA='2026.10.15-1';
+const VERSION_PANTALLA='2026.10.17-1';
 
 /* =====================================================
    VERIFICACIÓN DE ARCHIVOS

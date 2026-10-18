@@ -60,7 +60,7 @@ const UGM3 = {
   // Debe coincidir con la versión de Tecnico, Supervisor,
   // Estilos y Comun: así la pantalla avisa si falta
   // actualizar algún archivo.
-  VERSION: '2026.10.15-1',
+  VERSION: '2026.10.17-1',
 
   TZ: 'America/El_Salvador',
 
@@ -89,6 +89,11 @@ const UGM3 = {
   // por supervisión (p. ej. 10 regulares + 1 = 11).
   EXTRA_URGENCIA: 1,
   MIN_MOTIVO_URGENCIA: 15,
+
+  // Citas creadas en el HIS desde esta fecha son
+  // extraordinarias (Reportería las agendó o reagendó para
+  // fin de semana). Las anteriores son citas previas.
+  INICIO_EXTRAORDINARIOS: '2026-10-01',
 
   VIGENCIA_MINUTOS: 30,
   ALERTA_MINUTOS: 60,
@@ -187,7 +192,8 @@ const UGM3 = {
       'Estado',
       'Documento',
       'Paciente',
-      'IDExterno'
+      'IDExterno',
+      'FechaCreacion'
     ],
 
     LIMITES_FECHA: [
@@ -673,7 +679,7 @@ function garantizarAgenda3_() {
       UGM3.HEADERS.AGENDA_EXCEL
     ]);
 
-    sh.getRange(1,1,1,7)
+    sh.getRange(1,1,1,UGM3.HEADERS.AGENDA_EXCEL.length)
       .setBackground('#10456B')
       .setFontColor('#FFFFFF')
       .setFontWeight('bold');
@@ -681,6 +687,19 @@ function garantizarAgenda3_() {
     sh.setFrozenRows(1);
     sh.getRange('B:B').setNumberFormat('@');
     sh.getRange('E:E').setNumberFormat('@');
+  }
+
+  // Agrega columnas nuevas (FechaCreacion) a la hoja que ya
+  // existe, sin mover las anteriores.
+  if (!revisadas3_.AGENDA_EXCEL) {
+    const cab = UGM3.HEADERS.AGENDA_EXCEL;
+    const n = cab.length;
+    if (sh.getMaxColumns() < n ||
+        String(sh.getRange(1,n).getValue()) !== cab[n-1]) {
+      asegurarColumnas3_(sh, cab);
+      sh.getRange(1,n,sh.getMaxRows(),1).setNumberFormat('@');
+    }
+    revisadas3_.AGENDA_EXCEL = true;
   }
 
   return sh;
@@ -1091,6 +1110,8 @@ function importarAgenda(token, registros, archivo) {
   const validos = [];
   const fechas = new Set();
   const porFecha = {};
+  const COLS = UGM3.HEADERS.AGENDA_EXCEL.length;
+  let conCreacion = 0;
 
   const errores = {
     sinFecha:0,
@@ -1150,9 +1171,15 @@ function importarAgenda(token, registros, archivo) {
     fechas.add(f);
     if (estado !== 'CANCELADA') porFecha[f] = (porFecha[f] || 0) + 1;
 
+    let creacion = '';
+    try {
+      if (texto3_(r.creacion)) creacion = fechaAgenda3_(r.creacion);
+    } catch(e) {}
+    if (creacion) conCreacion++;
+
     validos.push([
       '', f, esp, estado,
-      doc, paciente, id || String(i+1)
+      doc, paciente, id || String(i+1), creacion
     ]);
   });
 
@@ -1188,10 +1215,10 @@ function importarAgenda(token, registros, archivo) {
 
     if (ultima > 1) {
       anterior = sh.getRange(
-        2,1,ultima-1,7
+        2,1,ultima-1,COLS
       ).getValues();
       sh.getRange(
-        2,1,ultima-1,7
+        2,1,ultima-1,COLS
       ).clearContent();
     }
 
@@ -1202,7 +1229,7 @@ function importarAgenda(token, registros, archivo) {
           .map(fila => fila.map(seguro3_));
 
         sh.getRange(
-          i+2,1,lote.length,7
+          i+2,1,lote.length,COLS
         ).setValues(lote);
       }
 
@@ -1215,7 +1242,7 @@ function importarAgenda(token, registros, archivo) {
 
       if (fin > 1) {
         sh.getRange(
-          2,1,fin-1,7
+          2,1,fin-1,COLS
         ).clearContent();
       }
 
@@ -1223,7 +1250,7 @@ function importarAgenda(token, registros, archivo) {
         for (let i=0;i<anterior.length;i+=500) {
           const lote=anterior.slice(i,i+500);
           sh.getRange(
-            i+2,1,lote.length,7
+            i+2,1,lote.length,COLS
           ).setValues(lote);
         }
       }
@@ -1243,6 +1270,7 @@ function importarAgenda(token, registros, archivo) {
       UGM3_AGENDA_USUARIO:usuario.nombre,
       UGM3_AGENDA_TOTAL:String(validos.length),
       UGM3_AGENDA_FECHAS:JSON.stringify(porFecha),
+      UGM3_AGENDA_CREACION:String(conCreacion),
       UGM3_ALERTA_AT:''
     });
 
@@ -1268,6 +1296,7 @@ function importarAgenda(token, registros, archivo) {
     total:validos.length,
     fechas:[...fechas].sort(),
     porFecha,
+    conCreacion,
     omitidas:registros.length-validos.length-errores.excluidas,
     excluidas:errores.excluidas,
     errores,
@@ -1306,6 +1335,9 @@ function estadoAgenda3_() {
   return {
     total:Number(p.getProperty('UGM3_AGENDA_TOTAL')) || 0,
     porFecha,
+    // Citas con fecha de creación del HIS (para separar
+    // extraordinarios de citas previas).
+    conCreacion:Number(p.getProperty('UGM3_AGENDA_CREACION')) || 0,
     fecha,
     archivo:p.getProperty(
       'UGM3_AGENDA_ARCHIVO'
@@ -2788,6 +2820,26 @@ function pacientesDelDia3_(fecha) {
   return lista;
 }
 
+// Extraordinario = Reportería lo agendó o reagendó para fin
+// de semana: cita creada en el HIS desde el 1 de octubre,
+// paciente del "Aumento 10%" o enviado por Reportería sin cita
+// en la agenda del HIS. El resto son citas previas (base HIS).
+function clasificar3_(c) {
+  let motivo='';
+  if (c.origen!=='SOBRECUPO') {
+    if (c.aumento) {
+      motivo='Aumento 10%';
+    } else if (c.creacion && c.creacion>=UGM3.INICIO_EXTRAORDINARIOS) {
+      motivo='Cita creada el '+c.creacion.slice(8,10)+'/'+c.creacion.slice(5,7);
+    } else if (c.origen==='REPORTERIA') {
+      motivo='Sin cita en la agenda del HIS';
+    }
+  }
+  c.extraordinario=Boolean(motivo);
+  c.motivoExtra=motivo;
+  return c;
+}
+
 function consultasDelDia3_(fecha,agenda,solicitudes,asistencia,reporteria) {
   const mapa=new Map();
 
@@ -2828,6 +2880,7 @@ function consultasDelDia3_(fecha,agenda,solicitudes,asistencia,reporteria) {
       estadoCita:estado,
       origen:'AGENDA',
       referencia:texto3_(r.IDExterno),
+      creacion:texto3_(r.FechaCreacion),
       sobrecupo:''
     });
   });
@@ -2965,6 +3018,7 @@ function consultasDelDia3_(fecha,agenda,solicitudes,asistencia,reporteria) {
 
   return [...mapa.values()]
     .map(c => {
+      clasificar3_(c);
       const a=marcas[c.clave];
       c.asistencia=a ? texto3_(a.Asistencia) : '';
       c.marcadoPor=a ? texto3_(a.MarcadoPor) : '';

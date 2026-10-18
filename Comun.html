@@ -486,6 +486,12 @@ const ALIAS_COLUMNAS={
   'PACIENTE','NOMBREPACIENTE',
   'NOMBRE','NOMBRES',
   'NOMBRECOMPLETO'
+ ],
+ // Cuándo se creó la cita en el HIS (separa citas previas
+ // de las extraordinarias de fin de semana).
+ creacion:[
+  'FECHACREACION','FECHADECREACION',
+  'FECHACREACIONCITA','CREACION'
  ]
 };
 
@@ -667,7 +673,8 @@ async function procesarExcel(archivo) {
    documento:String(
     valor('documento')??''
    ),
-   paciente:limpiarNombrePaciente(valor('paciente'))
+   paciente:limpiarNombrePaciente(valor('paciente')),
+   creacion:formatoFechaExcel(valor('creacion'))
   });
  }
 
@@ -766,7 +773,7 @@ function pintarIconos(raiz) {
    ===================================================== */
 
 // Versión de este archivo (ver UGM3.VERSION en Código.gs).
-const VERSION_COMUN='2026.10.15-1';
+const VERSION_COMUN='2026.10.17-1';
 
 const UGM={
  token:'',nombre:'',perfil:'',
@@ -1289,21 +1296,22 @@ MOV.desplazamiento=function() {
    ORIGEN DE CADA PACIENTE (para técnicos y supervisión)
    ===================================================== */
 
+// Dos grupos para jefatura:
+// - Base HIS: la cita ya existía en el HIS antes del 1 de
+//   octubre (cita previa para ese fin de semana).
+// - Extraordinario: Reportería lo agendó o reagendó para fin
+//   de semana (cita creada desde el 1 de octubre, Aumento 10%
+//   o sin cita en la agenda del HIS).
 const ORIGENES={
- REPORTERIA:{
-  nombre:'Reportería',
-  icono:'llamada',
-  detalle:'Paciente de la base de Reportería (call center) con cita en la agenda del sistema.'
+ AGENDA:{
+  nombre:'Base HIS',
+  icono:'calendario',
+  detalle:'Cita previa: ya estaba agendada en el HIS antes del 1 de octubre.'
  },
  ADICIONAL:{
-  nombre:'Adicional Reportería',
+  nombre:'Extraordinario',
   icono:'llamada',
-  detalle:'Enviado por Reportería: no estaba en la agenda del sistema o es del aumento del 10 %.'
- },
- AGENDA:{
-  nombre:'Agenda',
-  icono:'calendario',
-  detalle:'Cita del sistema hospitalario. No viene en la base de Reportería.'
+  detalle:'Reportería lo agendó o reagendó para fin de semana: cita creada desde el 1 de octubre, Aumento 10% o sin cita en la agenda del HIS.'
  },
  SOBRECUPO:{
   nombre:'Sobrecupo',
@@ -1312,13 +1320,18 @@ const ORIGENES={
  }
 };
 
-const ORDEN_ORIGENES=['REPORTERIA','ADICIONAL','AGENDA','SOBRECUPO'];
+const ORDEN_ORIGENES=['AGENDA','ADICIONAL','SOBRECUPO'];
 
 function origenCita(c) {
  if(c.origen==='SOBRECUPO'||c.sobrecupo)return 'SOBRECUPO';
- if(c.origen==='REPORTERIA'||c.aumento)return 'ADICIONAL';
- if(c.reporteria)return 'REPORTERIA';
+ if(c.extraordinario||c.origen==='REPORTERIA'||c.aumento)return 'ADICIONAL';
  return 'AGENDA';
+}
+
+// Por qué es extraordinario (para títulos y reportes).
+function motivoExtra(c) {
+ if(origenCita(c)!=='ADICIONAL')return '';
+ return c.motivoExtra||(c.aumento?'Aumento 10%':'Sin cita en la agenda del HIS');
 }
 
 // ¿Viene en la base de Reportería? (incluye adicionales)
@@ -1345,9 +1358,14 @@ function pildoraBase(cita) {
 function pildoraOrigen(c) {
  const o=origenCita(c);
  const O=ORIGENES[o];
- const nombre=o==='ADICIONAL'&&c.aumento?'Reportería · Aumento 10%':O.nombre;
- return '<span class="origen o-'+o.toLowerCase()+'" title="'+esc(O.detalle)+'">'+
-  icono(O.icono)+'<span>'+esc(nombre)+'</span></span>';
+ const nombre=o==='ADICIONAL'&&c.aumento?'Extraordinario · Aumento 10%':O.nombre;
+ const motivo=motivoExtra(c);
+ const titulo=O.detalle+(motivo?' Motivo: '+motivo+'.':'')+
+  (o==='AGENDA'&&deReporteria(c)?' También viene en la base de Reportería (llamada de confirmación).':'');
+ return '<span class="origen o-'+o.toLowerCase()+'" title="'+esc(titulo)+'">'+
+  icono(O.icono)+'<span>'+esc(nombre)+'</span>'+
+  (o==='AGENDA'&&deReporteria(c)?'<i class="o-call" aria-label="Confirmado por Reportería">'+icono('llamada')+'</i>':'')+
+  '</span>';
 }
 
 /* =====================================================
@@ -1723,7 +1741,8 @@ async function importarAgendaArchivo(archivo,alTerminar) {
   MOV.exito();
   aviso('Agenda actualizada: '+r.total+
    ' citas válidas. Omitidas: '+r.omitidas+'.'+
-   (r.excluidas?' Medicina General no tomada en cuenta: '+r.excluidas+'.':''));
+   (r.excluidas?' Medicina General no tomada en cuenta: '+r.excluidas+'.':'')+
+   (r.conCreacion===0?' Atención: el archivo no trae la columna "Fecha Creación"; no se podrán separar los extraordinarios.':''));
 
   if(alTerminar)await alTerminar(r);
 

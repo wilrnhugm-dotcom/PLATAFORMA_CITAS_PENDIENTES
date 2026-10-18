@@ -1,6 +1,6 @@
 <style>
 :root{
- --ugm-version:"2026.10.15-1";
+ --ugm-version:"2026.10.17-1";
  --bg:#031423;
  --bg2:#092d49;
  --panel:#0a3250;
@@ -1329,12 +1329,13 @@ input:focus,select:focus,textarea:focus{
 .origen.o-adicional{color:#2a1d00;background:var(--adi);border-color:var(--adi)}
 body.light .origen.o-adicional{color:#fff}
 .origen.o-sobrecupo{color:var(--cyan);border-color:var(--cyan)}
-.origen.o-agenda{color:var(--muted)}
+.origen.o-agenda{color:var(--rep);border-color:var(--rep-borde);background:var(--rep-bg)}
+/* Paciente de la base HIS que además llamó Reportería */
+.origen .o-call{display:inline-flex;margin-left:1px;opacity:.75}
+.origen .o-call svg{width:11px;height:11px}
 
 /* Tarjeta del paciente: anillo en el avatar según origen
    (el borde izquierdo sigue indicando la asistencia). */
-.cita[data-origen="REPORTERIA"] .avatar,
-.cita[data-origen="ADICIONAL"] .avatar{box-shadow:0 0 0 2px var(--panel2),0 0 0 4px var(--rep)}
 .cita[data-origen="ADICIONAL"] .avatar{box-shadow:0 0 0 2px var(--panel2),0 0 0 4px var(--adi)}
 .cita[data-origen="ADICIONAL"]{background:linear-gradient(90deg,var(--adi-bg),transparent 55%),var(--panel2)}
 
@@ -1352,9 +1353,8 @@ body.light .origen.o-adicional{color:#fff}
 .of-btn b{font-variant-numeric:tabular-nums;color:var(--muted);font-weight:800}
 .of-btn.on{border-color:var(--cyan);background:color-mix(in srgb,var(--cyan) 14%,var(--panel2))}
 .of-btn.on b{color:var(--text)}
-.of-btn[data-o="REPORTERIA_TODO"] i,.of-btn[data-o="REPORTERIA"] i{background:var(--rep)}
 .of-btn[data-o="ADICIONAL"] i{background:var(--adi)}
-.of-btn[data-o="AGENDA"] i{background:var(--muted)}
+.of-btn[data-o="AGENDA"] i{background:var(--rep)}
 .of-btn[data-o="SOBRECUPO"] i{background:var(--cyan)}
 .composicion{
  display:flex;height:6px;margin-top:10px;border-radius:999px;overflow:hidden;
@@ -1364,7 +1364,7 @@ body.light .origen.o-adicional{color:#fff}
 .composicion span+span{box-shadow:inset 2px 0 0 var(--panel)}
 .composicion .c-reporteria{background:var(--rep)}
 .composicion .c-adicional{background:var(--adi)}
-.composicion .c-agenda{background:color-mix(in srgb,var(--muted) 55%,transparent)}
+.composicion .c-agenda{background:var(--rep)}
 .composicion .c-sobrecupo{background:var(--cyan)}
 .composicion-leyenda{margin-top:6px;font-size:11px;color:var(--muted)}
 
