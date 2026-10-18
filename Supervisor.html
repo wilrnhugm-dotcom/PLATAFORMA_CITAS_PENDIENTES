@@ -700,16 +700,23 @@ async function refrescar(forzar) {
  const fecha=V.fecha;
 
  try {
+  const conDetalle=V.pagina==='asistencia';
   const d=await api('tableroSupervisor',UGM.token,fecha,{
-   detalle:V.pagina==='asistencia',
+   detalle:conDetalle,
    limites:V.pagina==='cupos',
    actividad:'Supervisión · '+TITULOS[V.pagina][0]
   });
 
   if(gen!==UGM.generacion||fecha!==V.fecha)return;
 
+  d.conDetalle=conDetalle;
   V.datos=d;
   dibujar(false);
+
+  // Si mientras llegaba esta respuesta se abrió Asistencia,
+  // vino sin el detalle de pacientes: se pide de nuevo.
+  if(!conDetalle&&V.pagina==='asistencia')
+   setTimeout(()=>refrescar(true),0);
 
   $('sync').textContent='● Sincronizado';
   $('sync').style.color='var(--green)';
@@ -2054,19 +2061,45 @@ function hojaResumen(wb,d,lista) {
  });
 }
 
-async function descargarReporte() {
- const d=V.datos;
-
- if(!d||!d.consultas) {
-  aviso('Espera a que cargue el detalle de asistencia.');
-  return;
+// Pide al servidor el detalle de pacientes de la fecha justo
+// antes de generar el Excel, para no usar una lista vacía o
+// desactualizada.
+async function datosReporte() {
+ try {
+  const d=await api('tableroSupervisor',UGM.token,V.fecha,{
+   detalle:true,actividad:'Supervisión · Reporte Excel'
+  });
+  d.conDetalle=true;
+  return d;
+ }catch(e) {
+  if(sesionTerminada(e,limpiarTodo))return null;
+  const d=V.datos;
+  return d&&d.conDetalle&&d.fecha===V.fecha?d:null;
  }
+}
 
+async function descargarReporte() {
  const boton=$('btnReporte');
+ if(boton.disabled)return;
  boton.disabled=true;
- boton.innerHTML=icono('reloj')+' Generando reporte...';
+ boton.innerHTML=icono('reloj')+' Preparando datos...';
+
+ let d=null;
 
  try {
+  d=await datosReporte();
+
+  if(!d||!Array.isArray(d.consultas)) {
+   aviso('No se pudo obtener el detalle de asistencia. Intenta de nuevo.');
+   return;
+  }
+
+  if(!d.consultas.length) {
+   aviso('No hay pacientes registrados para el '+fechaLarga(d.fecha)+'.');
+   return;
+  }
+
+  boton.innerHTML=icono('reloj')+' Generando reporte...';
   if(!window.ExcelJS)await cargarScript(EXCELJS_URL);
   if(!window.ExcelJS)throw Error('ExcelJS no disponible.');
 
@@ -2084,7 +2117,8 @@ async function descargarReporte() {
    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
-  a.download='Reporte_Asistencia_'+d.fecha+'.xlsx';
+  a.download='Reporte_Asistencia_'+d.fecha+'_'+
+   new Date().toTimeString().slice(0,5).replace(':','h')+'.xlsx';
   document.body.appendChild(a);
   a.click();
   setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},3000);
@@ -2095,7 +2129,7 @@ async function descargarReporte() {
  }catch(e) {
   console.warn(e);
   aviso('No se pudieron generar las gráficas; se descarga el reporte simple.');
-  descargarReporteSimple();
+  descargarReporteSimple(d);
 
  }finally {
   boton.disabled=false;
@@ -2103,10 +2137,10 @@ async function descargarReporte() {
  }
 }
 
-function descargarReporteSimple() {
- const d=V.datos;
+function descargarReporteSimple(datos) {
+ const d=datos||V.datos;
 
- if(!d||!d.consultas) {
+ if(!d||!d.consultas||!d.consultas.length) {
   aviso('Espera a que cargue el detalle de asistencia.');
   return;
  }
