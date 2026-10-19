@@ -707,6 +707,7 @@ async function archivoBase64(archivo) {
    ===================================================== */
 
 const ICONOS_SVG={
+ mas:'<rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/>',
  lista:'<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4M12 16h4M8 11h.01M8 16h.01"/>',
  agregar:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M12 18v-6M9 15h6"/>',
  bandeja:'<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
@@ -1882,6 +1883,7 @@ function mostrarPagina(n,titulo,sinAnimar) {
  });
 
  MOV.tinta(activa);
+ navMovilEstado();
 
  $('title').textContent=titulo;
  $('crumbPage').textContent=titulo;
@@ -1897,8 +1899,128 @@ function mostrarPagina(n,titulo,sinAnimar) {
  MOV.refrescarScroll();
 }
 
+/* =====================================================
+   VISTA DE CELULAR
+   - Menú inferior tipo aplicación con nombres cortos. Si hay
+     más de 5 secciones, las secundarias van en "Más".
+   - Las tablas se muestran como tarjetas (cada dato con su
+     título), sin columnas cortadas.
+   ===================================================== */
+
+const NAV_CORTO={
+ consultas:'Consultas',solicitud:'Sobrecupo',missolicitudes:'Solicitudes',
+ buscar:'Buscar',control:'Control',solicitudes:'Bandeja',asistencia:'Asistencia',
+ personal:'Personal',cupos:'Cupos',basepacientes:'Base',actualizacion:'Agenda',
+ auditoria:'Auditoría'
+};
+const NAV_PRINCIPAL=['control','solicitudes','asistencia','actualizacion'];
+const MOVIL=window.matchMedia('(max-width:720px)');
+
+function montarNavMovil() {
+ const barra=document.querySelector('.sidebar');
+ if(!barra||barra.dataset.movil)return;
+ barra.dataset.movil='1';
+
+ const navs=[...barra.querySelectorAll('.nav[data-page]')];
+
+ navs.forEach(b=>{
+  // Texto largo (escritorio) y corto (celular) por separado.
+  [...b.childNodes].forEach(n=>{
+   if(n.nodeType===3&&n.textContent.trim()) {
+    const t=document.createElement('span');
+    t.className='nav-t';
+    t.textContent=n.textContent.trim();
+    n.replaceWith(t);
+   }
+  });
+  const c=document.createElement('span');
+  c.className='nav-c';
+  c.textContent=NAV_CORTO[b.dataset.page]||
+   (b.querySelector('.nav-t')||{}).textContent||'';
+  const badge=b.querySelector('.badge');
+  b.insertBefore(c,badge||null);
+ });
+
+ if(navs.length>5) {
+  navs.forEach(b=>{
+   if(!NAV_PRINCIPAL.includes(b.dataset.page))b.classList.add('nav-extra');
+  });
+
+  const mas=document.createElement('button');
+  mas.type='button';
+  mas.className='nav-mas';
+  mas.id='navMas';
+  mas.setAttribute('aria-expanded','false');
+  mas.innerHTML=icono('mas')+'<span class="nav-c">Más</span>';
+  barra.appendChild(mas);
+
+  const cerrar=()=>{
+   barra.classList.remove('mas');
+   mas.setAttribute('aria-expanded','false');
+  };
+
+  mas.addEventListener('click',ev=>{
+   ev.stopPropagation();
+   const abrir=!barra.classList.contains('mas');
+   barra.classList.toggle('mas',abrir);
+   mas.setAttribute('aria-expanded',String(abrir));
+  });
+  navs.forEach(b=>b.addEventListener('click',cerrar));
+  document.addEventListener('click',ev=>{
+   if(!barra.contains(ev.target))cerrar();
+  });
+  barra.style.setProperty('--nav-cols',String(NAV_PRINCIPAL.length+1));
+ }else {
+  barra.style.setProperty('--nav-cols',String(navs.length));
+ }
+
+ navMovilEstado();
+}
+
+// "Más" queda resaltado si la sección abierta es secundaria.
+function navMovilEstado() {
+ const mas=$('navMas');
+ if(!mas)return;
+ const activa=document.querySelector('.nav.active');
+ mas.classList.toggle('active',Boolean(activa&&activa.classList.contains('nav-extra')));
+}
+
+// Copia el título de cada columna a sus celdas para que, en
+// celular, cada fila se lea como tarjeta.
+function etiquetarTablas() {
+ document.querySelectorAll('table').forEach(t=>{
+  const th=[...t.querySelectorAll('thead th')].map(x=>x.textContent.trim());
+  if(!th.length)return;
+  t.classList.add('t-resp');
+  t.querySelectorAll('tbody tr').forEach(tr=>{
+   if(tr.dataset.et===String(th.length))return;
+   [...tr.children].forEach((td,i)=>{
+    if(td.tagName==='TD'&&!td.hasAttribute('colspan'))td.setAttribute('data-label',th[i]||'');
+   });
+   tr.dataset.et=String(th.length);
+  });
+ });
+}
+
+function vigilarTablas() {
+ let pendiente=false;
+ const correr=()=>{
+  pendiente=false;
+  if(MOVIL.matches)etiquetarTablas();
+ };
+ new MutationObserver(()=>{
+  if(pendiente||!MOVIL.matches)return;
+  pendiente=true;
+  requestAnimationFrame(correr);
+ }).observe(document.body,{childList:true,subtree:true});
+ if(MOVIL.addEventListener)MOVIL.addEventListener('change',correr);
+ correr();
+}
+
 function montarComun() {
  iniciarTema();
+ montarNavMovil();
+ vigilarTablas();
 
  $('themeToggle').addEventListener('click',()=>{
   aplicarTema(

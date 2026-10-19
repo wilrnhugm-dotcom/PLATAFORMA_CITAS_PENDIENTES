@@ -792,7 +792,7 @@ function htmlCita(c,texto) {
     <div class="meta">
      <span>${c.documento?'Doc. '+esc(c.documento):'Sin documento'}</span>
      ${etiquetaCita(c)}
-     ${T.tab?'':'<span>· '+esc(c.especialidad)+'</span>'}
+     ${T.tab?'':'<span class="m-esp">'+esc(c.especialidad)+'</span>'}
     </div>
     ${c.observacion?`<div class="obs-ucc" title="Observación del call center">${esc(c.observacion)}</div>`:''}
    </div>
