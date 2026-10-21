@@ -66,6 +66,20 @@
 .scan-dia b{color:var(--text)}
 .scan-dia.alerta{color:var(--yellow)}
 
+.fecha-uap{margin-top:16px;display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
+.fecha-uap button,.fecha-otra{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:8px 14px;
+ border-radius:999px;border:1px solid var(--border);background:var(--panel2);color:var(--text);
+ font-size:13px;font-weight:700;cursor:pointer;transition:border-color .2s,background .2s}
+.fecha-uap button small{color:var(--muted);font-weight:700}
+.fecha-uap button.on{border-color:var(--cyan);background:color-mix(in srgb,var(--cyan) 14%,var(--panel2));color:var(--cyan)}
+.fecha-otra{position:relative}
+.fecha-otra svg{width:16px;height:16px}
+.fecha-otra input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.fecha-aviso{margin:14px auto 0;max-width:460px;padding:10px 14px;border-radius:14px;font-size:13px;line-height:1.4;
+ background:color-mix(in srgb,var(--yellow) 14%,transparent);border:1px solid color-mix(in srgb,var(--yellow) 45%,transparent);
+ color:var(--text)}
+.fecha-aviso b{color:var(--yellow)}
+.fecha-aviso button{margin-left:6px;border:0;background:none;color:var(--cyan);font-weight:800;text-decoration:underline;cursor:pointer}
 .manual-btn{margin-top:18px;width:100%;min-height:48px;display:inline-flex;align-items:center;
  justify-content:center;gap:8px}
 .manual-btn svg{width:18px;height:18px}
@@ -104,6 +118,7 @@
 .chip.SOBRECUPO{background:color-mix(in srgb,var(--cyan) 16%,transparent);color:var(--cyan)}
 .chip.NO_ENCONTRADO,.chip.LECTURA{background:color-mix(in srgb,var(--red) 16%,transparent);color:var(--red)}
 .chip.MIXTO{background:color-mix(in srgb,#a78bfa 18%,transparent);color:#a78bfa}
+.chip.OTRO_DIA{background:color-mix(in srgb,var(--green) 16%,transparent);color:var(--green)}
 body.light .chip.EXTRAORDINARIO{color:#fff}
 
 /* =========================================================
@@ -121,6 +136,10 @@ body.light .chip.EXTRAORDINARIO{color:#fff}
 .res.NO_ENCONTRADO{--c1:#f2707f;--c2:#b8283f;--tx:#fff}
 .res.LECTURA,.res.ERROR{--c1:#64748b;--c2:#334155;--tx:#fff}
 .res.CONSULTANDO{--c1:#0f3a57;--c2:#08243a;--tx:#fff}
+.res.OTRO_DIA{--c1:#34d3a6;--c2:#0b7a63;--tx:#032a22}
+.res-dia{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:-2px 0 10px;
+ font-size:12px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;color:#0b7a63}
+.res-dia.pasada{color:#8a5a00}
 
 .res-cab{text-align:center;margin:auto 0 0}
 .res-ico{width:84px;height:84px;margin:0 auto 14px;border-radius:50%;display:grid;place-items:center;
@@ -234,6 +253,9 @@ body.light .chip.EXTRAORDINARIO{color:#fff}
     El resultado aparece solo.</p>
    <div class="scan-dia" id="scanDia">Cargando la agenda de hoy…</div>
 
+   <div class="fecha-uap" id="fechaChips" role="group" aria-label="Fecha a consultar"></div>
+   <div class="fecha-aviso hidden" id="fechaAviso"></div>
+
    <button type="button" class="btn manual-btn" id="btnManual">
     <i data-ico="dui"></i> Escribir el DUI a mano
    </button>
@@ -285,7 +307,7 @@ const U={
  token:'',nombre:'',perfil:'',
  consultando:false,ultima:{dui:'',t:0},
  cierre:null,latido:null,hist:[],audio:null,
- total:null,fecha:''
+ total:null,fecha:'',hoy:'',fechaSel:'',fechas:[]
 };
 
 const CLAVE_SESION='UGM_UAP_SESION';
@@ -296,7 +318,8 @@ const TEXTOS={
  ORDINARIO:['Paciente','ORDINARIO','Cita previa · ya estaba agendado en el HIS.','calendarioCheck'],
  SOBRECUPO:['Paciente','SOBRECUPO','Registrado como sobrecupo por un técnico.','agregar'],
  MIXTO:['Paciente con','VARIAS CITAS','Tiene citas de distinto tipo hoy. Revise cada una.','lista'],
- NO_ENCONTRADO:['Sin cita','NO ENCONTRADO','Este DUI no tiene cita para hoy. Refiéralo con supervisión.','alerta'],
+ NO_ENCONTRADO:['Sin cita','NO ENCONTRADO','Este DUI no tiene cita para hoy ni en los demás días cargados. Refiéralo con supervisión.','alerta'],
+ OTRO_DIA:['Sin cita este día','CITA EN OTRO DÍA','','calendario'],
  LECTURA:['Lectura','NO VÁLIDA','No se reconoció un DUI. Vuelva a escanear el documento.','alerta'],
  ERROR:['Sin respuesta','INTENTE DE NUEVO','No se pudo consultar. Revise la conexión y vuelva a escanear.','alerta'],
  CONSULTANDO:['Consultando','UN MOMENTO','','refrescar']
@@ -342,6 +365,7 @@ function tono(tipo) {
   SOBRECUPO:[[740,.12],[740,.12]],
   MIXTO:[[660,.12],[880,.12],[660,.12]],
   NO_ENCONTRADO:[[300,.18],[220,.26]],
+  OTRO_DIA:[[520,.14],[390,.22]],
   LECTURA:[[260,.22]],
   ERROR:[[260,.22]]
  }[tipo];
@@ -407,7 +431,7 @@ function montarEscaner() {
  let tBuf=null;
  document.addEventListener('keydown',ev=>{
   const t=ev.target;
-  if(t===inp||t.id==='duiManual'||t.id==='loginName'||t.id==='loginPass')return;
+  if(t===inp||(t.tagName==='INPUT'&&t!==inp))return;
   if($('app').classList.contains('hidden'))return;
   const ahora=Date.now();
   if(ahora-ultimo>300)buf='';
@@ -454,7 +478,7 @@ async function consultar(lectura) {
  const espera=setTimeout(()=>mostrar({resultado:'CONSULTANDO',dui:formatoDui(dui)}),250);
 
  try {
-  const r=await api('consultarUAP',U.token,lectura);
+  const r=await api('consultarUAP',U.token,lectura,U.fechaSel);
   clearTimeout(espera);
   mostrar(r);
   if(r.ok)anotar(r);
@@ -464,7 +488,7 @@ async function consultar(lectura) {
   mostrar({resultado:'ERROR',detalle:e.message});
  }finally {
   U.consultando=false;
-  estado('','Listo para escanear');
+  estado('',textoListo());
  }
 }
 
@@ -476,14 +500,40 @@ function estado(clase,texto) {
 
 function mostrar(r) {
  const tipo=r.resultado||'ERROR';
- const [kicker,titulo,sub,ico]=TEXTOS[tipo]||TEXTOS.ERROR;
+ let [kicker,titulo,sub,ico]=TEXTOS[tipo]||TEXTOS.ERROR;
  const res=$('res');
  const citas=r.citas||[];
+ const otroDia=r.fecha&&r.hoy&&r.fecha!==r.hoy;
+ const diaCorto=f=>{
+  const d=new Date(f+'T12:00:00Z');
+  return isNaN(d)?f:d.toLocaleDateString('es-SV',{weekday:'long',day:'numeric',month:'long',timeZone:'UTC'});
+ };
+
+ if(otroDia&&['EXTRAORDINARIO','ORDINARIO','SOBRECUPO','MIXTO'].includes(tipo))
+  kicker='Cita del '+diaCorto(r.fecha);
+ if(tipo==='OTRO_DIA')
+  sub='No tiene cita '+(otroDia?'el '+diaCorto(r.fecha):'hoy')+', pero sí en '+
+   ((r.otras||[]).length>1?'estas fechas':'esta fecha')+':';
+ if(tipo==='NO_ENCONTRADO'&&otroDia)
+  sub='Este DUI no tiene cita el '+diaCorto(r.fecha)+' ni en los demás días cargados.';
 
  let cuerpo='';
+ const nombreTipo=t=>t==='EXTRAORDINARIO'?'EXTRAORDINARIO':t==='SOBRECUPO'?'SOBRECUPO':'ORDINARIO';
 
  if(tipo==='CONSULTANDO') {
   cuerpo=`<div class="res-pie" style="margin-top:18px">DUI ${esc(r.dui||'')}</div>`;
+ }else if(tipo==='OTRO_DIA') {
+  cuerpo='<div class="res-citas">'+(r.otras||[]).map(o=>o.citas.map(c=>`
+   <article class="res-cita">
+    <div class="res-dia${o.pasada?' pasada':''}"><span>${esc(diaCorto(o.fecha))}${o.pasada?' · ya pasó':''}</span>
+     <span class="chip ${esc(c.tipo)}">${nombreTipo(c.tipo)}</span></div>
+    <div class="res-nombre">${esc(c.paciente||'Sin nombre')}</div>
+    <div class="res-datos">
+     <div><small>DUI</small><span>${esc(r.dui)}</span></div>
+     <div><small>Hora de cita</small><span>${esc(c.hora||'—')}</span></div>
+     <div class="ancho"><small>Especialidad</small><span>${esc(c.especialidad||'—')}</span></div>
+    </div>
+   </article>`).join('')).join('')+'</div>';
  }else if(citas.length) {
   cuerpo='<div class="res-citas">'+citas.map(c=>`
    <article class="res-cita">
@@ -493,7 +543,7 @@ function mostrar(r) {
      <div><small>Hora de cita</small><span>${esc(c.hora||'—')}</span></div>
      <div class="ancho"><small>Especialidad</small><span>${esc(c.especialidad||'—')}</span></div>
     </div>
-    ${tipo==='MIXTO'?`<span class="chip ${esc(c.tipo)}">${c.tipo==='EXTRAORDINARIO'?'EXTRAORDINARIO':c.tipo==='SOBRECUPO'?'SOBRECUPO':'ORDINARIO'}</span>`:''}
+    ${tipo==='MIXTO'?`<span class="chip ${esc(c.tipo)}">${nombreTipo(c.tipo)}</span>`:''}
     ${c.tipo==='EXTRAORDINARIO'&&c.motivo?`<div class="res-motivo">${esc(c.motivo)}</div>`:''}
    </article>`).join('')+'</div>';
  }else if(r.dui) {
@@ -502,11 +552,11 @@ function mostrar(r) {
      <div><small>DUI</small><span>${esc(r.dui)}</span></div>
      <div><small>Fecha</small><span>${esc(r.fecha?fechaLarga(r.fecha):'Hoy')}</span></div>
     </div>
-    ${r.hayAgenda===false?'<div class="res-motivo">No hay agenda cargada para hoy. Avise a supervisión.</div>':''}
+    ${r.hayAgenda===false?'<div class="res-motivo">No hay citas cargadas para esa fecha. Avise a supervisión.</div>':''}
    </article></div>`;
  }
 
- const dur=tipo==='NO_ENCONTRADO'||tipo==='MIXTO'?8:6;
+ const dur=tipo==='NO_ENCONTRADO'||tipo==='MIXTO'||tipo==='OTRO_DIA'?9:6;
 
  res.className='res '+tipo;
  res.innerHTML=`
@@ -574,10 +624,11 @@ function anotar(r) {
  pintarConteo();
  if(window.gsap&&MOV.ok)gsap.fromTo('#nTotal',{scale:1.25},{scale:1,duration:.35,ease:'power3.out'});
 
- const p=(r.citas||[])[0];
+ const p=(r.citas||[])[0]||((r.otras||[])[0]&&r.otras[0].citas[0]);
  U.hist.unshift({
   nombre:p?p.paciente:'DUI '+r.dui,
-  detalle:(p?(r.citas.map(x=>x.especialidad).join(', ')+' · '):'')+horaAhora(),
+  detalle:(p?p.especialidad+' · ':'')+
+   (r.fecha&&r.hoy&&r.fecha!==r.hoy?'consulta del '+r.fecha.slice(8,10)+'/'+r.fecha.slice(5,7)+' · ':'')+horaAhora(),
   tipo:r.resultado
  });
  U.hist=U.hist.slice(0,6);
@@ -586,7 +637,7 @@ function anotar(r) {
 
 function pintarHistorial() {
  const nombres={EXTRAORDINARIO:'Extraordinario',ORDINARIO:'Ordinario',SOBRECUPO:'Sobrecupo',
-  MIXTO:'Varias citas',NO_ENCONTRADO:'Sin cita',LECTURA:'No válida'};
+  MIXTO:'Varias citas',NO_ENCONTRADO:'Sin cita',LECTURA:'No válida',OTRO_DIA:'Otro día'};
  $('hist').innerHTML=U.hist.length
   ?U.hist.map(h=>`<li><b>${esc(h.nombre)}</b><span class="chip ${esc(h.tipo)}">${esc(nombres[h.tipo]||h.tipo)}</span>
     <small>${esc(h.detalle)}</small></li>`).join('')
@@ -607,24 +658,72 @@ function sesionUAPTerminada(e) {
 async function latido() {
  if(!U.token)return;
  try {
-  const r=await api('latidoUAP',U.token);
+  const r=await api('latidoUAP',U.token,U.fechaSel);
+  // Al cambiar el día, la consulta vuelve a "Hoy".
+  if(U.hoy&&r.hoy!==U.hoy&&U.fechaSel&&U.fechaSel<r.hoy)U.fechaSel='';
+  U.hoy=r.hoy;
   U.fecha=r.fecha;
+  U.fechas=r.fechas||[];
   pintarDia(r);
  }catch(e) {
   sesionUAPTerminada(e);
  }
 }
 
+function diaCorto(f) {
+ const d=new Date(f+'T12:00:00Z');
+ return isNaN(d)?f:d.toLocaleDateString('es-SV',{weekday:'short',day:'numeric',month:'short',timeZone:'UTC'})
+  .replace(/\./g,'');
+}
+
+function textoListo() {
+ return U.fechaSel&&U.fechaSel!==U.hoy?'Listo · '+diaCorto(U.fechaSel):'Listo para escanear';
+}
+
 function pintarDia(r) {
  const el=$('scanDia');
+ const esHoy=r.fecha===r.hoy;
  el.classList.toggle('alerta',!r.total);
  el.innerHTML=r.total
-  ?`<b>${esc(fechaLarga(r.fecha))}</b> · ${r.total} citas en la agenda de hoy`
-  :`${esc(fechaLarga(r.fecha))} · <b>No hay agenda cargada para hoy.</b> Avise a supervisión.`;
+  ?`<b>${esc(fechaLarga(r.fecha))}</b> · ${r.total} citas ${esHoy?'en la agenda de hoy':'cargadas ese día'}`
+  :`${esc(fechaLarga(r.fecha))} · <b>No hay citas cargadas ${esHoy?'para hoy':'para ese día'}.</b>`+
+   (esHoy?' Avise a supervisión.':'');
+ pintarFechas();
+ estado('',textoListo());
+}
+
+// Botones: Hoy, los próximos días con citas y "Otra fecha".
+function pintarFechas() {
+ const sel=U.fechaSel||U.hoy;
+ const dias=U.fechas.filter(f=>f.fecha!==U.hoy).slice(0,3);
+ const extra=sel!==U.hoy&&!dias.some(f=>f.fecha===sel);
+ $('fechaChips').innerHTML=
+  `<button type="button" data-f="" class="${sel===U.hoy?'on':''}">Hoy</button>`+
+  dias.map(f=>`<button type="button" data-f="${esc(f.fecha)}" class="${sel===f.fecha?'on':''}">
+    ${esc(diaCorto(f.fecha))}</button>`).join('')+
+  (extra?`<button type="button" data-f="${esc(sel)}" class="on">${esc(diaCorto(sel))}</button>`:'')+
+  `<label class="fecha-otra">${icono('calendario')} Otra fecha
+    <input type="date" id="fechaOtra" aria-label="Elegir otra fecha" value="${esc(sel)}"></label>`;
+
+ const aviso=$('fechaAviso');
+ const otro=sel!==U.hoy;
+ aviso.classList.toggle('hidden',!otro);
+ if(otro)aviso.innerHTML=`Consultando citas del <b>${esc(fechaLarga(sel))}</b>, no de hoy.`+
+  `<button type="button" data-f="">Volver a hoy</button>`;
+}
+
+function elegirFecha(f) {
+ const hoyF=U.hoy||hoy();
+ U.fechaSel=f&&f!==hoyF?f:'';
+ U.ultima={dui:'',t:0};
+ pintarFechas();
+ estado('ocupado','Cargando…');
+ latido().then(enfocarEscaner);
 }
 
 function entrarUAP(r) {
  U.token=r.token;
+ U.fechaSel='';
  U.nombre=r.nombre;
  U.perfil=r.perfil;
  guardar(CLAVE_SESION,{token:r.token,nombre:r.nombre,perfil:r.perfil});
@@ -733,6 +832,20 @@ function iniciarUAP() {
  montarEscaner();
 
  $('res').addEventListener('click',cerrarResultado);
+
+ const alElegir=ev=>{
+  if(ev.target.id==='fechaOtra') {
+   try {ev.target.showPicker();}catch(e) {}
+   return;
+  }
+  const b=ev.target.closest('button[data-f]');
+  if(b)elegirFecha(b.dataset.f);
+ };
+ $('fechaChips').addEventListener('click',alElegir);
+ $('fechaAviso').addEventListener('click',alElegir);
+ $('fechaChips').addEventListener('change',ev=>{
+  if(ev.target.id==='fechaOtra'&&ev.target.value)elegirFecha(ev.target.value);
+ });
 
  $('btnManual').addEventListener('click',()=>{
   const f=$('formManual');

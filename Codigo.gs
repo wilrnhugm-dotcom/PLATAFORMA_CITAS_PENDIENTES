@@ -3433,7 +3433,35 @@ function indiceUAP3_(fecha) {
   return indice;
 }
 
-function consultarUAP(token, lectura) {
+// Días con citas cargadas (agenda del HIS o base de Reportería).
+function fechasUAP3_() {
+  const f={};
+  const ag=estadoAgenda3_().porFecha || {};
+  const pac=estadoPacientes3_().fechas || {};
+  Object.keys(ag).forEach(d => { f[d]=Math.max(f[d]||0,Number(ag[d])||0); });
+  Object.keys(pac).forEach(d => {
+    const n=Number((pac[d]||{}).total)||0;
+    f[d]=Math.max(f[d]||0,n);
+  });
+  return Object.keys(f).filter(d=>/^\d{4}-\d{2}-\d{2}$/.test(d)).sort()
+    .map(d=>({fecha:d,total:f[d]}));
+}
+
+function fechaUAP3_(valor) {
+  try {
+    return valor ? fecha3_(valor) : hoy3_();
+  } catch(e) {
+    return hoy3_();
+  }
+}
+
+function citasUAP3_(fecha, dui) {
+  return (indiceUAP3_(fecha).p[dui]||[]).map(c => ({
+    paciente:c[0],especialidad:c[1],hora:c[2],tipo:c[3],motivo:c[4]
+  }));
+}
+
+function consultarUAP(token, lectura, fechaElegida) {
   const s=validar3_(token, true);
 
   if (!['UAP','SUPERVISOR','AUTORIZADO'].includes(s.perfil)) {
@@ -3449,23 +3477,38 @@ function consultarUAP(token, lectura) {
     return {ok:false,resultado:'LECTURA',lectura:texto3_(lectura).slice(0,20)};
   }
 
-  const fecha=hoy3_();
+  const hoy=hoy3_();
+  const fecha=fechaUAP3_(fechaElegida);
   const indice=indiceUAP3_(fecha);
-  const citas=(indice.p[dui]||[]).map(c => ({
-    paciente:c[0],especialidad:c[1],hora:c[2],tipo:c[3],motivo:c[4]
-  }));
+  const citas=citasUAP3_(fecha, dui);
+
+  // Si no tiene cita ese día, se buscan los demás días
+  // cargados (agenda del HIS y base de Reportería).
+  const otras=[];
+  if (!citas.length) {
+    fechasUAP3_()
+      .filter(f => f.fecha!==fecha)
+      .slice(-12)
+      .forEach(f => {
+        const c=citasUAP3_(f.fecha, dui);
+        if (c.length) otras.push({fecha:f.fecha,pasada:f.fecha<hoy,citas:c});
+      });
+  }
 
   const tipos=[...new Set(citas.map(c=>c.tipo))];
-  const resultado=!citas.length ? 'NO_ENCONTRADO'
-    : tipos.length===1 ? tipos[0] : 'MIXTO';
+  const resultado=citas.length
+    ? (tipos.length===1 ? tipos[0] : 'MIXTO')
+    : otras.length ? 'OTRO_DIA' : 'NO_ENCONTRADO';
 
   actividad3_(s,'UAP · Escaneo de DUI');
 
   try {
+    const primera=citas[0] || (otras[0] && otras[0].citas[0]);
     auditar3_(
       s.nombre,s.perfil,'UAP_ESCANEO',dui,
-      resultado+(citas.length ? ' · '+citas[0].paciente+' · '+
-        citas.map(c=>c.especialidad).join(', ') : '')
+      resultado+' · '+fecha+(primera ? ' · '+primera.paciente+' · '+
+        primera.especialidad : '')+
+      (otras.length ? ' · cita el '+otras.map(o=>o.fecha).join(', ') : '')
     );
   } catch(e) {
     console.error(e.message);
@@ -3475,25 +3518,29 @@ function consultarUAP(token, lectura) {
     ok:true,
     dui,
     fecha,
+    hoy,
     resultado,
     citas,
+    otras,
     hayAgenda:indice.t>0
   };
 }
 
 // Mantiene la sesión del equipo de UAP activa durante el turno
 // (si no, "Cerrar sesiones inactivas" la cerraría).
-function latidoUAP(token) {
+function latidoUAP(token, fechaElegida) {
   const s=validar3_(token, true);
   actividad3_(s,'UAP · Listo para escanear');
-  const fecha=hoy3_();
+  const hoy=hoy3_();
+  const fecha=fechaUAP3_(fechaElegida);
   let total=0;
   try {
     total=indiceUAP3_(fecha).t;
   } catch(e) {
     console.error(e.message);
   }
-  return {ok:true,nombre:s.nombre,perfil:s.perfil,fecha,total,
+  return {ok:true,nombre:s.nombre,perfil:s.perfil,hoy,fecha,total,
+    fechas:fechasUAP3_().filter(f=>f.fecha>=hoy).slice(0,6),
     version:UGM3.VERSION};
 }
 
