@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<base target="_top">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>UGM | Atención al Paciente</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<?!= include('Estilos'); ?>
+<style>
+/* =========================================================
+   UAP · Unidad de Atención al Paciente
+   Pantalla de una sola función: escanear el DUI y ver si el
+   paciente es EXTRAORDINARIO u ORDINARIO.
+   ========================================================= */
+.uap-app{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column}
+.uap-top{
+ display:flex;align-items:center;gap:12px;padding:12px 16px;
+ padding-top:calc(12px + env(safe-area-inset-top));
+ border-bottom:1px solid var(--border);
+ background:var(--bg);
+ position:sticky;top:0;z-index:20
+}
+.uap-top .brand-logo{width:132px;flex:none}
+.uap-unidad{font-size:10px;font-weight:900;letter-spacing:.16em;color:var(--cyan);
+ padding-left:12px;border-left:1px solid var(--border);line-height:1.3}
+.uap-top .top-actions{margin-left:auto;display:flex;align-items:center;gap:10px;min-width:0}
+.uap-top .theme-btn{width:38px;height:38px;flex:none}
+.uap-quien{text-align:right;min-width:0;font-size:11px;line-height:1.35}
+.uap-quien strong{display:block;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.uap-quien a{color:var(--cyan)}
+
+.uap-main{flex:1;width:100%;max-width:760px;margin:0 auto;
+ padding:16px 16px calc(24px + env(safe-area-inset-bottom));display:grid;gap:14px;align-content:start}
+
+/* Tarjeta principal del escáner */
+.scan-card{position:relative;overflow:hidden;padding:22px 20px 20px;border-radius:22px;
+ border:1px solid var(--border);background:var(--panel);text-align:center}
+.scan-estado{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;
+ font-size:11px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;
+ color:var(--green);background:color-mix(in srgb,var(--green) 12%,transparent)}
+.scan-estado:before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;
+ animation:pulso 1.8s infinite}
+.scan-estado.ocupado{color:var(--cyan);background:color-mix(in srgb,var(--cyan) 12%,transparent)}
+.scan-estado.pausa{color:var(--yellow);background:color-mix(in srgb,var(--yellow) 12%,transparent)}
+
+.visor{position:relative;width:min(260px,72vw);aspect-ratio:1.6;margin:22px auto 18px;
+ border-radius:18px;background:
+  repeating-linear-gradient(90deg,color-mix(in srgb,var(--text) 26%,transparent) 0 2px,transparent 2px 5px,
+   color-mix(in srgb,var(--text) 26%,transparent) 5px 6px,transparent 6px 10px) center/72% 46% no-repeat,
+  color-mix(in srgb,var(--cyan) 5%,transparent)}
+.visor i{position:absolute;width:30px;height:30px;border:3px solid var(--cyan);border-radius:4px}
+.visor i:nth-child(1){top:0;left:0;border-right:0;border-bottom:0;border-top-left-radius:16px}
+.visor i:nth-child(2){top:0;right:0;border-left:0;border-bottom:0;border-top-right-radius:16px}
+.visor i:nth-child(3){bottom:0;left:0;border-right:0;border-top:0;border-bottom-left-radius:16px}
+.visor i:nth-child(4){bottom:0;right:0;border-left:0;border-top:0;border-bottom-right-radius:16px}
+.visor b{position:absolute;left:10%;right:10%;top:50%;height:2px;border-radius:2px;
+ background:var(--red);box-shadow:0 0 14px 2px color-mix(in srgb,var(--red) 70%,transparent);
+ animation:laser 2.2s ease-in-out infinite}
+@keyframes laser{0%,100%{transform:translateY(-26px)}50%{transform:translateY(26px)}}
+@media(prefers-reduced-motion:reduce){.visor b{animation:none}.scan-estado:before{animation:none}}
+
+.scan-card h1{margin:0;font-size:clamp(24px,6.4vw,34px);line-height:1.15}
+.scan-card p{margin:8px auto 0;max-width:420px;color:var(--muted);font-size:14px;line-height:1.5}
+.scan-dia{margin-top:14px;font-size:12px;color:var(--muted)}
+.scan-dia b{color:var(--text)}
+.scan-dia.alerta{color:var(--yellow)}
+
+.manual-btn{margin-top:18px;width:100%;min-height:48px;display:inline-flex;align-items:center;
+ justify-content:center;gap:8px}
+.manual-btn svg{width:18px;height:18px}
+.manual{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;margin-top:16px;text-align:left}
+.manual input{font-size:20px;letter-spacing:.08em;text-align:center;font-variant-numeric:tabular-nums}
+.manual .btn{min-height:50px;padding:0 18px}
+.manual small{grid-column:1/-1;color:var(--muted);font-size:12px}
+
+/* Campo invisible que recibe el escáner sin abrir el teclado */
+.scan-in{position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;border:0;padding:0;
+ pointer-events:none;caret-color:transparent}
+
+/* Contadores del equipo */
+.uap-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.uap-stat{padding:14px 12px;border-radius:16px;border:1px solid var(--border);background:var(--panel)}
+.uap-stat strong{display:block;font-size:26px;line-height:1.1;font-variant-numeric:tabular-nums}
+.uap-stat span{display:block;margin-top:4px;font-size:11.5px;color:var(--muted);line-height:1.3}
+.uap-stat.extra strong{color:var(--adi)}
+.uap-stat.ord strong{color:var(--rep)}
+.uap-nota{font-size:11px;color:var(--muted);text-align:center;margin-top:-4px}
+
+/* Historial reciente (solo en memoria del equipo) */
+.uap-hist{padding:16px;border-radius:18px;border:1px solid var(--border);background:var(--panel)}
+.uap-hist h2{margin:0 0 10px;font-size:15px}
+.uap-hist ol{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.uap-hist li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;align-items:center;
+ padding:10px 12px;border-radius:12px;background:var(--panel2);border:1px solid var(--border)}
+.uap-hist li b{font-size:13px;line-height:1.3;overflow-wrap:anywhere}
+.uap-hist li small{grid-column:1;color:var(--muted);font-size:11.5px}
+.uap-hist li .chip{grid-row:1/3;grid-column:2}
+.uap-hist .vacio{color:var(--muted);font-size:13px;text-align:center;padding:10px 0}
+.chip{display:inline-flex;align-items:center;justify-content:center;padding:4px 10px;border-radius:999px;
+ font-size:10.5px;font-weight:900;letter-spacing:.05em;white-space:nowrap}
+.chip.EXTRAORDINARIO{background:var(--adi);color:#2a1d00}
+.chip.ORDINARIO{background:var(--rep-bg);color:var(--rep);border:1px solid var(--rep-borde)}
+.chip.SOBRECUPO{background:color-mix(in srgb,var(--cyan) 16%,transparent);color:var(--cyan)}
+.chip.NO_ENCONTRADO,.chip.LECTURA{background:color-mix(in srgb,var(--red) 16%,transparent);color:var(--red)}
+.chip.MIXTO{background:color-mix(in srgb,#a78bfa 18%,transparent);color:#a78bfa}
+body.light .chip.EXTRAORDINARIO{color:#fff}
+
+/* =========================================================
+   VENTANA DE RESULTADO (pantalla completa, por color)
+   ========================================================= */
+.res{position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;
+ padding:calc(22px + env(safe-area-inset-top)) 18px calc(18px + env(safe-area-inset-bottom));
+ overflow:auto;cursor:pointer;-webkit-tap-highlight-color:transparent;
+ --c1:#4f7bff;--c2:#2747c9;--tx:#fff;--card:#fff;--cardtx:#0d1b2a;
+ background:linear-gradient(165deg,var(--c1),var(--c2));color:var(--tx)}
+.res.EXTRAORDINARIO{--c1:#ffd15c;--c2:#f2a300;--tx:#231700}
+.res.ORDINARIO{--c1:#5b84ff;--c2:#2a46c4;--tx:#fff}
+.res.SOBRECUPO{--c1:#3fdcf2;--c2:#0a8fb0;--tx:#032a35}
+.res.MIXTO{--c1:#a98bff;--c2:#5b2fc9;--tx:#fff}
+.res.NO_ENCONTRADO{--c1:#f2707f;--c2:#b8283f;--tx:#fff}
+.res.LECTURA,.res.ERROR{--c1:#64748b;--c2:#334155;--tx:#fff}
+.res.CONSULTANDO{--c1:#0f3a57;--c2:#08243a;--tx:#fff}
+
+.res-cab{text-align:center;margin:auto 0 0}
+.res-ico{width:84px;height:84px;margin:0 auto 14px;border-radius:50%;display:grid;place-items:center;
+ background:color-mix(in srgb,var(--tx) 14%,transparent)}
+.res-ico svg{width:46px;height:46px;stroke:currentColor;fill:none;stroke-width:2.2}
+.res-kicker{font-size:12px;font-weight:900;letter-spacing:.2em;text-transform:uppercase;opacity:.75}
+.res-tit{margin:6px 0 0;font-size:clamp(26px,9vw,64px);line-height:1.02;font-weight:900;letter-spacing:0;overflow-wrap:anywhere}
+.res-sub{margin:10px auto 0;max-width:480px;font-size:15px;line-height:1.45;opacity:.92}
+
+.res-citas{display:grid;gap:12px;width:100%;max-width:560px;margin:24px auto 0}
+.res-cita{background:var(--card);color:var(--cardtx);border-radius:20px;padding:18px 18px 16px;
+ box-shadow:0 18px 40px rgba(0,0,0,.22);text-align:left}
+.res-nombre{font-size:clamp(19px,5.4vw,24px);font-weight:900;line-height:1.2;overflow-wrap:anywhere}
+.res-datos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 16px;margin-top:14px}
+.res-datos div{min-width:0}
+.res-datos small{display:block;font-size:10px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:#5d6b7a}
+.res-datos span{display:block;margin-top:2px;font-size:15px;font-weight:700;overflow-wrap:anywhere}
+.res-datos .ancho{grid-column:1/-1}
+.res-cita .chip{margin-top:12px}
+.res-motivo{margin-top:12px;padding:9px 12px;border-radius:12px;background:#fff6db;color:#5b4300;font-size:12.5px;font-weight:700}
+
+.res-pie{margin:22px auto 0;width:100%;max-width:560px;text-align:center;font-size:12.5px;font-weight:700;opacity:.85}
+.res-barra{display:block;height:4px;margin-top:10px;border-radius:4px;overflow:hidden;
+ background:color-mix(in srgb,var(--tx) 22%,transparent)}
+.res-barra i{display:block;height:100%;background:var(--tx);transform-origin:left center;transform:scaleX(1)}
+.res-barra i.corre{animation:cuenta var(--dur,6s) linear forwards}
+@keyframes cuenta{to{transform:scaleX(0)}}
+.res.CONSULTANDO .res-ico svg{animation:gira 1s linear infinite}
+@keyframes gira{to{transform:rotate(360deg)}}
+.res-espacio{margin:auto 0 0}
+
+@media(min-width:721px){
+ .uap-main{padding-top:28px}
+ .scan-card{padding:30px 34px 28px}
+}
+@media(max-width:380px){
+ .uap-unidad{display:none}
+ .uap-stat strong{font-size:22px}
+}
+</style>
+</head>
+<body>
+
+<div class="bg-orbs" aria-hidden="true">
+ <span class="orb o1"></span>
+ <span class="orb o2"></span>
+</div>
+
+<!-- ACCESO -->
+<div id="login">
+ <section class="login-card glass">
+  <span class="shine" aria-hidden="true"></span>
+  <div class="brand-row">
+   <div class="brand-logo" role="img"
+    aria-label="Red Nacional de Hospitales · Nuevo Hospital Rosales"></div>
+   <div class="brand-escudo" role="img"
+    aria-label="Escudo de El Salvador"></div>
+  </div>
+
+  <h1>Atención al Paciente</h1>
+  <p>Escanea el DUI y conoce al instante si el paciente es
+   extraordinario u ordinario.</p>
+  <span class="login-badge">● UAP · CONSULTA POR DUI</span>
+
+  <form id="loginForm" autocomplete="off" style="margin-top:22px">
+   <div class="field">
+    <label for="loginName">Nombre del colaborador</label>
+    <input id="loginName" required
+     autocomplete="off" placeholder="Nombres y apellidos">
+   </div>
+
+   <div class="field">
+    <label for="loginPass">Clave de UAP</label>
+    <input id="loginPass" type="text" required class="clave-oculta"
+     autocomplete="off" autocapitalize="off" spellcheck="false"
+     data-lpignore="true" data-1p-ignore data-form-type="other"
+     style="-webkit-text-security:disc"
+     placeholder="Clave de acceso">
+   </div>
+
+   <button id="btnLogin" class="btn primary"
+    type="submit" style="width:100%">
+    Ingresar
+   </button>
+  </form>
+ </section>
+</div>
+
+<!-- PANTALLA UAP -->
+<div id="app" class="uap-app hidden">
+ <header class="uap-top">
+  <div class="brand-logo" role="img"
+   aria-label="Red Nacional de Hospitales · Nuevo Hospital Rosales"></div>
+  <div class="uap-unidad">ATENCIÓN<br>AL PACIENTE</div>
+  <div class="top-actions">
+   <button id="themeToggle" class="theme-btn" type="button"
+    aria-label="Cambiar tema"></button>
+   <div class="uap-quien">
+    <strong id="who"></strong>
+    <a href="#" id="btnSalir">Salir</a>
+   </div>
+  </div>
+ </header>
+
+ <main class="uap-main">
+  <section class="scan-card" id="zonaScan">
+   <span class="scan-estado" id="scanEstado">Listo para escanear</span>
+   <div class="visor" aria-hidden="true"><i></i><i></i><i></i><i></i><b></b></div>
+   <h1>Escanee el DUI</h1>
+   <p>Apunte el escáner al código de barras del DUI.
+    El resultado aparece solo.</p>
+   <div class="scan-dia" id="scanDia">Cargando la agenda de hoy…</div>
+
+   <button type="button" class="btn manual-btn" id="btnManual">
+    <i data-ico="dui"></i> Escribir el DUI a mano
+   </button>
+
+   <form class="manual hidden" id="formManual" autocomplete="off">
+    <input id="duiManual" inputmode="numeric" maxlength="10"
+     placeholder="00000000-0" aria-label="DUI del paciente"
+     autocomplete="off">
+    <button class="btn primary" type="submit">Consultar</button>
+    <small>Úselo solo si el escáner no lee el documento.</small>
+   </form>
+  </section>
+
+  <section class="uap-stats" aria-label="Escaneos de hoy en este equipo">
+   <div class="uap-stat"><strong id="nTotal">0</strong><span>Escaneados</span></div>
+   <div class="uap-stat extra"><strong id="nExtra">0</strong><span>Extraordinarios</span></div>
+   <div class="uap-stat ord"><strong id="nOrd">0</strong><span>Ordinarios</span></div>
+  </section>
+  <div class="uap-nota">Conteo de hoy en este equipo</div>
+
+  <section class="uap-hist">
+   <h2>Últimos escaneos</h2>
+   <ol id="hist"><li class="vacio" style="display:block">Aún no hay escaneos.</li></ol>
+  </section>
+ </main>
+</div>
+
+<input id="scanIn" class="scan-in" inputmode="none" autocomplete="off"
+ autocapitalize="off" spellcheck="false" aria-label="Lectura del escáner" tabindex="-1">
+
+<!-- RESULTADO -->
+<div id="res" class="res hidden" role="alertdialog" aria-modal="true"
+ aria-live="assertive" aria-labelledby="resTit"></div>
+
+<div id="toast" class="toast hidden" role="status"></div>
+
+<!-- Elementos que usa el código compartido -->
+<div id="modal" class="hidden"><div id="modalContent"></div></div>
+<div id="errorPanel" class="hidden"><button id="btnCloseError" type="button"></button></div>
+
+<?!= include('Comun'); ?>
+
+<script>
+'use strict';
+
+const VERSION_PANTALLA='2026.10.21-1';
+
+const U={
+ token:'',nombre:'',perfil:'',
+ consultando:false,ultima:{dui:'',t:0},
+ cierre:null,latido:null,hist:[],audio:null,
+ total:null,fecha:''
+};
+
+const CLAVE_SESION='UGM_UAP_SESION';
+const CLAVE_CONTEO='UGM_UAP_CONTEO';
+
+const TEXTOS={
+ EXTRAORDINARIO:['Paciente','EXTRAORDINARIO','Reportería lo agendó o reagendó para fin de semana.','llamada'],
+ ORDINARIO:['Paciente','ORDINARIO','Cita previa · ya estaba agendado en el HIS.','calendarioCheck'],
+ SOBRECUPO:['Paciente','SOBRECUPO','Registrado como sobrecupo por un técnico.','agregar'],
+ MIXTO:['Paciente con','VARIAS CITAS','Tiene citas de distinto tipo hoy. Revise cada una.','lista'],
+ NO_ENCONTRADO:['Sin cita','NO ENCONTRADO','Este DUI no tiene cita para hoy. Refiéralo con supervisión.','alerta'],
+ LECTURA:['Lectura','NO VÁLIDA','No se reconoció un DUI. Vuelva a escanear el documento.','alerta'],
+ ERROR:['Sin respuesta','INTENTE DE NUEVO','No se pudo consultar. Revise la conexión y vuelva a escanear.','alerta'],
+ CONSULTANDO:['Consultando','UN MOMENTO','','refrescar']
+};
+
+/* ---------- utilidades ---------- */
+
+function guardar(clave,valor) {
+ try {
+  if(valor==null)localStorage.removeItem(clave);
+  else localStorage.setItem(clave,JSON.stringify(valor));
+ }catch(e) {}
+}
+
+function leer(clave) {
+ try {return JSON.parse(localStorage.getItem(clave)||'null');}
+ catch(e) {return null;}
+}
+
+function formatoDui(d) {
+ const n=String(d||'').replace(/\D/g,'');
+ return n.length===9?n.slice(0,8)+'-'+n.slice(8):n;
+}
+
+function horaAhora() {
+ return new Date().toLocaleTimeString('es-SV',{hour:'2-digit',minute:'2-digit'});
+}
+
+/* ---------- sonido y vibración ---------- */
+
+function activarAudio() {
+ if(U.audio)return;
+ try {
+  const A=window.AudioContext||window.webkitAudioContext;
+  if(A)U.audio=new A();
+ }catch(e) {}
+}
+
+function tono(tipo) {
+ const pasos={
+  EXTRAORDINARIO:[[660,.12],[990,.2]],
+  ORDINARIO:[[880,.18]],
+  SOBRECUPO:[[740,.12],[740,.12]],
+  MIXTO:[[660,.12],[880,.12],[660,.12]],
+  NO_ENCONTRADO:[[300,.18],[220,.26]],
+  LECTURA:[[260,.22]],
+  ERROR:[[260,.22]]
+ }[tipo];
+ const vib={EXTRAORDINARIO:[60,40,60],NO_ENCONTRADO:[180,80,180],LECTURA:[200],ERROR:[200]}[tipo]||[50];
+ try {if(navigator.vibrate)navigator.vibrate(vib);}catch(e) {}
+ if(!pasos||!U.audio)return;
+ try {
+  if(U.audio.state==='suspended')U.audio.resume();
+  let t=U.audio.currentTime+.01;
+  pasos.forEach(([f,d])=>{
+   const o=U.audio.createOscillator();
+   const g=U.audio.createGain();
+   o.type='sine';o.frequency.value=f;
+   g.gain.setValueAtTime(.0001,t);
+   g.gain.exponentialRampToValueAtTime(.35,t+.015);
+   g.gain.exponentialRampToValueAtTime(.0001,t+d);
+   o.connect(g).connect(U.audio.destination);
+   o.start(t);o.stop(t+d+.02);
+   t+=d+.05;
+  });
+ }catch(e) {}
+}
+
+/* ---------- escáner ----------
+   Los escáneres (Zebra DataWedge y USB) escriben el número
+   como un teclado y normalmente envían Enter. Se aceptan
+   ambos casos: con Enter, o 9 dígitos seguidos sin Enter. */
+
+function enfocarEscaner() {
+ if($('app').classList.contains('hidden'))return;
+ const a=document.activeElement;
+ if(a&&a.id==='duiManual')return;
+ $('scanIn').focus({preventScroll:true});
+}
+
+function montarEscaner() {
+ const inp=$('scanIn');
+ let espera=null;
+
+ const enviar=()=>{
+  clearTimeout(espera);
+  const v=inp.value;
+  inp.value='';
+  if(v.replace(/\D/g,'').length>=6)consultar(v);
+ };
+
+ inp.addEventListener('keydown',ev=>{
+  if(ev.key==='Enter'||ev.key==='Tab') {
+   ev.preventDefault();
+   enviar();
+  }
+ });
+
+ inp.addEventListener('input',()=>{
+  clearTimeout(espera);
+  if(/^\D*\d{9}\D*$/.test(inp.value))espera=setTimeout(enviar,160);
+  else espera=setTimeout(()=>{inp.value='';},1500);
+ });
+
+ // Si el foco quedó en otro lado, igual se capturan las teclas.
+ let buf='';
+ let ultimo=0;
+ let tBuf=null;
+ document.addEventListener('keydown',ev=>{
+  const t=ev.target;
+  if(t===inp||t.id==='duiManual'||t.id==='loginName'||t.id==='loginPass')return;
+  if($('app').classList.contains('hidden'))return;
+  const ahora=Date.now();
+  if(ahora-ultimo>300)buf='';
+  ultimo=ahora;
+  if(/^\d$/.test(ev.key)) {
+   buf+=ev.key;
+   clearTimeout(tBuf);
+   if(buf.length===9)tBuf=setTimeout(()=>{const v=buf;buf='';consultar(v);},160);
+  }else if(ev.key==='Enter'&&buf.length>=8) {
+   ev.preventDefault();
+   clearTimeout(tBuf);
+   const v=buf;buf='';
+   consultar(v);
+  }
+ });
+
+ // Tocar cualquier parte vuelve a dejar listo el escáner.
+ document.addEventListener('pointerup',ev=>{
+  activarAudio();
+  if(!ev.target.closest('input,button,a,form'))setTimeout(enfocarEscaner,0);
+ });
+ document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden) {
+   enfocarEscaner();
+   latido();
+  }
+ });
+ window.addEventListener('focus',enfocarEscaner);
+}
+
+/* ---------- consulta ---------- */
+
+async function consultar(lectura) {
+ const dui=String(lectura||'').replace(/\D/g,'');
+ const ahora=Date.now();
+
+ // El mismo DUI leído dos veces seguidas no se consulta doble.
+ if(dui===U.ultima.dui&&ahora-U.ultima.t<2500)return;
+ if(U.consultando)return;
+ U.ultima={dui,t:ahora};
+ U.consultando=true;
+
+ estado('ocupado','Consultando…');
+ const espera=setTimeout(()=>mostrar({resultado:'CONSULTANDO',dui:formatoDui(dui)}),250);
+
+ try {
+  const r=await api('consultarUAP',U.token,lectura);
+  clearTimeout(espera);
+  mostrar(r);
+  if(r.ok)anotar(r);
+ }catch(e) {
+  clearTimeout(espera);
+  if(sesionUAPTerminada(e))return;
+  mostrar({resultado:'ERROR',detalle:e.message});
+ }finally {
+  U.consultando=false;
+  estado('','Listo para escanear');
+ }
+}
+
+function estado(clase,texto) {
+ const el=$('scanEstado');
+ el.className='scan-estado'+(clase?' '+clase:'');
+ el.textContent=texto;
+}
+
+function mostrar(r) {
+ const tipo=r.resultado||'ERROR';
+ const [kicker,titulo,sub,ico]=TEXTOS[tipo]||TEXTOS.ERROR;
+ const res=$('res');
+ const citas=r.citas||[];
+
+ let cuerpo='';
+
+ if(tipo==='CONSULTANDO') {
+  cuerpo=`<div class="res-pie" style="margin-top:18px">DUI ${esc(r.dui||'')}</div>`;
+ }else if(citas.length) {
+  cuerpo='<div class="res-citas">'+citas.map(c=>`
+   <article class="res-cita">
+    <div class="res-nombre">${esc(c.paciente||'Sin nombre')}</div>
+    <div class="res-datos">
+     <div><small>DUI</small><span>${esc(r.dui)}</span></div>
+     <div><small>Hora de cita</small><span>${esc(c.hora||'—')}</span></div>
+     <div class="ancho"><small>Especialidad</small><span>${esc(c.especialidad||'—')}</span></div>
+    </div>
+    ${tipo==='MIXTO'?`<span class="chip ${esc(c.tipo)}">${c.tipo==='EXTRAORDINARIO'?'EXTRAORDINARIO':c.tipo==='SOBRECUPO'?'SOBRECUPO':'ORDINARIO'}</span>`:''}
+    ${c.tipo==='EXTRAORDINARIO'&&c.motivo?`<div class="res-motivo">${esc(c.motivo)}</div>`:''}
+   </article>`).join('')+'</div>';
+ }else if(r.dui) {
+  cuerpo=`<div class="res-citas"><article class="res-cita">
+    <div class="res-datos" style="margin-top:0">
+     <div><small>DUI</small><span>${esc(r.dui)}</span></div>
+     <div><small>Fecha</small><span>${esc(r.fecha?fechaLarga(r.fecha):'Hoy')}</span></div>
+    </div>
+    ${r.hayAgenda===false?'<div class="res-motivo">No hay agenda cargada para hoy. Avise a supervisión.</div>':''}
+   </article></div>`;
+ }
+
+ const dur=tipo==='NO_ENCONTRADO'||tipo==='MIXTO'?8:6;
+
+ res.className='res '+tipo;
+ res.innerHTML=`
+  <div class="res-espacio"></div>
+  <div class="res-cab">
+   <div class="res-ico">${icono(ico)}</div>
+   <div class="res-kicker">${esc(kicker)}</div>
+   <h2 class="res-tit" id="resTit">${esc(titulo)}</h2>
+   ${sub?`<p class="res-sub">${esc(sub)}</p>`:''}
+  </div>
+  ${cuerpo}
+  ${tipo==='CONSULTANDO'?'':`<div class="res-pie">Toque la pantalla o escanee el siguiente DUI
+   <span class="res-barra"><i style="--dur:${dur}s"></i></span></div>`}
+  <div class="res-espacio"></div>`;
+
+ res.classList.remove('hidden');
+
+ if(window.gsap&&MOV.ok&&tipo!=='CONSULTANDO') {
+  gsap.fromTo(res,{opacity:0},{opacity:1,duration:.18,ease:'power2.out'});
+  gsap.fromTo(res.querySelectorAll('.res-cab,.res-cita'),{y:18,opacity:0,scale:.98},
+   {y:0,opacity:1,scale:1,duration:.32,stagger:.05,ease:'power3.out',clearProps:'transform'});
+ }
+
+ clearTimeout(U.cierre);
+ if(tipo!=='CONSULTANDO') {
+  tono(tipo);
+  const barra=res.querySelector('.res-barra i');
+  if(barra)requestAnimationFrame(()=>barra.classList.add('corre'));
+  U.cierre=setTimeout(cerrarResultado,dur*1000);
+ }
+
+ enfocarEscaner();
+}
+
+function cerrarResultado() {
+ clearTimeout(U.cierre);
+ const res=$('res');
+ if(res.classList.contains('hidden'))return;
+ const fin=()=>{res.classList.add('hidden');res.innerHTML='';enfocarEscaner();};
+ if(window.gsap&&MOV.ok)gsap.to(res,{opacity:0,duration:.18,ease:'power2.in',onComplete:()=>{gsap.set(res,{opacity:1});fin();}});
+ else fin();
+}
+
+/* ---------- conteo e historial del equipo ---------- */
+
+function conteo() {
+ const c=leer(CLAVE_CONTEO);
+ const f=hoy();
+ return c&&c.fecha===f?c:{fecha:f,total:0,extra:0,ord:0};
+}
+
+function pintarConteo() {
+ const c=conteo();
+ $('nTotal').textContent=c.total;
+ $('nExtra').textContent=c.extra;
+ $('nOrd').textContent=c.ord;
+}
+
+function anotar(r) {
+ const c=conteo();
+ c.total++;
+ if(r.resultado==='EXTRAORDINARIO')c.extra++;
+ if(r.resultado==='ORDINARIO')c.ord++;
+ guardar(CLAVE_CONTEO,c);
+ pintarConteo();
+ if(window.gsap&&MOV.ok)gsap.fromTo('#nTotal',{scale:1.25},{scale:1,duration:.35,ease:'power3.out'});
+
+ const p=(r.citas||[])[0];
+ U.hist.unshift({
+  nombre:p?p.paciente:'DUI '+r.dui,
+  detalle:(p?(r.citas.map(x=>x.especialidad).join(', ')+' · '):'')+horaAhora(),
+  tipo:r.resultado
+ });
+ U.hist=U.hist.slice(0,6);
+ pintarHistorial();
+}
+
+function pintarHistorial() {
+ const nombres={EXTRAORDINARIO:'Extraordinario',ORDINARIO:'Ordinario',SOBRECUPO:'Sobrecupo',
+  MIXTO:'Varias citas',NO_ENCONTRADO:'Sin cita',LECTURA:'No válida'};
+ $('hist').innerHTML=U.hist.length
+  ?U.hist.map(h=>`<li><b>${esc(h.nombre)}</b><span class="chip ${esc(h.tipo)}">${esc(nombres[h.tipo]||h.tipo)}</span>
+    <small>${esc(h.detalle)}</small></li>`).join('')
+  :'<li class="vacio" style="display:block">Aún no hay escaneos.</li>';
+}
+
+/* ---------- sesión ---------- */
+
+function sesionUAPTerminada(e) {
+ const m=String(e&&e.message||e);
+ if(/Sesi[oó]n (cerrada|vencida|inv[aá]lida|no autorizada)|Inicia sesi[oó]n|solo permite/.test(m)) {
+  salirUAP('Tu sesión terminó: '+m);
+  return true;
+ }
+ return false;
+}
+
+async function latido() {
+ if(!U.token)return;
+ try {
+  const r=await api('latidoUAP',U.token);
+  U.fecha=r.fecha;
+  pintarDia(r);
+ }catch(e) {
+  sesionUAPTerminada(e);
+ }
+}
+
+function pintarDia(r) {
+ const el=$('scanDia');
+ el.classList.toggle('alerta',!r.total);
+ el.innerHTML=r.total
+  ?`<b>${esc(fechaLarga(r.fecha))}</b> · ${r.total} citas en la agenda de hoy`
+  :`${esc(fechaLarga(r.fecha))} · <b>No hay agenda cargada para hoy.</b> Avise a supervisión.`;
+}
+
+function entrarUAP(r) {
+ U.token=r.token;
+ U.nombre=r.nombre;
+ U.perfil=r.perfil;
+ guardar(CLAVE_SESION,{token:r.token,nombre:r.nombre,perfil:r.perfil});
+
+ $('who').textContent=r.nombre;
+ $('toast').classList.add('hidden');
+ window.scrollTo(0,0);
+ $('login').classList.add('hidden');
+ $('app').classList.remove('hidden');
+ pintarConteo();
+ pintarHistorial();
+ enfocarEscaner();
+
+ clearInterval(U.latido);
+ U.latido=setInterval(latido,4*60*1000);
+ latido();
+
+ if(window.gsap&&MOV.ok)gsap.fromTo('.uap-main>*',{y:14,opacity:0},
+  {y:0,opacity:1,duration:.4,stagger:.06,ease:'power3.out',clearProps:'all'});
+}
+
+function salirUAP(mensaje) {
+ clearInterval(U.latido);
+ U.token='';
+ guardar(CLAVE_SESION,null);
+ U.hist=[];
+ cerrarResultado();
+ $('app').classList.add('hidden');
+ $('login').classList.remove('hidden');
+ $('loginPass').value='';
+ if(mensaje)aviso(mensaje);
+}
+
+function montarAccesoUAP() {
+ $('loginForm').addEventListener('submit',async ev=>{
+  ev.preventDefault();
+  activarAudio();
+  const b=$('btnLogin');
+  b.disabled=true;
+  b.textContent='Ingresando…';
+  try {
+   const r=await api('entrar',$('loginName').value,$('loginPass').value,'uap');
+   $('loginPass').value='';
+   entrarUAP(r);
+  }catch(e) {
+   aviso(e.message);
+  }finally {
+   b.disabled=false;
+   b.textContent='Ingresar';
+  }
+ });
+
+ $('btnSalir').addEventListener('click',async ev=>{
+  ev.preventDefault();
+  const token=U.token;
+  salirUAP('Sesión cerrada.');
+  try {if(token)await api('salir',token);}catch(e) {}
+ });
+}
+
+// El equipo de UAP conserva la sesión del turno aunque se
+// recargue la página o se bloquee la pantalla.
+async function restaurarSesion() {
+ const s=leer(CLAVE_SESION);
+ if(!s||!s.token)return;
+ try {
+  await api('latidoUAP',s.token);
+  entrarUAP(s);
+ }catch(e) {
+  guardar(CLAVE_SESION,null);
+ }
+}
+
+/* ---------- versión de archivos ---------- */
+
+async function verificarArchivos() {
+ const css=(()=>{try{return getComputedStyle(document.documentElement)
+  .getPropertyValue('--ugm-version').replace(/["'\s]/g,'');}catch(e){return '';}})();
+ let servidor='';
+ try {servidor=await api('versionUGM');}catch(e) {}
+ const faltan=[['Código.gs',servidor],
+  ['Comun',typeof VERSION_COMUN==='undefined'?'':VERSION_COMUN],['Estilos',css]]
+  .filter(([,v])=>v!==VERSION_PANTALLA).map(([n])=>n);
+ if(!faltan.length)return;
+ const a=document.createElement('div');
+ a.className='aviso-version';
+ a.setAttribute('role','alert');
+ a.innerHTML='<b>Faltan archivos por actualizar:</b> '+faltan.join(', ')+
+  '. Pega los .txt más recientes en Apps Script e implementa una nueva versión.';
+ document.body.appendChild(a);
+}
+
+/* ---------- inicio ---------- */
+
+function iniciarUAP() {
+ const c=$('loginPass');
+ if(!(window.CSS&&CSS.supports&&CSS.supports('-webkit-text-security','disc')))c.type='password';
+
+ iniciarTema();
+ $('themeToggle').addEventListener('click',()=>
+  aplicarTema(document.body.classList.contains('light')?'oscuro':'claro'));
+ pintarIconos();
+ verificarArchivos();
+
+ montarAccesoUAP();
+ montarEscaner();
+
+ $('res').addEventListener('click',cerrarResultado);
+
+ $('btnManual').addEventListener('click',()=>{
+  const f=$('formManual');
+  const abrir=f.classList.contains('hidden');
+  f.classList.toggle('hidden',!abrir);
+  $('btnManual').classList.toggle('hidden',abrir);
+  if(abrir)setTimeout(()=>$('duiManual').focus(),30);
+ });
+
+ $('duiManual').addEventListener('input',ev=>{
+  const n=ev.target.value.replace(/\D/g,'').slice(0,9);
+  ev.target.value=n.length>8?n.slice(0,8)+'-'+n.slice(8):n;
+ });
+
+ $('formManual').addEventListener('submit',ev=>{
+  ev.preventDefault();
+  const v=$('duiManual').value;
+  if(v.replace(/\D/g,'').length<9) {
+   aviso('Escribe los 9 dígitos del DUI.');
+   return;
+  }
+  $('duiManual').value='';
+  $('duiManual').blur();
+  $('formManual').classList.add('hidden');
+  $('btnManual').classList.remove('hidden');
+  U.ultima={dui:'',t:0};
+  consultar(v);
+ });
+
+ if(MOV.login)MOV.login();
+ restaurarSesion();
+}
+
+iniciarUAP();
+</script>
+</body>
+</html>

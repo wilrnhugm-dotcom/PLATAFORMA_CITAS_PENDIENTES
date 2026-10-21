@@ -60,7 +60,7 @@ const UGM3 = {
   // Debe coincidir con la versión de Tecnico, Supervisor,
   // Estilos y Comun: así la pantalla avisa si falta
   // actualizar algún archivo.
-  VERSION: '2026.10.17-1',
+  VERSION: '2026.10.21-1',
 
   TZ: 'America/El_Salvador',
 
@@ -68,7 +68,9 @@ const UGM3 = {
   ROLES: {
     SUPERVISOR: 'SUP1',
     AUTORIZADO: 'HNRUGM$',
-    TECNICO: 'UGM2026'
+    TECNICO: 'UGM2026',
+    // Unidad de Atención al Paciente: solo consulta por DUI.
+    UAP: 'UAP2026'
   },
 
   // Sin nuevas programaciones ni asignación de cupos.
@@ -245,19 +247,18 @@ function doGet(e) {
     e && e.parameter && e.parameter.vista
   ).toLowerCase();
 
-  const supervisor = vista === 'supervisor';
+  const pantalla =
+    vista === 'supervisor' ? ['Supervisor','UGM | Supervisión'] :
+    vista === 'uap' ? ['Uap','UGM | Atención al Paciente'] :
+    ['Tecnico','UGM | Técnicos'];
 
   return HtmlService
-    .createTemplateFromFile(
-      supervisor ? 'Supervisor' : 'Tecnico'
-    )
+    .createTemplateFromFile(pantalla[0])
     .evaluate()
-    .setTitle(
-      supervisor ? 'UGM | Supervisión' : 'UGM | Técnicos'
-    )
+    .setTitle(pantalla[1])
     .addMetaTag(
       'viewport',
-      'width=device-width,initial-scale=1'
+      'width=device-width,initial-scale=1,viewport-fit=cover'
     );
 }
 
@@ -916,7 +917,8 @@ function firmar3_(sesion) {
   );
 }
 
-function validar3_(token) {
+// UAP solo puede usar su consulta por DUI (permitirUAP).
+function validar3_(token, permitirUAP) {
   if (!token) throw Error('Inicia sesión.');
 
   let partes;
@@ -955,6 +957,10 @@ function validar3_(token) {
 
   if (!conectado) throw Error('Sesión cerrada.');
 
+  if (s.perfil === 'UAP' && !permitirUAP) {
+    throw Error('El acceso de UAP solo permite la consulta por DUI.');
+  }
+
   return s;
 }
 
@@ -962,7 +968,8 @@ function validar3_(token) {
 // solo admite sus perfiles. Sin parámetro, admite todos.
 const VISTAS3 = {
   tecnico: ['TECNICO','AUTORIZADO'],
-  supervisor: ['SUPERVISOR','AUTORIZADO']
+  supervisor: ['SUPERVISOR','AUTORIZADO'],
+  uap: ['UAP','SUPERVISOR','AUTORIZADO']
 };
 
 function entrar(nombre, clave, vista) {
@@ -984,9 +991,20 @@ function entrar(nombre, clave, vista) {
 
   const v = texto3_(vista).toLowerCase();
 
+  // La clave de UAP solo abre su propio enlace.
+  if (perfil === 'UAP' && v !== 'uap') {
+    throw Error(
+      'La clave de UAP solo funciona en el enlace de '+
+      'Atención al Paciente (?vista=uap).'
+    );
+  }
+
   if (VISTAS3[v] && !VISTAS3[v].includes(perfil)) {
     throw Error(
-      v === 'tecnico'
+      v === 'uap'
+        ? 'Esta es la pantalla de Atención al Paciente (UAP). '+
+          'Usa la clave de UAP.'
+        : v === 'tecnico'
         ? 'Esta es la plataforma de técnicos. '+
           'Ingresa por el enlace de supervisión.'
         : 'Esta es la plataforma de supervisión. '+
@@ -1066,7 +1084,7 @@ function modificarSesion3_(s,actividad,cerrar) {
 }
 
 function salir(token) {
-  const s = validar3_(token);
+  const s = validar3_(token, true);
 
   modificarSesion3_(s,'Sesión cerrada',true);
 
@@ -3364,6 +3382,119 @@ function tableroSupervisor(token,fecha,opciones) {
 
 function versionUGM() {
   return UGM3.VERSION;
+}
+
+/* ==========================================================
+   UAP · CONSULTA POR DUI (escáner)
+   Dice si el paciente de hoy es EXTRAORDINARIO (Reportería
+   lo agendó o reagendó para fin de semana), ORDINARIO (cita
+   previa de la base HIS) o SOBRECUPO, con nombre, DUI y
+   especialidad. No permite marcar ni modificar nada.
+   ========================================================== */
+
+// Índice del día por DUI. Se guarda 90 s en caché para que
+// cada escaneo responda rápido aunque haya varios equipos.
+function indiceUAP3_(fecha) {
+  const ag=estadoAgenda3_();
+  const pac=estadoPacientes3_();
+  const clave='UAP1_'+fecha+'_'+texto3_(ag.cargaID).slice(0,8)+'_'+
+    texto3_(pac.version).slice(0,8);
+  const cache=CacheService.getScriptCache();
+
+  try {
+    const g=cache.get(clave);
+    if (g) return JSON.parse(g);
+  } catch(e) {}
+
+  const consultas=consultasDelDia3_(
+    fecha,leer3_('AGENDA_EXCEL'),leer3_('SOBRECUPOS'),[],
+    pacientesDelDia3_(fecha)
+  );
+
+  const p={};
+  consultas.forEach(c => {
+    const d=dui3_(c.documento);
+    if (!d) return;
+    const tipo=c.origen==='SOBRECUPO' ? 'SOBRECUPO'
+      : c.extraordinario ? 'EXTRAORDINARIO' : 'ORDINARIO';
+    (p[d]=p[d]||[]).push([
+      texto3_(c.paciente),texto3_(c.especialidad),
+      texto3_(c.horaCita),tipo,texto3_(c.motivoExtra)
+    ]);
+  });
+
+  const indice={t:consultas.length,p};
+
+  try {
+    const json=JSON.stringify(indice);
+    if (json.length<95000) cache.put(clave,json,90);
+  } catch(e) {}
+
+  return indice;
+}
+
+function consultarUAP(token, lectura) {
+  const s=validar3_(token, true);
+
+  if (!['UAP','SUPERVISOR','AUTORIZADO'].includes(s.perfil)) {
+    throw Error('Sin permiso para la consulta de UAP.');
+  }
+
+  // El escáner entrega solo los 9 dígitos del DUI.
+  const digitos=texto3_(lectura).replace(/\D/g,'');
+  const dui=digitos.length===8 || digitos.length===9
+    ? dui3_(digitos) : '';
+
+  if (!dui) {
+    return {ok:false,resultado:'LECTURA',lectura:texto3_(lectura).slice(0,20)};
+  }
+
+  const fecha=hoy3_();
+  const indice=indiceUAP3_(fecha);
+  const citas=(indice.p[dui]||[]).map(c => ({
+    paciente:c[0],especialidad:c[1],hora:c[2],tipo:c[3],motivo:c[4]
+  }));
+
+  const tipos=[...new Set(citas.map(c=>c.tipo))];
+  const resultado=!citas.length ? 'NO_ENCONTRADO'
+    : tipos.length===1 ? tipos[0] : 'MIXTO';
+
+  actividad3_(s,'UAP · Escaneo de DUI');
+
+  try {
+    auditar3_(
+      s.nombre,s.perfil,'UAP_ESCANEO',dui,
+      resultado+(citas.length ? ' · '+citas[0].paciente+' · '+
+        citas.map(c=>c.especialidad).join(', ') : '')
+    );
+  } catch(e) {
+    console.error(e.message);
+  }
+
+  return {
+    ok:true,
+    dui,
+    fecha,
+    resultado,
+    citas,
+    hayAgenda:indice.t>0
+  };
+}
+
+// Mantiene la sesión del equipo de UAP activa durante el turno
+// (si no, "Cerrar sesiones inactivas" la cerraría).
+function latidoUAP(token) {
+  const s=validar3_(token, true);
+  actividad3_(s,'UAP · Listo para escanear');
+  const fecha=hoy3_();
+  let total=0;
+  try {
+    total=indiceUAP3_(fecha).t;
+  } catch(e) {
+    console.error(e.message);
+  }
+  return {ok:true,nombre:s.nombre,perfil:s.perfil,fecha,total,
+    version:UGM3.VERSION};
 }
 
 /**
