@@ -3397,7 +3397,7 @@ function versionUGM() {
 function indiceUAP3_(fecha) {
   const ag=estadoAgenda3_();
   const pac=estadoPacientes3_();
-  const clave='UAP1_'+fecha+'_'+texto3_(ag.cargaID).slice(0,8)+'_'+
+  const clave='UAP2_'+fecha+'_'+texto3_(ag.cargaID).slice(0,8)+'_'+
     texto3_(pac.version).slice(0,8);
   const cache=CacheService.getScriptCache();
 
@@ -3406,9 +3406,12 @@ function indiceUAP3_(fecha) {
     if (g) return JSON.parse(g);
   } catch(e) {}
 
+  // Incluye las asistencias ya marcadas: si la agenda de ese
+  // día se reemplazó, el paciente sigue apareciendo (igual que
+  // en el panel de supervisión).
   const consultas=consultasDelDia3_(
-    fecha,leer3_('AGENDA_EXCEL'),leer3_('SOBRECUPOS'),[],
-    pacientesDelDia3_(fecha)
+    fecha,leer3_('AGENDA_EXCEL'),leer3_('SOBRECUPOS'),
+    leer3_('ASISTENCIA'),pacientesDelDia3_(fecha)
   );
 
   const p={};
@@ -3419,7 +3422,9 @@ function indiceUAP3_(fecha) {
       : c.extraordinario ? 'EXTRAORDINARIO' : 'ORDINARIO';
     (p[d]=p[d]||[]).push([
       texto3_(c.paciente),texto3_(c.especialidad),
-      texto3_(c.horaCita),tipo,texto3_(c.motivoExtra)
+      texto3_(c.horaCita),tipo,texto3_(c.motivoExtra),
+      texto3_(c.asistencia),texto3_(c.marcadoPor),
+      horaUAP3_(c.hora)
     ]);
   });
 
@@ -3433,6 +3438,12 @@ function indiceUAP3_(fecha) {
   return indice;
 }
 
+// Hora local (El Salvador) de la marca de asistencia.
+function horaUAP3_(v) {
+  const t=v instanceof Date ? v : new Date(texto3_(v));
+  return isNaN(t.getTime()) ? '' : Utilities.formatDate(t,UGM3.TZ,'HH:mm');
+}
+
 // Días con citas cargadas (agenda del HIS o base de Reportería).
 function fechasUAP3_() {
   const f={};
@@ -3442,6 +3453,15 @@ function fechasUAP3_() {
   Object.keys(pac).forEach(d => {
     const n=Number((pac[d]||{}).total)||0;
     f[d]=Math.max(f[d]||0,n);
+  });
+  // Días con asistencia marcada (últimos 30 días), aunque su
+  // agenda ya se haya reemplazado.
+  const desde=Utilities.formatDate(
+    new Date(Date.now()-30*86400000),UGM3.TZ,'yyyy-MM-dd'
+  );
+  leer3_('ASISTENCIA').forEach(a => {
+    const d=texto3_(a.Fecha);
+    if (d>=desde) f[d]=Math.max(f[d]||0,1);
   });
   return Object.keys(f).filter(d=>/^\d{4}-\d{2}-\d{2}$/.test(d)).sort()
     .map(d=>({fecha:d,total:f[d]}));
@@ -3457,7 +3477,8 @@ function fechaUAP3_(valor) {
 
 function citasUAP3_(fecha, dui) {
   return (indiceUAP3_(fecha).p[dui]||[]).map(c => ({
-    paciente:c[0],especialidad:c[1],hora:c[2],tipo:c[3],motivo:c[4]
+    paciente:c[0],especialidad:c[1],hora:c[2],tipo:c[3],motivo:c[4],
+    asistencia:c[5]||'',marcadoPor:c[6]||'',horaMarca:c[7]||''
   }));
 }
 

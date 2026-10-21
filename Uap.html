@@ -159,6 +159,11 @@ body.light .chip.EXTRAORDINARIO{color:#fff}
 .res-datos span{display:block;margin-top:2px;font-size:15px;font-weight:700;overflow-wrap:anywhere}
 .res-datos .ancho{grid-column:1/-1}
 .res-cita .chip{margin-top:12px}
+.res-asis{display:flex;align-items:center;gap:8px;margin-top:12px;padding:9px 12px;border-radius:12px;
+ font-size:12.5px;font-weight:800;background:#eef2f6;color:#475569}
+.res-asis svg{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:2.4}
+.res-asis.si{background:#dcfce9;color:#166534}
+.res-asis.no{background:#fee2e2;color:#9f1239}
 .res-motivo{margin-top:12px;padding:9px 12px;border-radius:12px;background:#fff6db;color:#5b4300;font-size:12.5px;font-weight:700}
 
 .res-pie{margin:22px auto 0;width:100%;max-width:560px;text-align:center;font-size:12.5px;font-weight:700;opacity:.85}
@@ -533,6 +538,7 @@ function mostrar(r) {
      <div><small>Hora de cita</small><span>${esc(c.hora||'—')}</span></div>
      <div class="ancho"><small>Especialidad</small><span>${esc(c.especialidad||'—')}</span></div>
     </div>
+    ${lineaAsistencia(c)}
    </article>`).join('')).join('')+'</div>';
  }else if(citas.length) {
   cuerpo='<div class="res-citas">'+citas.map(c=>`
@@ -545,6 +551,7 @@ function mostrar(r) {
     </div>
     ${tipo==='MIXTO'?`<span class="chip ${esc(c.tipo)}">${nombreTipo(c.tipo)}</span>`:''}
     ${c.tipo==='EXTRAORDINARIO'&&c.motivo?`<div class="res-motivo">${esc(c.motivo)}</div>`:''}
+    ${lineaAsistencia(c)}
    </article>`).join('')+'</div>';
  }else if(r.dui) {
   cuerpo=`<div class="res-citas"><article class="res-cita">
@@ -589,6 +596,16 @@ function mostrar(r) {
  }
 
  enfocarEscaner();
+}
+
+// Estado de asistencia marcado por los técnicos.
+function lineaAsistencia(c) {
+ const extra=[c.horaMarca,c.marcadoPor?'marcado por '+c.marcadoPor:''].filter(Boolean).join(' · ');
+ if(c.asistencia==='ASISTIO')
+  return `<div class="res-asis si">${icono('check')}Asistió${extra?' · '+esc(extra):''}</div>`;
+ if(c.asistencia==='NO_ASISTIO')
+  return `<div class="res-asis no">${icono('x')}No asistió${extra?' · '+esc(extra):''}</div>`;
+ return `<div class="res-asis">${icono('reloj')}Asistencia aún sin marcar</div>`;
 }
 
 function cerrarResultado() {
