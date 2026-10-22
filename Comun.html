@@ -492,6 +492,10 @@ const ALIAS_COLUMNAS={
  creacion:[
   'FECHACREACION','FECHADECREACION',
   'FECHACREACIONCITA','CREACION'
+ ],
+ // Expediente del paciente (es lo que trae el QR del ticket).
+ expediente:[
+  'EXPEDIENTE','NUMEROEXPEDIENTE','NOEXPEDIENTE','NEXPEDIENTE'
  ]
 };
 
@@ -674,7 +678,8 @@ async function procesarExcel(archivo) {
     valor('documento')??''
    ),
    paciente:limpiarNombrePaciente(valor('paciente')),
-   creacion:formatoFechaExcel(valor('creacion'))
+   creacion:formatoFechaExcel(valor('creacion')),
+   expediente:String(valor('expediente')??'').replace(/\.0+$/,'').trim()
   });
  }
 
@@ -774,7 +779,7 @@ function pintarIconos(raiz) {
    ===================================================== */
 
 // Versión de este archivo (ver UGM3.VERSION en Código.gs).
-const VERSION_COMUN='2026.10.21-1';
+const VERSION_COMUN='2026.10.22-1';
 
 const UGM={
  token:'',nombre:'',perfil:'',

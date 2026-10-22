@@ -2438,10 +2438,9 @@ function pintarAgenda() {
       <strong>${a.porFecha[f]}</strong>
       <small>citas activas o pendientes</small>
      </button>`).join('')}</div>`:''}
-    ${a.total&&!a.conCreacion?`<div class="carga-falta" style="margin-top:10px">
+    ${a.total&&(!a.conCreacion||!a.conExpediente)?`<div class="carga-falta" style="margin-top:10px">
      <b>Vuelve a subir esta agenda una vez.</b>
-     <small>Se cargó antes de la actualización y no trae la "Fecha Creación" de
-      cada cita: sin ella no se puede separar Base HIS de Extraordinarios.</small>
+     <small>Se cargó antes de la actualización: le falta ${!a.conCreacion?'la "Fecha Creación" (separa Base HIS de Extraordinarios)':''}${!a.conCreacion&&!a.conExpediente?' y ':''}${!a.conExpediente?'el "Expediente" (UAP lo busca con el QR del ticket)':''}.</small>
     </div>`:`<p class="muted small" style="margin:10px 0 0">Solo súbela otra vez si el
      sistema hospitalario tiene cambios nuevos: la nueva <b>reemplaza</b> a esta.</p>`}`
   :`<div class="carga-falta">
@@ -2523,7 +2522,7 @@ async function alEntrar() {
  aviso('Bienvenido al centro de control, '+UGM.nombre+'.');
 }
 
-const VERSION_PANTALLA='2026.10.21-1';
+const VERSION_PANTALLA='2026.10.22-1';
 
 /* =====================================================
    VERIFICACIÓN DE ARCHIVOS

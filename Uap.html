@@ -134,7 +134,7 @@ body.light .chip.EXTRAORDINARIO{color:#fff}
 .res.SOBRECUPO{--c1:#3fdcf2;--c2:#0a8fb0;--tx:#032a35}
 .res.MIXTO{--c1:#a98bff;--c2:#5b2fc9;--tx:#fff}
 .res.NO_ENCONTRADO{--c1:#f2707f;--c2:#b8283f;--tx:#fff}
-.res.LECTURA,.res.ERROR{--c1:#64748b;--c2:#334155;--tx:#fff}
+.res.LECTURA,.res.ERROR,.res.SIN_DATO{--c1:#64748b;--c2:#334155;--tx:#fff}
 .res.CONSULTANDO{--c1:#0f3a57;--c2:#08243a;--tx:#fff}
 .res.OTRO_DIA{--c1:#34d3a6;--c2:#0b7a63;--tx:#032a22}
 .res-dia{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:-2px 0 10px;
@@ -253,24 +253,24 @@ body.light .chip.EXTRAORDINARIO{color:#fff}
   <section class="scan-card" id="zonaScan">
    <span class="scan-estado" id="scanEstado">Listo para escanear</span>
    <div class="visor" aria-hidden="true"><i></i><i></i><i></i><i></i><b></b></div>
-   <h1>Escanee el DUI</h1>
-   <p>Apunte el escáner al código de barras del DUI.
-    El resultado aparece solo.</p>
+   <h1>Escanee el QR del ticket</h1>
+   <p>Apunte el escáner al código QR del ticket de la cita
+    (o al código de barras del DUI). El resultado aparece solo.</p>
    <div class="scan-dia" id="scanDia">Cargando la agenda de hoy…</div>
 
    <div class="fecha-uap" id="fechaChips" role="group" aria-label="Fecha a consultar"></div>
    <div class="fecha-aviso hidden" id="fechaAviso"></div>
 
    <button type="button" class="btn manual-btn" id="btnManual">
-    <i data-ico="dui"></i> Escribir el DUI a mano
+    <i data-ico="dui"></i> Escribir DUI o expediente
    </button>
 
    <form class="manual hidden" id="formManual" autocomplete="off">
-    <input id="duiManual" inputmode="numeric" maxlength="10"
-     placeholder="00000000-0" aria-label="DUI del paciente"
-     autocomplete="off">
+    <input id="duiManual" inputmode="tel" maxlength="20"
+     placeholder="DUI o expediente" aria-label="DUI o expediente del paciente"
+     autocomplete="off" autocapitalize="characters" spellcheck="false">
     <button class="btn primary" type="submit">Consultar</button>
-    <small>Úselo solo si el escáner no lee el documento.</small>
+    <small>Escriba el DUI (00000000-0) o el expediente (ej. 10553-25 o 202617010).</small>
    </form>
   </section>
 
@@ -306,7 +306,7 @@ body.light .chip.EXTRAORDINARIO{color:#fff}
 <script>
 'use strict';
 
-const VERSION_PANTALLA='2026.10.21-1';
+const VERSION_PANTALLA='2026.10.22-1';
 
 const U={
  token:'',nombre:'',perfil:'',
@@ -324,9 +324,10 @@ const TEXTOS={
  ORDINARIO:['Paciente','ORDINARIO','Cita previa · ya estaba agendado en el HIS.','calendarioCheck'],
  SOBRECUPO:['Paciente','SOBRECUPO','Registrado como sobrecupo por un técnico.','agregar'],
  MIXTO:['Paciente con','VARIAS CITAS','Tiene citas de distinto tipo hoy. Revise cada una.','lista'],
- NO_ENCONTRADO:['Sin cita','NO ENCONTRADO','Este DUI no tiene cita para hoy ni en los demás días cargados. Refiéralo con supervisión.','alerta'],
+ NO_ENCONTRADO:['Sin cita','NO ENCONTRADO','Este paciente no tiene cita para hoy ni en los demás días cargados. Refiéralo con supervisión.','alerta'],
  OTRO_DIA:['Sin cita este día','CITA EN OTRO DÍA','','calendario'],
- LECTURA:['Lectura','NO VÁLIDA','No se reconoció un DUI. Vuelva a escanear el documento.','alerta'],
+ LECTURA:['Lectura','NO VÁLIDA','No se reconoció un expediente ni un DUI. Vuelva a escanear el código.','alerta'],
+ SIN_DATO:['Ticket','SIN EXPEDIENTE','El código QR de este ticket no trae el expediente. Escriba el DUI o el expediente a mano.','alerta'],
  ERROR:['Sin respuesta','INTENTE DE NUEVO','No se pudo consultar. Revise la conexión y vuelva a escanear.','alerta'],
  CONSULTANDO:['Consultando','UN MOMENTO','','refrescar']
 };
@@ -373,9 +374,10 @@ function tono(tipo) {
   NO_ENCONTRADO:[[300,.18],[220,.26]],
   OTRO_DIA:[[520,.14],[390,.22]],
   LECTURA:[[260,.22]],
+  SIN_DATO:[[260,.22]],
   ERROR:[[260,.22]]
  }[tipo];
- const vib={EXTRAORDINARIO:[60,40,60],NO_ENCONTRADO:[180,80,180],LECTURA:[200],ERROR:[200]}[tipo]||[50];
+ const vib={EXTRAORDINARIO:[60,40,60],NO_ENCONTRADO:[180,80,180],LECTURA:[200],SIN_DATO:[200],ERROR:[200]}[tipo]||[50];
  try {if(navigator.vibrate)navigator.vibrate(vib);}catch(e) {}
  if(!pasos||!U.audio)return;
  try {
@@ -409,48 +411,55 @@ function enfocarEscaner() {
 
 function montarEscaner() {
  const inp=$('scanIn');
+ let lectura='';
  let espera=null;
 
- const enviar=()=>{
+ // Un escaneo llega como una ráfaga de teclas. Se junta TODO
+ // el texto (letras, números y guiones) y se procesa una sola
+ // vez: con Enter/Tab o cuando la ráfaga termina (120 ms sin
+ // teclas). Así nunca se mezcla con el escaneo anterior ni se
+ // corta a la mitad.
+ const terminar=()=>{
   clearTimeout(espera);
-  const v=inp.value;
+  espera=null;
+  const v=lectura.trim();
+  lectura='';
   inp.value='';
-  if(v.replace(/\D/g,'').length>=6)consultar(v);
+  if(v.length>=4)consultar(v);
+ };
+ const seguir=()=>{
+  clearTimeout(espera);
+  espera=setTimeout(terminar,120);
  };
 
  inp.addEventListener('keydown',ev=>{
   if(ev.key==='Enter'||ev.key==='Tab') {
    ev.preventDefault();
-   enviar();
+   lectura=inp.value;
+   terminar();
   }
  });
 
  inp.addEventListener('input',()=>{
-  clearTimeout(espera);
-  if(/^\D*\d{9}\D*$/.test(inp.value))espera=setTimeout(enviar,160);
-  else espera=setTimeout(()=>{inp.value='';},1500);
+  lectura=inp.value;
+  seguir();
  });
 
  // Si el foco quedó en otro lado, igual se capturan las teclas.
- let buf='';
- let ultimo=0;
- let tBuf=null;
  document.addEventListener('keydown',ev=>{
   const t=ev.target;
-  if(t===inp||(t.tagName==='INPUT'&&t!==inp))return;
+  if(t===inp||['INPUT','TEXTAREA','SELECT'].includes(t.tagName))return;
   if($('app').classList.contains('hidden'))return;
-  const ahora=Date.now();
-  if(ahora-ultimo>300)buf='';
-  ultimo=ahora;
-  if(/^\d$/.test(ev.key)) {
-   buf+=ev.key;
-   clearTimeout(tBuf);
-   if(buf.length===9)tBuf=setTimeout(()=>{const v=buf;buf='';consultar(v);},160);
-  }else if(ev.key==='Enter'&&buf.length>=8) {
-   ev.preventDefault();
-   clearTimeout(tBuf);
-   const v=buf;buf='';
-   consultar(v);
+  if(ev.key==='Enter'||ev.key==='Tab') {
+   if(lectura) {
+    ev.preventDefault();
+    terminar();
+   }
+   return;
+  }
+  if(ev.key.length===1&&!ev.ctrlKey&&!ev.metaKey&&!ev.altKey) {
+   lectura+=ev.key;
+   seguir();
   }
  });
 
@@ -473,35 +482,52 @@ function montarEscaner() {
 
 /* ---------- consulta ---------- */
 
-// DUI de 8 o 9 dígitos -> "00000000-0" (igual que el servidor).
-function normalizarDui(lectura) {
- let n=String(lectura||'').replace(/\D/g,'');
- if(n.length===8)n='0'+n;
- return n.length===9?n.slice(0,8)+'-'+n.slice(8):'';
+// Qué trae la lectura (igual que el servidor):
+// - QR del ticket: el EXPEDIENTE ("10553-25", "202617010").
+// - Código de barras del DUI: 9 dígitos ("012345678").
+// - "SIN_EXPEDIENTE": el ticket no trae dato para buscar.
+function analizarLectura(lectura) {
+ const t=String(lectura||'').toUpperCase().replace(/\s+/g,'');
+ if(!t||/SIN_?EXPEDIENTE|SINEXPEDIENTE/.test(t))return {sinDato:true,texto:t};
+ const claves=[];
+ if(/^\d{8}-?\d$/.test(t)) {
+  const n=t.replace('-','');
+  claves.push(n.slice(0,8)+'-'+n.slice(8));
+ }
+ const exp=t.replace(/\.0+$/,'');
+ if(/^[0-9A-Z][0-9A-Z-]{3,}$/.test(exp))claves.push('E:'+exp);
+ return {claves,texto:t};
 }
 
-function aCitas(arr) {
- return (arr||[]).map(c=>({
-  paciente:c[0],especialidad:c[1],hora:c[2],tipo:c[3],motivo:c[4],
-  asistencia:c[5]||'',marcadoPor:c[6]||'',horaMarca:c[7]||''
+function aCitas(dia,claves) {
+ const vistas=new Set();
+ const out=[];
+ claves.forEach(k=>(dia.p[k]||[]).forEach(c=>{
+  const id=c.join('|');
+  if(vistas.has(id))return;
+  vistas.add(id);
+  out.push({paciente:c[0],especialidad:c[1],hora:c[2],tipo:c[3],motivo:c[4],
+   asistencia:c[5]||'',marcadoPor:c[6]||'',horaMarca:c[7]||'',
+   dui:c[8]||'',expediente:c[9]||''});
  }));
+ return out;
 }
 
 // Búsqueda en el equipo: instantánea, sin esperar al servidor.
-function buscarLocal(dui,fecha) {
+function buscarLocal(lect,fecha) {
  if(!U.paq||!U.paq[fecha])return null;
  const hoyF=U.hoy||hoy();
- const citas=aCitas(U.paq[fecha].p[dui]);
+ const citas=aCitas(U.paq[fecha],lect.claves);
  const otras=[];
  if(!citas.length) {
   Object.keys(U.paq).filter(f=>f!==fecha).sort().forEach(f=>{
-   const c=aCitas(U.paq[f].p[dui]);
+   const c=aCitas(U.paq[f],lect.claves);
    if(c.length)otras.push({fecha:f,pasada:f<hoyF,citas:c});
   });
  }
  const tipos=[...new Set(citas.map(c=>c.tipo))];
  return {
-  ok:true,dui,fecha,hoy:hoyF,citas,otras,local:true,
+  ok:true,dui:lect.texto,fecha,hoy:hoyF,citas,otras,local:true,
   hayAgenda:U.paq[fecha].t>0,
   resultado:citas.length?(tipos.length===1?tipos[0]:'MIXTO')
    :otras.length?'OTRO_DIA':'NO_ENCONTRADO'
@@ -509,22 +535,27 @@ function buscarLocal(dui,fecha) {
 }
 
 async function consultar(lectura) {
- const dui=String(lectura||'').replace(/\D/g,'');
+ const lect=analizarLectura(lectura);
  const ahora=Date.now();
 
- // El mismo DUI leído dos veces seguidas no se consulta doble.
- if(dui===U.ultima.dui&&ahora-U.ultima.t<2500)return;
+ // El mismo código leído dos veces seguidas no se consulta doble.
+ if(lect.texto===U.ultima.dui&&ahora-U.ultima.t<2500)return;
  if(U.consultando)return;
- U.ultima={dui,t:ahora};
+ U.ultima={dui:lect.texto,t:ahora};
 
- const duiF=normalizarDui(dui);
- if(!duiF) {
-  mostrar({resultado:'LECTURA'});
+ if(lect.sinDato) {
+  mostrar({resultado:'SIN_DATO',dui:lect.texto});
+  U.abrirManual=true;
+  return;
+ }
+ if(!lect.claves.length) {
+  mostrar({resultado:'LECTURA',dui:lect.texto});
   return;
  }
 
+ const duiF=lect.texto;
  const fecha=U.fechaSel||U.hoy||hoy();
- const local=buscarLocal(duiF,fecha);
+ const local=buscarLocal(lect,fecha);
 
  if(local) {
   mostrar(local);
@@ -532,7 +563,7 @@ async function consultar(lectura) {
   encolar(local);
   // Si no aparece, se revisa con datos recién descargados por
   // si lo registraron hace un momento.
-  if(local.resultado==='NO_ENCONTRADO'&&Date.now()-U.paqAt>20000)confirmarNoEncontrado(duiF,fecha);
+  if(local.resultado==='NO_ENCONTRADO'&&Date.now()-U.paqAt>20000)confirmarNoEncontrado(lect,fecha);
   return;
  }
 
@@ -540,7 +571,7 @@ async function consultar(lectura) {
  U.consultando=true;
 
  estado('ocupado','Consultando…');
- const espera=setTimeout(()=>mostrar({resultado:'CONSULTANDO',dui:formatoDui(dui)}),250);
+ const espera=setTimeout(()=>mostrar({resultado:'CONSULTANDO',dui:duiF}),250);
 
  try {
   const r=await api('consultarUAP',U.token,lectura,U.fechaSel);
@@ -557,12 +588,12 @@ async function consultar(lectura) {
  }
 }
 
-async function confirmarNoEncontrado(dui,fecha) {
+async function confirmarNoEncontrado(lect,fecha) {
  await cargarPaquete();
- const r=buscarLocal(dui,fecha);
+ const r=buscarLocal(lect,fecha);
  const res=$('res');
  if(!r||r.resultado==='NO_ENCONTRADO')return;
- if(!res.classList.contains('hidden')&&res.dataset.dui===dui) {
+ if(!res.classList.contains('hidden')&&res.dataset.dui===lect.texto) {
   mostrar(r);
   aviso('Datos actualizados: el paciente sí aparece.');
  }
@@ -616,13 +647,13 @@ function mostrar(r) {
   sub='No tiene cita '+(otroDia?'el '+diaCorto(r.fecha):'hoy')+', pero sí en '+
    ((r.otras||[]).length>1?'estas fechas':'esta fecha')+':';
  if(tipo==='NO_ENCONTRADO'&&otroDia)
-  sub='Este DUI no tiene cita el '+diaCorto(r.fecha)+' ni en los demás días cargados.';
+  sub='Este paciente no tiene cita el '+diaCorto(r.fecha)+' ni en los demás días cargados.';
 
  let cuerpo='';
  const nombreTipo=t=>t==='EXTRAORDINARIO'?'EXTRAORDINARIO':t==='SOBRECUPO'?'SOBRECUPO':'ORDINARIO';
 
  if(tipo==='CONSULTANDO') {
-  cuerpo=`<div class="res-pie" style="margin-top:18px">DUI ${esc(r.dui||'')}</div>`;
+  cuerpo=`<div class="res-pie" style="margin-top:18px">Código ${esc(r.dui||'')}</div>`;
  }else if(tipo==='OTRO_DIA') {
   cuerpo='<div class="res-citas">'+(r.otras||[]).map(o=>o.citas.map(c=>`
    <article class="res-cita">
@@ -630,9 +661,10 @@ function mostrar(r) {
      <span class="chip ${esc(c.tipo)}">${nombreTipo(c.tipo)}</span></div>
     <div class="res-nombre">${esc(c.paciente||'Sin nombre')}</div>
     <div class="res-datos">
-     <div><small>DUI</small><span>${esc(r.dui)}</span></div>
+     <div><small>DUI</small><span>${esc(c.dui||'—')}</span></div>
+     <div><small>Expediente</small><span>${esc(c.expediente||'—')}</span></div>
      <div><small>Hora de cita</small><span>${esc(c.hora||'—')}</span></div>
-     <div class="ancho"><small>Especialidad</small><span>${esc(c.especialidad||'—')}</span></div>
+     <div><small>Especialidad</small><span>${esc(c.especialidad||'—')}</span></div>
     </div>
     ${lineaAsistencia(c)}
    </article>`).join('')).join('')+'</div>';
@@ -641,25 +673,26 @@ function mostrar(r) {
    <article class="res-cita">
     <div class="res-nombre">${esc(c.paciente||'Sin nombre')}</div>
     <div class="res-datos">
-     <div><small>DUI</small><span>${esc(r.dui)}</span></div>
+     <div><small>DUI</small><span>${esc(c.dui||'—')}</span></div>
+     <div><small>Expediente</small><span>${esc(c.expediente||'—')}</span></div>
      <div><small>Hora de cita</small><span>${esc(c.hora||'—')}</span></div>
-     <div class="ancho"><small>Especialidad</small><span>${esc(c.especialidad||'—')}</span></div>
+     <div><small>Especialidad</small><span>${esc(c.especialidad||'—')}</span></div>
     </div>
     ${tipo==='MIXTO'?`<span class="chip ${esc(c.tipo)}">${nombreTipo(c.tipo)}</span>`:''}
     ${c.tipo==='EXTRAORDINARIO'&&c.motivo?`<div class="res-motivo">${esc(c.motivo)}</div>`:''}
     ${lineaAsistencia(c)}
    </article>`).join('')+'</div>';
- }else if(r.dui) {
+ }else if(r.dui&&tipo!=='SIN_DATO'&&tipo!=='LECTURA') {
   cuerpo=`<div class="res-citas"><article class="res-cita">
     <div class="res-datos" style="margin-top:0">
-     <div><small>DUI</small><span>${esc(r.dui)}</span></div>
+     <div><small>Código leído</small><span>${esc(r.dui)}</span></div>
      <div><small>Fecha</small><span>${esc(r.fecha?fechaLarga(r.fecha):'Hoy')}</span></div>
     </div>
     ${r.hayAgenda===false?'<div class="res-motivo">No hay citas cargadas para esa fecha. Avise a supervisión.</div>':''}
    </article></div>`;
  }
 
- const dur=tipo==='NO_ENCONTRADO'||tipo==='MIXTO'||tipo==='OTRO_DIA'?9:6;
+ const dur=tipo==='NO_ENCONTRADO'||tipo==='MIXTO'||tipo==='OTRO_DIA'||tipo==='SIN_DATO'?9:6;
 
  res.className='res '+tipo;
  res.dataset.dui=r.dui||'';
@@ -672,7 +705,7 @@ function mostrar(r) {
    ${sub?`<p class="res-sub">${esc(sub)}</p>`:''}
   </div>
   ${cuerpo}
-  ${tipo==='CONSULTANDO'?'':`<div class="res-pie">Toque la pantalla o escanee el siguiente DUI
+  ${tipo==='CONSULTANDO'?'':`<div class="res-pie">Toque la pantalla o escanee el siguiente ticket
    <span class="res-barra"><i style="--dur:${dur}s"></i></span></div>`}
   <div class="res-espacio"></div>`;
 
@@ -709,7 +742,13 @@ function cerrarResultado() {
  clearTimeout(U.cierre);
  const res=$('res');
  if(res.classList.contains('hidden'))return;
- const fin=()=>{res.classList.add('hidden');res.innerHTML='';enfocarEscaner();};
+ const fin=()=>{
+  res.classList.add('hidden');res.innerHTML='';
+  if(U.abrirManual) {
+   U.abrirManual=false;
+   abrirManual();
+  }else enfocarEscaner();
+ };
  if(window.gsap&&MOV.ok)gsap.to(res,{opacity:0,duration:.18,ease:'power2.in',onComplete:()=>{gsap.set(res,{opacity:1});fin();}});
  else fin();
 }
@@ -740,7 +779,7 @@ function anotar(r) {
 
  const p=(r.citas||[])[0]||((r.otras||[])[0]&&r.otras[0].citas[0]);
  U.hist.unshift({
-  nombre:p?p.paciente:'DUI '+r.dui,
+  nombre:p?p.paciente:'Código '+r.dui,
   detalle:(p?p.especialidad+' · ':'')+
    (r.fecha&&r.hoy&&r.fecha!==r.hoy?'consulta del '+r.fecha.slice(8,10)+'/'+r.fecha.slice(5,7)+' · ':'')+horaAhora(),
   tipo:r.resultado
@@ -963,6 +1002,13 @@ async function verificarArchivos() {
  document.body.appendChild(a);
 }
 
+function abrirManual() {
+ $('formManual').classList.remove('hidden');
+ $('btnManual').classList.add('hidden');
+ $('zonaScan').scrollIntoView({block:'center',behavior:'smooth'});
+ setTimeout(()=>$('duiManual').focus(),60);
+}
+
 /* ---------- inicio ---------- */
 
 function iniciarUAP() {
@@ -994,24 +1040,14 @@ function iniciarUAP() {
   if(ev.target.id==='fechaOtra'&&ev.target.value)elegirFecha(ev.target.value);
  });
 
- $('btnManual').addEventListener('click',()=>{
-  const f=$('formManual');
-  const abrir=f.classList.contains('hidden');
-  f.classList.toggle('hidden',!abrir);
-  $('btnManual').classList.toggle('hidden',abrir);
-  if(abrir)setTimeout(()=>$('duiManual').focus(),30);
- });
-
- $('duiManual').addEventListener('input',ev=>{
-  const n=ev.target.value.replace(/\D/g,'').slice(0,9);
-  ev.target.value=n.length>8?n.slice(0,8)+'-'+n.slice(8):n;
- });
+ $('btnManual').addEventListener('click',abrirManual);
 
  $('formManual').addEventListener('submit',ev=>{
   ev.preventDefault();
-  const v=$('duiManual').value;
-  if(v.replace(/\D/g,'').length<9) {
-   aviso('Escribe los 9 dígitos del DUI.');
+  const v=$('duiManual').value.trim();
+  const lect=analizarLectura(v);
+  if(lect.sinDato||!lect.claves.length) {
+   aviso('Escribe el DUI (9 dígitos) o el número de expediente.');
    return;
   }
   $('duiManual').value='';

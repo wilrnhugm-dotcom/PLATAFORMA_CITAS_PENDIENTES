@@ -60,7 +60,7 @@ const UGM3 = {
   // Debe coincidir con la versión de Tecnico, Supervisor,
   // Estilos y Comun: así la pantalla avisa si falta
   // actualizar algún archivo.
-  VERSION: '2026.10.21-1',
+  VERSION: '2026.10.22-1',
 
   TZ: 'America/El_Salvador',
 
@@ -195,7 +195,8 @@ const UGM3 = {
       'Documento',
       'Paciente',
       'IDExterno',
-      'FechaCreacion'
+      'FechaCreacion',
+      'Expediente'
     ],
 
     LIMITES_FECHA: [
@@ -1130,6 +1131,7 @@ function importarAgenda(token, registros, archivo) {
   const porFecha = {};
   const COLS = UGM3.HEADERS.AGENDA_EXCEL.length;
   let conCreacion = 0;
+  let conExpediente = 0;
 
   const errores = {
     sinFecha:0,
@@ -1195,9 +1197,14 @@ function importarAgenda(token, registros, archivo) {
     } catch(e) {}
     if (creacion) conCreacion++;
 
+    // Expediente: es lo que trae el QR del ticket de la cita.
+    const expediente = texto3_(r.expediente)
+      .replace(/\.0+$/,'').slice(0,30);
+    if (expediente) conExpediente++;
+
     validos.push([
       '', f, esp, estado,
-      doc, paciente, id || String(i+1), creacion
+      doc, paciente, id || String(i+1), creacion, expediente
     ]);
   });
 
@@ -1289,6 +1296,7 @@ function importarAgenda(token, registros, archivo) {
       UGM3_AGENDA_TOTAL:String(validos.length),
       UGM3_AGENDA_FECHAS:JSON.stringify(porFecha),
       UGM3_AGENDA_CREACION:String(conCreacion),
+      UGM3_AGENDA_EXPEDIENTE:String(conExpediente),
       UGM3_ALERTA_AT:''
     });
 
@@ -1356,6 +1364,7 @@ function estadoAgenda3_() {
     // Citas con fecha de creación del HIS (para separar
     // extraordinarios de citas previas).
     conCreacion:Number(p.getProperty('UGM3_AGENDA_CREACION')) || 0,
+    conExpediente:Number(p.getProperty('UGM3_AGENDA_EXPEDIENTE')) || 0,
     fecha,
     archivo:p.getProperty(
       'UGM3_AGENDA_ARCHIVO'
@@ -2827,6 +2836,7 @@ function pacientesDelDia3_(fecha) {
       hora:v(r,c.hora),
       aumento:v(r,c.aumento)==='SI',
       observacion:v(r,c.observacion),
+      expediente:v(r,c.expediente).replace(/\.0+$/,''),
       correlativo:v(r,c.correlativo)
     }));
 
@@ -2899,6 +2909,7 @@ function consultasDelDia3_(fecha,agenda,solicitudes,asistencia,reporteria) {
       origen:'AGENDA',
       referencia:texto3_(r.IDExterno),
       creacion:texto3_(r.FechaCreacion),
+      expediente:texto3_(r.Expediente),
       sobrecupo:''
     });
   });
@@ -2943,6 +2954,7 @@ function consultasDelDia3_(fecha,agenda,solicitudes,asistencia,reporteria) {
       existente.aumento=existente.aumento || p.aumento;
       existente.horaCita=existente.horaCita || p.hora;
       existente.observacion=existente.observacion || p.observacion;
+      existente.expediente=existente.expediente || p.expediente;
       return;
     }
 
@@ -2965,7 +2977,8 @@ function consultasDelDia3_(fecha,agenda,solicitudes,asistencia,reporteria) {
       reporteria:true,
       aumento:p.aumento,
       horaCita:p.hora,
-      observacion:p.observacion
+      observacion:p.observacion,
+      expediente:p.expediente
     };
 
     mapa.set(clave,nueva);
@@ -3440,6 +3453,7 @@ function pacientesFechas3_(fechas) {
       hora:v(r,c.hora),
       aumento:v(r,c.aumento)==='SI',
       observacion:v(r,c.observacion),
+      expediente:v(r,c.expediente).replace(/\.0+$/,''),
       correlativo:v(r,c.correlativo)
     });
   });
@@ -3462,18 +3476,22 @@ function indiceDia3_(fecha, d) {
     fecha,d.agenda,d.solicitudes,d.asistencia,d.pacientes[fecha]||[]
   );
 
+  // Claves: el DUI ("00000000-0") y el expediente ("E:10553-25").
   const p={};
   consultas.forEach(c => {
     const dui=dui3_(c.documento);
-    if (!dui) return;
+    const exp=expUAP3_(c.expediente);
+    if (!dui && !exp) return;
     const tipo=c.origen==='SOBRECUPO' ? 'SOBRECUPO'
       : c.extraordinario ? 'EXTRAORDINARIO' : 'ORDINARIO';
-    (p[dui]=p[dui]||[]).push([
+    const fila=[
       texto3_(c.paciente),texto3_(c.especialidad),
       texto3_(c.horaCita),tipo,texto3_(c.motivoExtra),
       texto3_(c.asistencia),texto3_(c.marcadoPor),
-      horaUAP3_(c.hora)
-    ]);
+      horaUAP3_(c.hora),dui,texto3_(c.expediente)
+    ];
+    if (dui) (p[dui]=p[dui]||[]).push(fila);
+    if (exp) (p['E:'+exp]=p['E:'+exp]||[]).push(fila);
   });
 
   return {t:consultas.length,p};
@@ -3487,6 +3505,24 @@ function datosUAP3_(fechas) {
     asistencia:leer3_('ASISTENCIA'),
     pacientes:pacientesFechas3_(fechas)
   };
+}
+
+// Expediente normalizado: "10553-25", "202617010" (sin ".0").
+function expUAP3_(v) {
+  const t=texto3_(v).replace(/\.0+$/,'').toUpperCase().replace(/\s+/g,'');
+  return /^[0-9A-Z][0-9A-Z-]{3,}$/.test(t) ? t : '';
+}
+
+// Qué trae la lectura: DUI (9 dígitos), expediente, o nada
+// útil ("SIN_EXPEDIENTE" que imprimen algunos tickets).
+function lecturaUAP3_(lectura) {
+  const t=texto3_(lectura).toUpperCase().replace(/\s+/g,'');
+  if (!t || /SIN_?EXPEDIENTE|SINEXPEDIENTE/.test(t)) return {sinDato:true};
+  const claves=[];
+  if (/^\d{8}-?\d$/.test(t)) claves.push(dui3_(t.replace('-','')));
+  const exp=expUAP3_(t);
+  if (exp) claves.push('E:'+exp);
+  return {claves,texto:t};
 }
 
 // Hora local (El Salvador) de la marca de asistencia.
@@ -3581,14 +3617,13 @@ function paqueteUAP(token, fechaElegida) {
 function consultarUAP(token, lectura, fechaElegida) {
   const s=permisoUAP3_(token);
 
-  // El escáner entrega solo los 9 dígitos del DUI.
-  const digitos=texto3_(lectura).replace(/\D/g,'');
-  const dui=digitos.length===8 || digitos.length===9
-    ? dui3_(digitos) : '';
-
-  if (!dui) {
-    return {ok:false,resultado:'LECTURA',lectura:texto3_(lectura).slice(0,20)};
+  // El QR del ticket trae el expediente; el DUI también se acepta.
+  const lect=lecturaUAP3_(lectura);
+  if (lect.sinDato) return {ok:false,resultado:'SIN_DATO'};
+  if (!lect.claves.length) {
+    return {ok:false,resultado:'LECTURA',lectura:texto3_(lectura).slice(0,30)};
   }
+  const dui=lect.texto;
 
   const hoy=hoy3_();
   const fecha=fechaUAP3_(fechaElegida);
@@ -3602,18 +3637,27 @@ function consultarUAP(token, lectura, fechaElegida) {
     pacientes:pacientesFechas3_(todas)
   };
 
-  const aCitas=(arr)=>(arr||[]).map(c => ({
-    paciente:c[0],especialidad:c[1],hora:c[2],tipo:c[3],motivo:c[4],
-    asistencia:c[5]||'',marcadoPor:c[6]||'',horaMarca:c[7]||''
-  }));
+  const aCitas=(idx)=>{
+    const vistas=new Set();
+    const out=[];
+    lect.claves.forEach(k => (idx.p[k]||[]).forEach(c => {
+      const id=c.join('|');
+      if (vistas.has(id)) return;
+      vistas.add(id);
+      out.push({paciente:c[0],especialidad:c[1],hora:c[2],tipo:c[3],motivo:c[4],
+        asistencia:c[5]||'',marcadoPor:c[6]||'',horaMarca:c[7]||'',
+        dui:c[8]||'',expediente:c[9]||''});
+    }));
+    return out;
+  };
 
   const indice=indiceDia3_(fecha, d);
-  const citas=aCitas(indice.p[dui]);
+  const citas=aCitas(indice);
   const otras=[];
 
   if (!citas.length) {
     lista.forEach(f => {
-      const c=aCitas(indiceDia3_(f.fecha, d).p[dui]);
+      const c=aCitas(indiceDia3_(f.fecha, d));
       if (c.length) otras.push({fecha:f.fecha,pasada:f.fecha<hoy,citas:c});
     });
   }
