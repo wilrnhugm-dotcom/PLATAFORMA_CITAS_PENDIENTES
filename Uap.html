@@ -116,7 +116,7 @@
 .chip.EXTRAORDINARIO{background:var(--adi);color:#2a1d00}
 .chip.ORDINARIO{background:var(--rep-bg);color:var(--rep);border:1px solid var(--rep-borde)}
 .chip.SOBRECUPO{background:color-mix(in srgb,var(--cyan) 16%,transparent);color:var(--cyan)}
-.chip.NO_ENCONTRADO,.chip.LECTURA{background:color-mix(in srgb,var(--red) 16%,transparent);color:var(--red)}
+.chip.NO_ENCONTRADO,.chip.LECTURA,.chip.ILEGIBLE{background:color-mix(in srgb,var(--red) 16%,transparent);color:var(--red)}
 .chip.MIXTO{background:color-mix(in srgb,#a78bfa 18%,transparent);color:#a78bfa}
 .chip.OTRO_DIA{background:color-mix(in srgb,var(--green) 16%,transparent);color:var(--green)}
 body.light .chip.EXTRAORDINARIO{color:#fff}
@@ -134,7 +134,7 @@ body.light .chip.EXTRAORDINARIO{color:#fff}
 .res.SOBRECUPO{--c1:#3fdcf2;--c2:#0a8fb0;--tx:#032a35}
 .res.MIXTO{--c1:#a98bff;--c2:#5b2fc9;--tx:#fff}
 .res.NO_ENCONTRADO{--c1:#f2707f;--c2:#b8283f;--tx:#fff}
-.res.LECTURA,.res.ERROR,.res.SIN_DATO{--c1:#64748b;--c2:#334155;--tx:#fff}
+.res.ILEGIBLE,.res.ERROR{--c1:#64748b;--c2:#334155;--tx:#fff}
 .res.CONSULTANDO{--c1:#0f3a57;--c2:#08243a;--tx:#fff}
 .res.OTRO_DIA{--c1:#34d3a6;--c2:#0b7a63;--tx:#032a22}
 .res-dia{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:-2px 0 10px;
@@ -319,15 +319,15 @@ const U={
 const CLAVE_SESION='UGM_UAP_SESION';
 const CLAVE_CONTEO='UGM_UAP_CONTEO';
 
+// Solo 4 resultados para la ventanilla (y un aviso si el
+// ticket no se puede leer):
+// EXTRAORDINARIO · ORDINARIO · CITA OTRO DÍA · SIN CITA.
 const TEXTOS={
- EXTRAORDINARIO:['Paciente','EXTRAORDINARIO','Reportería lo agendó o reagendó para fin de semana.','llamada'],
+ EXTRAORDINARIO:['Paciente','EXTRAORDINARIO','Agendado por Reportería para fin de semana.','llamada'],
  ORDINARIO:['Paciente','ORDINARIO','Cita previa · ya estaba agendado en el HIS.','calendarioCheck'],
- SOBRECUPO:['Paciente','SOBRECUPO','Registrado como sobrecupo por un técnico.','agregar'],
- MIXTO:['Paciente con','VARIAS CITAS','Tiene citas de distinto tipo hoy. Revise cada una.','lista'],
- NO_ENCONTRADO:['Sin cita','NO ENCONTRADO','Este paciente no tiene cita para hoy ni en los demás días cargados. Refiéralo con supervisión.','alerta'],
- OTRO_DIA:['Sin cita este día','CITA EN OTRO DÍA','','calendario'],
- LECTURA:['Lectura','NO VÁLIDA','No se reconoció un expediente ni un DUI. Vuelva a escanear el código.','alerta'],
- SIN_DATO:['Ticket','SIN EXPEDIENTE','El código QR de este ticket no trae el expediente. Escriba el DUI o el expediente a mano.','alerta'],
+ NO_ENCONTRADO:['Paciente','SIN CITA PROGRAMADA','No tiene cita hoy ni en otro día. Refiéralo con supervisión.','alerta'],
+ OTRO_DIA:['Sin cita hoy','CITA EN OTRO DÍA','','calendario'],
+ ILEGIBLE:['Ticket','NO SE PUDO LEER','Vuelva a escanear el ticket o escriba el DUI del paciente.','alerta'],
  ERROR:['Sin respuesta','INTENTE DE NUEVO','No se pudo consultar. Revise la conexión y vuelva a escanear.','alerta'],
  CONSULTANDO:['Consultando','UN MOMENTO','','refrescar']
 };
@@ -374,10 +374,10 @@ function tono(tipo) {
   NO_ENCONTRADO:[[300,.18],[220,.26]],
   OTRO_DIA:[[520,.14],[390,.22]],
   LECTURA:[[260,.22]],
-  SIN_DATO:[[260,.22]],
+  ILEGIBLE:[[260,.22]],
   ERROR:[[260,.22]]
  }[tipo];
- const vib={EXTRAORDINARIO:[60,40,60],NO_ENCONTRADO:[180,80,180],LECTURA:[200],SIN_DATO:[200],ERROR:[200]}[tipo]||[50];
+ const vib={EXTRAORDINARIO:[60,40,60],NO_ENCONTRADO:[180,80,180],ILEGIBLE:[200],ERROR:[200]}[tipo]||[50];
  try {if(navigator.vibrate)navigator.vibrate(vib);}catch(e) {}
  if(!pasos||!U.audio)return;
  try {
@@ -630,7 +630,23 @@ function estado(clase,texto) {
  el.textContent=texto;
 }
 
+// Reduce el resultado a lo que necesita la ventanilla: un
+// sobrecupo cuenta como extraordinario; si tiene varias citas
+// hoy y alguna es extraordinaria, el paciente es extraordinario.
+function simplificar(r) {
+ const t=c=>Object.assign({},c,{tipo:c.tipo==='SOBRECUPO'?'EXTRAORDINARIO':c.tipo,sobrecupo:c.tipo==='SOBRECUPO'});
+ const x=Object.assign({},r);
+ x.citas=(r.citas||[]).map(t);
+ x.otras=(r.otras||[]).map(o=>Object.assign({},o,{citas:o.citas.map(t)}));
+ const res=r.resultado;
+ if(['EXTRAORDINARIO','ORDINARIO','SOBRECUPO','MIXTO'].includes(res))
+  x.resultado=x.citas.some(c=>c.tipo==='EXTRAORDINARIO')?'EXTRAORDINARIO':'ORDINARIO';
+ if(res==='SIN_DATO'||res==='LECTURA')x.resultado='ILEGIBLE';
+ return x;
+}
+
 function mostrar(r) {
+ r=simplificar(r);
  const tipo=r.resultado||'ERROR';
  let [kicker,titulo,sub,ico]=TEXTOS[tipo]||TEXTOS.ERROR;
  const res=$('res');
@@ -641,16 +657,23 @@ function mostrar(r) {
   return isNaN(d)?f:d.toLocaleDateString('es-SV',{weekday:'long',day:'numeric',month:'long',timeZone:'UTC'});
  };
 
- if(otroDia&&['EXTRAORDINARIO','ORDINARIO','SOBRECUPO','MIXTO'].includes(tipo))
+ if(otroDia&&['EXTRAORDINARIO','ORDINARIO'].includes(tipo))
   kicker='Cita del '+diaCorto(r.fecha);
- if(tipo==='OTRO_DIA')
-  sub='No tiene cita '+(otroDia?'el '+diaCorto(r.fecha):'hoy')+', pero sí en '+
-   ((r.otras||[]).length>1?'estas fechas':'esta fecha')+':';
+ if(tipo==='EXTRAORDINARIO'&&citas.length&&citas.every(c=>c.sobrecupo))
+  sub='Registrado como sobrecupo por un técnico.';
+ if(tipo==='OTRO_DIA') {
+  const fechas=[...new Set((r.otras||[]).map(o=>o.fecha))];
+  const dia=f=>new Date(f+'T12:00:00Z').toLocaleDateString('es-SV',{weekday:'long',timeZone:'UTC'}).toUpperCase();
+  kicker=otroDia?'Sin cita el '+diaCorto(r.fecha):'Sin cita hoy';
+  titulo=fechas.length===1?'CITA EL '+dia(fechas[0]):'CITA EN OTRO DÍA';
+  sub=fechas.length===1?'Está agendado para el '+diaCorto(fechas[0])+'.':'Tiene citas en estas fechas:';
+ }
  if(tipo==='NO_ENCONTRADO'&&otroDia)
-  sub='Este paciente no tiene cita el '+diaCorto(r.fecha)+' ni en los demás días cargados.';
+  sub='No tiene cita el '+diaCorto(r.fecha)+' ni en otro día. Refiéralo con supervisión.';
 
  let cuerpo='';
- const nombreTipo=t=>t==='EXTRAORDINARIO'?'EXTRAORDINARIO':t==='SOBRECUPO'?'SOBRECUPO':'ORDINARIO';
+ const nombreTipo=t=>t==='EXTRAORDINARIO'?'EXTRAORDINARIO':'ORDINARIO';
+ const mezcla=new Set(citas.map(c=>c.tipo)).size>1;
 
  if(tipo==='CONSULTANDO') {
   cuerpo=`<div class="res-pie" style="margin-top:18px">Código ${esc(r.dui||'')}</div>`;
@@ -662,9 +685,8 @@ function mostrar(r) {
     <div class="res-nombre">${esc(c.paciente||'Sin nombre')}</div>
     <div class="res-datos">
      <div><small>DUI</small><span>${esc(c.dui||'—')}</span></div>
-     <div><small>Expediente</small><span>${esc(c.expediente||'—')}</span></div>
      <div><small>Hora de cita</small><span>${esc(c.hora||'—')}</span></div>
-     <div><small>Especialidad</small><span>${esc(c.especialidad||'—')}</span></div>
+     <div class="ancho"><small>Especialidad</small><span>${esc(c.especialidad||'—')}</span></div>
     </div>
     ${lineaAsistencia(c)}
    </article>`).join('')).join('')+'</div>';
@@ -674,15 +696,14 @@ function mostrar(r) {
     <div class="res-nombre">${esc(c.paciente||'Sin nombre')}</div>
     <div class="res-datos">
      <div><small>DUI</small><span>${esc(c.dui||'—')}</span></div>
-     <div><small>Expediente</small><span>${esc(c.expediente||'—')}</span></div>
      <div><small>Hora de cita</small><span>${esc(c.hora||'—')}</span></div>
-     <div><small>Especialidad</small><span>${esc(c.especialidad||'—')}</span></div>
+     <div class="ancho"><small>Especialidad</small><span>${esc(c.especialidad||'—')}</span></div>
     </div>
-    ${tipo==='MIXTO'?`<span class="chip ${esc(c.tipo)}">${nombreTipo(c.tipo)}</span>`:''}
+    ${mezcla?`<span class="chip ${esc(c.tipo)}">${nombreTipo(c.tipo)}</span>`:''}
     ${c.tipo==='EXTRAORDINARIO'&&c.motivo?`<div class="res-motivo">${esc(c.motivo)}</div>`:''}
     ${lineaAsistencia(c)}
    </article>`).join('')+'</div>';
- }else if(r.dui&&tipo!=='SIN_DATO'&&tipo!=='LECTURA') {
+ }else if(r.dui&&tipo==='NO_ENCONTRADO') {
   cuerpo=`<div class="res-citas"><article class="res-cita">
     <div class="res-datos" style="margin-top:0">
      <div><small>Código leído</small><span>${esc(r.dui)}</span></div>
@@ -692,7 +713,7 @@ function mostrar(r) {
    </article></div>`;
  }
 
- const dur=tipo==='NO_ENCONTRADO'||tipo==='MIXTO'||tipo==='OTRO_DIA'||tipo==='SIN_DATO'?9:6;
+ const dur=tipo==='NO_ENCONTRADO'||tipo==='OTRO_DIA'||tipo==='ILEGIBLE'?9:6;
 
  res.className='res '+tipo;
  res.dataset.dui=r.dui||'';
@@ -769,6 +790,7 @@ function pintarConteo() {
 }
 
 function anotar(r) {
+ r=simplificar(r);
  const c=conteo();
  c.total++;
  if(r.resultado==='EXTRAORDINARIO')c.extra++;
@@ -789,8 +811,8 @@ function anotar(r) {
 }
 
 function pintarHistorial() {
- const nombres={EXTRAORDINARIO:'Extraordinario',ORDINARIO:'Ordinario',SOBRECUPO:'Sobrecupo',
-  MIXTO:'Varias citas',NO_ENCONTRADO:'Sin cita',LECTURA:'No válida',OTRO_DIA:'Otro día'};
+ const nombres={EXTRAORDINARIO:'Extraordinario',ORDINARIO:'Ordinario',
+  NO_ENCONTRADO:'Sin cita',ILEGIBLE:'No legible',OTRO_DIA:'Otro día'};
  $('hist').innerHTML=U.hist.length
   ?U.hist.map(h=>`<li><b>${esc(h.nombre)}</b><span class="chip ${esc(h.tipo)}">${esc(nombres[h.tipo]||h.tipo)}</span>
     <small>${esc(h.detalle)}</small></li>`).join('')
