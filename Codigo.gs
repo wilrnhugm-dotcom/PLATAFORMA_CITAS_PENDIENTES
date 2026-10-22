@@ -3392,35 +3392,83 @@ function versionUGM() {
    especialidad. No permite marcar ni modificar nada.
    ========================================================== */
 
-// Índice del día por DUI. Se guarda 90 s en caché para que
-// cada escaneo responda rápido aunque haya varios equipos.
-function indiceUAP3_(fecha) {
-  const ag=estadoAgenda3_();
-  const pac=estadoPacientes3_();
-  const clave='UAP2_'+fecha+'_'+texto3_(ag.cargaID).slice(0,8)+'_'+
-    texto3_(pac.version).slice(0,8);
+// ---------------------------------------------------------
+// Para que el escaneo sea instantáneo, el equipo de UAP
+// descarga el "paquete" de los días cercanos (paqueteUAP) y
+// busca el DUI en el propio equipo. Cada hoja se lee una sola
+// vez por paquete, sin importar cuántos días incluya.
+// ---------------------------------------------------------
+
+// Base de Reportería de varios días con una sola lectura.
+function pacientesFechas3_(fechas) {
+  const estado=estadoPacientes3_();
+  const out={};
+  if (!estado.conFechas) return out;
+
   const cache=CacheService.getScriptCache();
+  const faltan=[];
 
-  try {
-    const g=cache.get(clave);
-    if (g) return JSON.parse(g);
-  } catch(e) {}
+  fechas.forEach(f => {
+    if (!estado.fechas[f]) { out[f]=[]; return; }
+    try {
+      const g=cache.get('PACDIA_'+estado.version.slice(0,12)+'_'+f);
+      if (g) { out[f]=JSON.parse(g); return; }
+    } catch(e) {}
+    faltan.push(f);
+  });
 
-  // Incluye las asistencias ya marcadas: si la agenda de ese
-  // día se reemplazó, el paciente sigue apareciendo (igual que
-  // en el panel de supervisión).
+  if (!faltan.length) return out;
+
+  const sh=base3_().getSheetByName('PACIENTES');
+  faltan.forEach(f => { out[f]=[]; });
+  if (!sh || sh.getLastRow()<2) return out;
+
+  const c=columnasPacientes3_(sh);
+  if (c.fecha<0) return out;
+
+  const v=(r,i)=>i>=0 ? texto3_(r[i]) : '';
+  const quiero=new Set(faltan);
+
+  sh.getRange(2,1,sh.getLastRow()-1,c.ancho).getValues().forEach(r => {
+    const f=v(r,c.fecha);
+    if (!quiero.has(f)) return;
+    out[f].push({
+      nombre:v(r,c.nombre),
+      documento:v(r,c.documento),
+      original:v(r,c.original),
+      especialidad:v(r,c.especialidad).split(' | ')[0] || '',
+      hora:v(r,c.hora),
+      aumento:v(r,c.aumento)==='SI',
+      observacion:v(r,c.observacion),
+      correlativo:v(r,c.correlativo)
+    });
+  });
+
+  faltan.forEach(f => {
+    try {
+      const json=JSON.stringify(out[f]);
+      if (json.length<95000) {
+        cache.put('PACDIA_'+estado.version.slice(0,12)+'_'+f,json,300);
+      }
+    } catch(e) {}
+  });
+
+  return out;
+}
+
+// Índice de un día por DUI, con las hojas ya leídas.
+function indiceDia3_(fecha, d) {
   const consultas=consultasDelDia3_(
-    fecha,leer3_('AGENDA_EXCEL'),leer3_('SOBRECUPOS'),
-    leer3_('ASISTENCIA'),pacientesDelDia3_(fecha)
+    fecha,d.agenda,d.solicitudes,d.asistencia,d.pacientes[fecha]||[]
   );
 
   const p={};
   consultas.forEach(c => {
-    const d=dui3_(c.documento);
-    if (!d) return;
+    const dui=dui3_(c.documento);
+    if (!dui) return;
     const tipo=c.origen==='SOBRECUPO' ? 'SOBRECUPO'
       : c.extraordinario ? 'EXTRAORDINARIO' : 'ORDINARIO';
-    (p[d]=p[d]||[]).push([
+    (p[dui]=p[dui]||[]).push([
       texto3_(c.paciente),texto3_(c.especialidad),
       texto3_(c.horaCita),tipo,texto3_(c.motivoExtra),
       texto3_(c.asistencia),texto3_(c.marcadoPor),
@@ -3428,14 +3476,17 @@ function indiceUAP3_(fecha) {
     ]);
   });
 
-  const indice={t:consultas.length,p};
+  return {t:consultas.length,p};
+}
 
-  try {
-    const json=JSON.stringify(indice);
-    if (json.length<95000) cache.put(clave,json,90);
-  } catch(e) {}
-
-  return indice;
+// Lee una vez las hojas que necesita UAP.
+function datosUAP3_(fechas) {
+  return {
+    agenda:leer3_('AGENDA_EXCEL'),
+    solicitudes:leer3_('SOBRECUPOS'),
+    asistencia:leer3_('ASISTENCIA'),
+    pacientes:pacientesFechas3_(fechas)
+  };
 }
 
 // Hora local (El Salvador) de la marca de asistencia.
@@ -3444,8 +3495,9 @@ function horaUAP3_(v) {
   return isNaN(t.getTime()) ? '' : Utilities.formatDate(t,UGM3.TZ,'HH:mm');
 }
 
-// Días con citas cargadas (agenda del HIS o base de Reportería).
-function fechasUAP3_() {
+// Días con citas cargadas (agenda del HIS o base de Reportería)
+// y días con asistencia marcada en los últimos 30 días.
+function fechasUAP3_(asistencia) {
   const f={};
   const ag=estadoAgenda3_().porFecha || {};
   const pac=estadoPacientes3_().fechas || {};
@@ -3454,12 +3506,10 @@ function fechasUAP3_() {
     const n=Number((pac[d]||{}).total)||0;
     f[d]=Math.max(f[d]||0,n);
   });
-  // Días con asistencia marcada (últimos 30 días), aunque su
-  // agenda ya se haya reemplazado.
   const desde=Utilities.formatDate(
     new Date(Date.now()-30*86400000),UGM3.TZ,'yyyy-MM-dd'
   );
-  leer3_('ASISTENCIA').forEach(a => {
+  (asistencia || leer3_('ASISTENCIA')).forEach(a => {
     const d=texto3_(a.Fecha);
     if (d>=desde) f[d]=Math.max(f[d]||0,1);
   });
@@ -3475,19 +3525,61 @@ function fechaUAP3_(valor) {
   }
 }
 
-function citasUAP3_(fecha, dui) {
-  return (indiceUAP3_(fecha).p[dui]||[]).map(c => ({
-    paciente:c[0],especialidad:c[1],hora:c[2],tipo:c[3],motivo:c[4],
-    asistencia:c[5]||'',marcadoPor:c[6]||'',horaMarca:c[7]||''
-  }));
-}
-
-function consultarUAP(token, lectura, fechaElegida) {
+function permisoUAP3_(token) {
   const s=validar3_(token, true);
-
   if (!['UAP','SUPERVISOR','AUTORIZADO'].includes(s.perfil)) {
     throw Error('Sin permiso para la consulta de UAP.');
   }
+  return s;
+}
+
+// Días que viajan al equipo: hoy, la fecha elegida y los días
+// con citas más cercanos a hoy (hasta 8, de -14 a +14 días).
+function diasPaqueteUAP3_(lista, hoy, fecha) {
+  const ms=d=>Date.parse(d+'T12:00:00Z');
+  const h=ms(hoy);
+  const cerca=lista.map(x=>x.fecha)
+    .filter(d=>Math.abs(ms(d)-h)<=14*86400000)
+    .sort((a,b)=>Math.abs(ms(a)-h)-Math.abs(ms(b)-h));
+  return [...new Set([hoy,fecha].concat(cerca))].slice(0,8);
+}
+
+function paqueteUAP(token, fechaElegida) {
+  const s=permisoUAP3_(token);
+  const hoy=hoy3_();
+  const fecha=fechaUAP3_(fechaElegida);
+
+  const asistencia=leer3_('ASISTENCIA');
+  const lista=fechasUAP3_(asistencia);
+  const dias=diasPaqueteUAP3_(lista, hoy, fecha);
+
+  const d={
+    agenda:leer3_('AGENDA_EXCEL'),
+    solicitudes:leer3_('SOBRECUPOS'),
+    asistencia,
+    pacientes:pacientesFechas3_(dias)
+  };
+
+  const indices={};
+  dias.forEach(f => { indices[f]=indiceDia3_(f, d); });
+
+  actividad3_(s,'UAP · Listo para escanear');
+
+  return {
+    ok:true,
+    hoy,
+    fecha,
+    fechas:lista.filter(f=>f.fecha>=hoy).slice(0,6),
+    dias:indices,
+    generado:Date.now(),
+    version:UGM3.VERSION
+  };
+}
+
+// Respaldo: consulta en el servidor (si el equipo aún no tiene
+// el paquete). Lee cada hoja una sola vez.
+function consultarUAP(token, lectura, fechaElegida) {
+  const s=permisoUAP3_(token);
 
   // El escáner entrega solo los 9 dígitos del DUI.
   const digitos=texto3_(lectura).replace(/\D/g,'');
@@ -3500,20 +3592,30 @@ function consultarUAP(token, lectura, fechaElegida) {
 
   const hoy=hoy3_();
   const fecha=fechaUAP3_(fechaElegida);
-  const indice=indiceUAP3_(fecha);
-  const citas=citasUAP3_(fecha, dui);
+  const asistencia=leer3_('ASISTENCIA');
+  const lista=fechasUAP3_(asistencia).filter(f=>f.fecha!==fecha).slice(-12);
+  const todas=[fecha].concat(lista.map(f=>f.fecha));
+  const d={
+    agenda:leer3_('AGENDA_EXCEL'),
+    solicitudes:leer3_('SOBRECUPOS'),
+    asistencia,
+    pacientes:pacientesFechas3_(todas)
+  };
 
-  // Si no tiene cita ese día, se buscan los demás días
-  // cargados (agenda del HIS y base de Reportería).
+  const aCitas=(arr)=>(arr||[]).map(c => ({
+    paciente:c[0],especialidad:c[1],hora:c[2],tipo:c[3],motivo:c[4],
+    asistencia:c[5]||'',marcadoPor:c[6]||'',horaMarca:c[7]||''
+  }));
+
+  const indice=indiceDia3_(fecha, d);
+  const citas=aCitas(indice.p[dui]);
   const otras=[];
+
   if (!citas.length) {
-    fechasUAP3_()
-      .filter(f => f.fecha!==fecha)
-      .slice(-12)
-      .forEach(f => {
-        const c=citasUAP3_(f.fecha, dui);
-        if (c.length) otras.push({fecha:f.fecha,pasada:f.fecha<hoy,citas:c});
-      });
+    lista.forEach(f => {
+      const c=aCitas(indiceDia3_(f.fecha, d).p[dui]);
+      if (c.length) otras.push({fecha:f.fecha,pasada:f.fecha<hoy,citas:c});
+    });
   }
 
   const tipos=[...new Set(citas.map(c=>c.tipo))];
@@ -3521,49 +3623,60 @@ function consultarUAP(token, lectura, fechaElegida) {
     ? (tipos.length===1 ? tipos[0] : 'MIXTO')
     : otras.length ? 'OTRO_DIA' : 'NO_ENCONTRADO';
 
-  actividad3_(s,'UAP · Escaneo de DUI');
+  const primera=citas[0] || (otras[0] && otras[0].citas[0]);
+  registrarUAP(token,[{
+    dui,fecha,resultado,
+    paciente:primera ? primera.paciente : '',
+    especialidad:primera ? primera.especialidad : '',
+    otras:otras.map(o=>o.fecha)
+  }], s);
 
-  try {
-    const primera=citas[0] || (otras[0] && otras[0].citas[0]);
-    auditar3_(
-      s.nombre,s.perfil,'UAP_ESCANEO',dui,
-      resultado+' · '+fecha+(primera ? ' · '+primera.paciente+' · '+
-        primera.especialidad : '')+
-      (otras.length ? ' · cita el '+otras.map(o=>o.fecha).join(', ') : '')
-    );
-  } catch(e) {
-    console.error(e.message);
-  }
-
-  return {
-    ok:true,
-    dui,
-    fecha,
-    hoy,
-    resultado,
-    citas,
-    otras,
-    hayAgenda:indice.t>0
-  };
+  return {ok:true,dui,fecha,hoy,resultado,citas,otras,hayAgenda:indice.t>0};
 }
 
-// Mantiene la sesión del equipo de UAP activa durante el turno
-// (si no, "Cerrar sesiones inactivas" la cerraría).
+// Compatibilidad con pantallas UAP anteriores.
 function latidoUAP(token, fechaElegida) {
-  const s=validar3_(token, true);
-  actividad3_(s,'UAP · Listo para escanear');
-  const hoy=hoy3_();
-  const fecha=fechaUAP3_(fechaElegida);
-  let total=0;
-  try {
-    total=indiceUAP3_(fecha).t;
-  } catch(e) {
-    console.error(e.message);
-  }
-  return {ok:true,nombre:s.nombre,perfil:s.perfil,hoy,fecha,total,
-    fechas:fechasUAP3_().filter(f=>f.fecha>=hoy).slice(0,6),
-    version:UGM3.VERSION};
+  return paqueteUAP(token, fechaElegida);
 }
+
+// Auditoría de escaneos por lotes (el equipo los envía en
+// segundo plano para no hacer esperar a la ventanilla).
+function registrarUAP(token, lote, sesion) {
+  const s=sesion || permisoUAP3_(token);
+  const filas=(Array.isArray(lote) ? lote : []).slice(0,80).map(e => {
+    const detalle=[
+      texto3_(e.resultado),texto3_(e.fecha),
+      texto3_(e.paciente),texto3_(e.especialidad),
+      (e.otras||[]).length ? 'cita el '+e.otras.join(', ') : ''
+    ].filter(Boolean).join(' · ');
+    const fila={
+      FechaHora:e.ts ? new Date(Number(e.ts)).toISOString() : ahora3_(),
+      Usuario:s.nombre,
+      Perfil:s.perfil,
+      Accion:'UAP_ESCANEO',
+      Referencia:texto3_(e.dui).slice(0,12),
+      Detalle:seguro3_(detalle.slice(0,350))
+    };
+    return UGM3.HEADERS.AUDITORIA.map(campo =>
+      fila[campo]===undefined ? '' : fila[campo]);
+  });
+
+  if (filas.length) {
+    const sh=hoja3_('AUDITORIA');
+    const lock=LockService.getScriptLock();
+    lock.waitLock(10000);
+    try {
+      sh.getRange(sh.getLastRow()+1,1,filas.length,filas[0].length)
+        .setValues(filas);
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
+  if (!sesion) actividad3_(s,'UAP · Listo para escanear');
+  return {ok:true,n:filas.length};
+}
+
 
 /**
  * Cierra de una vez las sesiones sin actividad por más de

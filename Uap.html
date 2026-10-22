@@ -312,6 +312,7 @@ const U={
  token:'',nombre:'',perfil:'',
  consultando:false,ultima:{dui:'',t:0},
  cierre:null,latido:null,hist:[],audio:null,
+ paq:null,paqAt:0,cargando:null,cola:[],envio:null,
  total:null,fecha:'',hoy:'',fechaSel:'',fechas:[]
 };
 
@@ -459,15 +460,53 @@ function montarEscaner() {
   if(!ev.target.closest('input,button,a,form'))setTimeout(enfocarEscaner,0);
  });
  document.addEventListener('visibilitychange',()=>{
-  if(!document.hidden) {
+  if(document.hidden) {
+   enviarCola();
+  }else {
    enfocarEscaner();
-   latido();
+   if(Date.now()-U.paqAt>60000)latido();
   }
  });
+ window.addEventListener('pagehide',()=>enviarCola());
  window.addEventListener('focus',enfocarEscaner);
 }
 
 /* ---------- consulta ---------- */
+
+// DUI de 8 o 9 dígitos -> "00000000-0" (igual que el servidor).
+function normalizarDui(lectura) {
+ let n=String(lectura||'').replace(/\D/g,'');
+ if(n.length===8)n='0'+n;
+ return n.length===9?n.slice(0,8)+'-'+n.slice(8):'';
+}
+
+function aCitas(arr) {
+ return (arr||[]).map(c=>({
+  paciente:c[0],especialidad:c[1],hora:c[2],tipo:c[3],motivo:c[4],
+  asistencia:c[5]||'',marcadoPor:c[6]||'',horaMarca:c[7]||''
+ }));
+}
+
+// Búsqueda en el equipo: instantánea, sin esperar al servidor.
+function buscarLocal(dui,fecha) {
+ if(!U.paq||!U.paq[fecha])return null;
+ const hoyF=U.hoy||hoy();
+ const citas=aCitas(U.paq[fecha].p[dui]);
+ const otras=[];
+ if(!citas.length) {
+  Object.keys(U.paq).filter(f=>f!==fecha).sort().forEach(f=>{
+   const c=aCitas(U.paq[f].p[dui]);
+   if(c.length)otras.push({fecha:f,pasada:f<hoyF,citas:c});
+  });
+ }
+ const tipos=[...new Set(citas.map(c=>c.tipo))];
+ return {
+  ok:true,dui,fecha,hoy:hoyF,citas,otras,local:true,
+  hayAgenda:U.paq[fecha].t>0,
+  resultado:citas.length?(tipos.length===1?tipos[0]:'MIXTO')
+   :otras.length?'OTRO_DIA':'NO_ENCONTRADO'
+ };
+}
 
 async function consultar(lectura) {
  const dui=String(lectura||'').replace(/\D/g,'');
@@ -477,6 +516,27 @@ async function consultar(lectura) {
  if(dui===U.ultima.dui&&ahora-U.ultima.t<2500)return;
  if(U.consultando)return;
  U.ultima={dui,t:ahora};
+
+ const duiF=normalizarDui(dui);
+ if(!duiF) {
+  mostrar({resultado:'LECTURA'});
+  return;
+ }
+
+ const fecha=U.fechaSel||U.hoy||hoy();
+ const local=buscarLocal(duiF,fecha);
+
+ if(local) {
+  mostrar(local);
+  anotar(local);
+  encolar(local);
+  // Si no aparece, se revisa con datos recién descargados por
+  // si lo registraron hace un momento.
+  if(local.resultado==='NO_ENCONTRADO'&&Date.now()-U.paqAt>20000)confirmarNoEncontrado(duiF,fecha);
+  return;
+ }
+
+ // Respaldo: el equipo aún no tiene los datos del día.
  U.consultando=true;
 
  estado('ocupado','Consultando…');
@@ -494,6 +554,42 @@ async function consultar(lectura) {
  }finally {
   U.consultando=false;
   estado('',textoListo());
+ }
+}
+
+async function confirmarNoEncontrado(dui,fecha) {
+ await cargarPaquete();
+ const r=buscarLocal(dui,fecha);
+ const res=$('res');
+ if(!r||r.resultado==='NO_ENCONTRADO')return;
+ if(!res.classList.contains('hidden')&&res.dataset.dui===dui) {
+  mostrar(r);
+  aviso('Datos actualizados: el paciente sí aparece.');
+ }
+}
+
+/* ---------- auditoría en segundo plano ---------- */
+
+function encolar(r) {
+ const p=(r.citas||[])[0]||((r.otras||[])[0]&&r.otras[0].citas[0]);
+ U.cola.push({dui:r.dui,fecha:r.fecha,resultado:r.resultado,
+  paciente:p?p.paciente:'',especialidad:p?p.especialidad:'',
+  otras:(r.otras||[]).map(o=>o.fecha),ts:Date.now()});
+ if(U.cola.length>=10)enviarCola();
+ else if(!U.envio)U.envio=setTimeout(enviarCola,15000);
+}
+
+async function enviarCola() {
+ clearTimeout(U.envio);
+ U.envio=null;
+ if(!U.cola.length||!U.token)return;
+ const lote=U.cola.splice(0,80);
+ try {
+  await api('registrarUAP',U.token,lote);
+ }catch(e) {
+  if(sesionUAPTerminada(e))return;
+  U.cola=lote.concat(U.cola).slice(-200);
+  U.envio=setTimeout(enviarCola,30000);
  }
 }
 
@@ -566,6 +662,7 @@ function mostrar(r) {
  const dur=tipo==='NO_ENCONTRADO'||tipo==='MIXTO'||tipo==='OTRO_DIA'?9:6;
 
  res.className='res '+tipo;
+ res.dataset.dui=r.dui||'';
  res.innerHTML=`
   <div class="res-espacio"></div>
   <div class="res-cab">
@@ -672,19 +769,33 @@ function sesionUAPTerminada(e) {
  return false;
 }
 
-async function latido() {
- if(!U.token)return;
- try {
-  const r=await api('latidoUAP',U.token,U.fechaSel);
-  // Al cambiar el día, la consulta vuelve a "Hoy".
-  if(U.hoy&&r.hoy!==U.hoy&&U.fechaSel&&U.fechaSel<r.hoy)U.fechaSel='';
-  U.hoy=r.hoy;
-  U.fecha=r.fecha;
-  U.fechas=r.fechas||[];
-  pintarDia(r);
- }catch(e) {
-  sesionUAPTerminada(e);
- }
+// Descarga los días cercanos al equipo (se repite cada 2 min
+// en segundo plano). Si ya hay una descarga en curso, la espera.
+function cargarPaquete(dato) {
+ if(!U.token)return Promise.resolve();
+ if(U.cargando)return U.cargando;
+ U.cargando=(async()=>{
+  try {
+   const r=dato||await api('paqueteUAP',U.token,U.fechaSel);
+   // Al cambiar el día, la consulta vuelve a "Hoy".
+   if(U.hoy&&r.hoy!==U.hoy&&U.fechaSel&&U.fechaSel<r.hoy)U.fechaSel='';
+   U.paq=r.dias||{};
+   U.paqAt=Date.now();
+   U.hoy=r.hoy;
+   U.fecha=r.fecha;
+   U.fechas=r.fechas||[];
+   pintarDia();
+  }catch(e) {
+   sesionUAPTerminada(e);
+  }finally {
+   U.cargando=null;
+  }
+ })();
+ return U.cargando;
+}
+
+function latido() {
+ return cargarPaquete();
 }
 
 function diaCorto(f) {
@@ -697,16 +808,26 @@ function textoListo() {
  return U.fechaSel&&U.fechaSel!==U.hoy?'Listo · '+diaCorto(U.fechaSel):'Listo para escanear';
 }
 
-function pintarDia(r) {
+function pintarDia() {
+ const fecha=U.fechaSel||U.hoy;
+ const dia=U.paq&&U.paq[fecha];
+ if(!fecha)return;
+ if(!dia) {
+  $('scanDia').textContent='Cargando las citas de '+fechaLarga(fecha)+'…';
+  return;
+ }
+ const total=dia.t;
+ const esHoy=fecha===U.hoy;
  const el=$('scanDia');
- const esHoy=r.fecha===r.hoy;
- el.classList.toggle('alerta',!r.total);
- el.innerHTML=r.total
-  ?`<b>${esc(fechaLarga(r.fecha))}</b> · ${r.total} citas ${esHoy?'en la agenda de hoy':'cargadas ese día'}`
-  :`${esc(fechaLarga(r.fecha))} · <b>No hay citas cargadas ${esHoy?'para hoy':'para ese día'}.</b>`+
-   (esHoy?' Avise a supervisión.':'');
+ const act=new Date(U.paqAt).toLocaleTimeString('es-SV',{hour:'2-digit',minute:'2-digit'});
+ el.classList.toggle('alerta',!total);
+ el.innerHTML=(total
+  ?`<b>${esc(fechaLarga(fecha))}</b> · ${total} citas ${esHoy?'en la agenda de hoy':'cargadas ese día'}`
+  :`${esc(fechaLarga(fecha))} · <b>No hay citas cargadas ${esHoy?'para hoy':'para ese día'}.</b>`+
+   (esHoy?' Avise a supervisión.':''))+
+  `<br><small>Datos actualizados ${esc(act)}</small>`;
  pintarFechas();
- estado('',textoListo());
+ if(!U.consultando)estado('',textoListo());
 }
 
 // Botones: Hoy, los próximos días con citas y "Otra fecha".
@@ -734,11 +855,17 @@ function elegirFecha(f) {
  U.fechaSel=f&&f!==hoyF?f:'';
  U.ultima={dui:'',t:0};
  pintarFechas();
+ // Si ese día ya está en el equipo, el cambio es inmediato.
+ if(U.paq&&U.paq[U.fechaSel||hoyF]) {
+  pintarDia();
+  enfocarEscaner();
+  return;
+ }
  estado('ocupado','Cargando…');
- latido().then(enfocarEscaner);
+ cargarPaquete().then(enfocarEscaner);
 }
 
-function entrarUAP(r) {
+function entrarUAP(r,paquete) {
  U.token=r.token;
  U.fechaSel='';
  U.nombre=r.nombre;
@@ -755,8 +882,9 @@ function entrarUAP(r) {
  enfocarEscaner();
 
  clearInterval(U.latido);
- U.latido=setInterval(latido,4*60*1000);
- latido();
+ U.latido=setInterval(latido,2*60*1000);
+ estado('ocupado','Cargando citas…');
+ cargarPaquete(paquete);
 
  if(window.gsap&&MOV.ok)gsap.fromTo('.uap-main>*',{y:14,opacity:0},
   {y:0,opacity:1,duration:.4,stagger:.06,ease:'power3.out',clearProps:'all'});
@@ -764,6 +892,8 @@ function entrarUAP(r) {
 
 function salirUAP(mensaje) {
  clearInterval(U.latido);
+ enviarCola();
+ U.paq=null;
  U.token='';
  guardar(CLAVE_SESION,null);
  U.hist=[];
@@ -807,8 +937,8 @@ async function restaurarSesion() {
  const s=leer(CLAVE_SESION);
  if(!s||!s.token)return;
  try {
-  await api('latidoUAP',s.token);
-  entrarUAP(s);
+  const paquete=await api('paqueteUAP',s.token,'');
+  entrarUAP(s,paquete);
  }catch(e) {
   guardar(CLAVE_SESION,null);
  }
