@@ -60,7 +60,7 @@ const UGM3 = {
   // Debe coincidir con la versión de Tecnico, Supervisor,
   // Estilos y Comun: así la pantalla avisa si falta
   // actualizar algún archivo.
-  VERSION: '2026.10.22-1',
+  VERSION: '2026.10.23-1',
 
   TZ: 'America/El_Salvador',
 
@@ -92,10 +92,17 @@ const UGM3 = {
   EXTRA_URGENCIA: 1,
   MIN_MOTIVO_URGENCIA: 15,
 
-  // Citas creadas en el HIS desde esta fecha son
-  // extraordinarias (Reportería las agendó o reagendó para
-  // fin de semana). Las anteriores son citas previas.
-  INICIO_EXTRAORDINARIOS: '2026-10-01',
+  // Especialidades del programa extraordinario de los
+  // SÁBADOS. Los DOMINGOS todo es extraordinario.
+  ESPECIALIDADES_SABADO: [
+    'Cardiología','Cirugía General','Cirugía Vascular Periférica',
+    'Cuidados Paliativos','Endocrinología','Fisiatría',
+    'Gastroenterología','Ginecología','Medicina Familiar',
+    'Medicina Familiar - Diabetología','Medicina Interna',
+    'Nefrología','Neurología','Nutriología','Oftalmología',
+    'Neurocirugía','Ortopedia y Traumatología',
+    'Otorrinolaringología','Urología'
+  ],
 
   VIGENCIA_MINUTOS: 30,
   ALERTA_MINUTOS: 60,
@@ -2848,10 +2855,6 @@ function pacientesDelDia3_(fecha) {
   return lista;
 }
 
-// Extraordinario = Reportería lo agendó o reagendó para fin
-// de semana: cita creada en el HIS desde el 1 de octubre,
-// paciente del "Aumento 10%" o enviado por Reportería sin cita
-// en la agenda del HIS. El resto son citas previas (base HIS).
 // Regla de jefatura: los domingos solo hay pacientes
 // extraordinarios (no se programa consulta ordinaria).
 function esDomingo3_(fecha) {
@@ -2859,17 +2862,40 @@ function esDomingo3_(fecha) {
   return !isNaN(d.getTime()) && d.getUTCDay()===0;
 }
 
+function esSabado3_(fecha) {
+  const d=new Date(texto3_(fecha)+'T12:00:00Z');
+  return !isNaN(d.getTime()) && d.getUTCDay()===6;
+}
+
+// Clave para comparar especialidades sin tildes, espacios ni
+// guiones ("Medicina Familiar-Diabetología" =
+// "Medicina Familiar - Diabetología"). La comparación es exacta:
+// "Cardiología - Estudios Especiales" NO es "Cardiología".
+function claveEsp3_(v) {
+  return norm3_(v).replace(/[^A-Z0-9]/g,'');
+}
+
+// Especialidades extraordinarias del sábado (lista del
+// programa de fin de semana; se actualiza aquí cada semana).
+function listaSabado3_() {
+  return UGM3.ESPECIALIDADES_SABADO;
+}
+
+// Extraordinario:
+// - DOMINGO: todas las citas.
+// - SÁBADO: la especialidad está en la lista del sábado.
+// Todo lo demás es ordinario. Los sobrecupos de técnicos se
+// muestran aparte.
 function clasificar3_(c, fecha) {
   let motivo='';
   if (c.origen!=='SOBRECUPO') {
     if (esDomingo3_(fecha)) {
       motivo='Cita en domingo';
-    } else if (c.aumento) {
-      motivo='Aumento 10%';
-    } else if (c.creacion && c.creacion>=UGM3.INICIO_EXTRAORDINARIOS) {
-      motivo='Cita creada el '+c.creacion.slice(8,10)+'/'+c.creacion.slice(5,7);
-    } else if (c.origen==='REPORTERIA') {
-      motivo='Sin cita en la agenda del HIS';
+    } else if (esSabado3_(fecha)) {
+      const set=new Set(listaSabado3_().map(claveEsp3_));
+      if (set.has(claveEsp3_(c.especialidad))) {
+        motivo='Especialidad del programa del sábado';
+      }
     }
   }
   c.extraordinario=Boolean(motivo);

@@ -306,7 +306,7 @@ body.light .chip.EXTRAORDINARIO{color:#fff}
 <script>
 'use strict';
 
-const VERSION_PANTALLA='2026.10.22-1';
+const VERSION_PANTALLA='2026.10.23-1';
 
 const U={
  token:'',nombre:'',perfil:'',
@@ -323,8 +323,8 @@ const CLAVE_CONTEO='UGM_UAP_CONTEO';
 // ticket no se puede leer):
 // EXTRAORDINARIO · ORDINARIO · CITA OTRO DÍA · SIN CITA.
 const TEXTOS={
- EXTRAORDINARIO:['Paciente','EXTRAORDINARIO','Agendado por Reportería para fin de semana.','llamada'],
- ORDINARIO:['Paciente','ORDINARIO','Cita previa · ya estaba agendado en el HIS.','calendarioCheck'],
+ EXTRAORDINARIO:['Paciente','EXTRAORDINARIO','Programa extraordinario de fin de semana.','llamada'],
+ ORDINARIO:['Paciente','ORDINARIO','Consulta ordinaria (especialidad fuera del programa).','calendarioCheck'],
  NO_ENCONTRADO:['Paciente','SIN CITA PROGRAMADA','No tiene cita hoy ni en otro día. Refiéralo con supervisión.','alerta'],
  OTRO_DIA:['Sin cita hoy','CITA EN OTRO DÍA','','calendario'],
  ILEGIBLE:['Ticket','NO SE PUDO LEER','Vuelva a escanear el ticket o escriba el DUI del paciente.','alerta'],

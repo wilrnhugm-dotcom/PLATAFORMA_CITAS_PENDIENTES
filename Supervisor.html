@@ -335,10 +335,9 @@
    <div class="toolbar">
     <div>
      <h2>Reporte de asistencia</h2>
-     <p class="desc" style="margin:0">Hojas del Excel: <b>Base HIS</b>
-      (citas previas, creadas antes del 1 de octubre), <b>Extraordinarios</b>
-      (Reportería los agendó o reagendó para fin de semana: citas creadas
-      desde el 1 de octubre, Aumento 10% o sin cita en el HIS) y
+     <p class="desc" style="margin:0">Hojas del Excel: <b>Extraordinarios</b> (todo el domingo y, el
+      sábado, las especialidades del programa de fin de semana), <b>Base HIS</b>
+      (ordinarios: sábado en especialidades fuera del programa) y
       <b>Sobrecupos técnicos</b>, con resumen y gráficas.</p>
     </div>
     <button class="btn primary" id="btnReporte" type="button">
@@ -1635,14 +1634,14 @@ const GRUPOS={
   corto:'Base HIS',
   hoja:'Base HIS',
   color:'FF3B54C4',
-  detalle:'Pacientes que ya tenían su cita en el HIS desde antes del 1 de octubre.'
+  detalle:'Ordinarios: citas del sábado en especialidades fuera del programa de fin de semana.'
  },
  ADICIONAL:{
   nombre:'Extraordinarios (Reportería)',
   corto:'Extraordinario',
   hoja:'Extraordinarios',
   color:'FFE0A526',
-  detalle:'Pacientes que Reportería agendó o reagendó para fin de semana: cita creada en el HIS desde el 1 de octubre, "Aumento 10%" o sin cita en la agenda del HIS.'
+  detalle:'Extraordinarios: todas las citas del domingo y, el sábado, las especialidades del programa de fin de semana.'
  },
  SOBRECUPO:{
   nombre:'Sobrecupos de técnicos',
@@ -2522,7 +2521,7 @@ async function alEntrar() {
  aviso('Bienvenido al centro de control, '+UGM.nombre+'.');
 }
 
-const VERSION_PANTALLA='2026.10.22-1';
+const VERSION_PANTALLA='2026.10.23-1';
 
 /* =====================================================
    VERIFICACIÓN DE ARCHIVOS

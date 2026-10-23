@@ -779,7 +779,7 @@ function pintarIconos(raiz) {
    ===================================================== */
 
 // Versión de este archivo (ver UGM3.VERSION en Código.gs).
-const VERSION_COMUN='2026.10.22-1';
+const VERSION_COMUN='2026.10.23-1';
 
 const UGM={
  token:'',nombre:'',perfil:'',
@@ -1313,12 +1313,12 @@ const ORIGENES={
  AGENDA:{
   nombre:'Base HIS',
   icono:'calendario',
-  detalle:'Cita previa: ya estaba agendada en el HIS antes del 1 de octubre.'
+  detalle:'Ordinario: sábado en una especialidad fuera del programa de fin de semana.'
  },
  ADICIONAL:{
   nombre:'Extraordinario',
   icono:'llamada',
-  detalle:'Reportería lo agendó o reagendó para fin de semana: cita creada desde el 1 de octubre, Aumento 10% o sin cita en la agenda del HIS.'
+  detalle:'Extraordinario: toda cita del domingo, y el sábado las especialidades del programa de fin de semana.'
  },
  SOBRECUPO:{
   nombre:'Sobrecupo',
@@ -1331,7 +1331,9 @@ const ORDEN_ORIGENES=['AGENDA','ADICIONAL','SOBRECUPO'];
 
 function origenCita(c) {
  if(c.origen==='SOBRECUPO'||c.sobrecupo)return 'SOBRECUPO';
- if(c.extraordinario||c.origen==='REPORTERIA'||c.aumento)return 'ADICIONAL';
+ // El servidor decide (domingo / especialidad del sábado).
+ if('extraordinario' in c)return c.extraordinario?'ADICIONAL':'AGENDA';
+ if(c.origen==='REPORTERIA'||c.aumento)return 'ADICIONAL';
  return 'AGENDA';
 }
 

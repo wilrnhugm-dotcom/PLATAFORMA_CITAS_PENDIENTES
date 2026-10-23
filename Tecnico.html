@@ -767,7 +767,7 @@ function pintarOrigenes() {
   ?n.AGENDA+' base HIS + '+n.ADICIONAL+' extraordinarios'+
    (n.SOBRECUPO?' + '+n.SOBRECUPO+' sobrecupo'+(n.SOBRECUPO>1?'s':''):'')+
    ' = '+base.length+' pacientes'+(T.tab?' de '+T.tab:' del día')+
-   '. Extraordinarios: '+pct+' % (citas creadas desde el 1 de octubre, Aumento 10% o sin cita en el HIS).'
+   '. Extraordinarios: '+pct+' % (domingo: todos; sábado: especialidades del programa).'
   :'';
 }
 
@@ -1738,7 +1738,7 @@ async function alEntrar() {
  aviso('Bienvenido, '+UGM.nombre+'.');
 }
 
-const VERSION_PANTALLA='2026.10.22-1';
+const VERSION_PANTALLA='2026.10.23-1';
 
 /* =====================================================
    VERIFICACIÓN DE ARCHIVOS
