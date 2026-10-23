@@ -2883,6 +2883,7 @@ function listaSabado3_() {
 
 // Extraordinario:
 // - DOMINGO: todas las citas.
+// - Viene en la base de REPORTERÍA (con o sin cita en el HIS).
 // - SÁBADO: la especialidad está en la lista del sábado.
 // Todo lo demás es ordinario. Los sobrecupos de técnicos se
 // muestran aparte.
@@ -2891,6 +2892,8 @@ function clasificar3_(c, fecha) {
   if (c.origen!=='SOBRECUPO') {
     if (esDomingo3_(fecha)) {
       motivo='Cita en domingo';
+    } else if (c.reporteria) {
+      motivo='Base de Reportería';
     } else if (esSabado3_(fecha)) {
       const set=new Set(listaSabado3_().map(claveEsp3_));
       if (set.has(claveEsp3_(c.especialidad))) {
@@ -2984,12 +2987,19 @@ function consultasDelDia3_(fecha,agenda,solicitudes,asistencia,reporteria) {
       return;
     }
 
+    // Paciente en las dos bases: manda REPORTERÍA (es la base de
+    // extraordinarios). La agenda del HIS solo completa lo que a
+    // Reportería le falte (DUI, expediente, número de cita).
+    // La clave no cambia, para conservar las asistencias marcadas.
     if (existente) {
       existente.reporteria=true;
       existente.aumento=existente.aumento || p.aumento;
-      existente.horaCita=existente.horaCita || p.hora;
-      existente.observacion=existente.observacion || p.observacion;
+      existente.paciente=texto3_(p.nombre) || existente.paciente;
+      existente.especialidad=texto3_(p.especialidad) || existente.especialidad;
+      existente.horaCita=texto3_(p.hora) || existente.horaCita;
+      existente.observacion=texto3_(p.observacion) || existente.observacion;
       existente.expediente=existente.expediente || p.expediente;
+      if (!dui3_(existente.documento) && dui) existente.documento=dui;
       return;
     }
 
