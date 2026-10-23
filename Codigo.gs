@@ -2852,10 +2852,19 @@ function pacientesDelDia3_(fecha) {
 // de semana: cita creada en el HIS desde el 1 de octubre,
 // paciente del "Aumento 10%" o enviado por Reportería sin cita
 // en la agenda del HIS. El resto son citas previas (base HIS).
-function clasificar3_(c) {
+// Regla de jefatura: los domingos solo hay pacientes
+// extraordinarios (no se programa consulta ordinaria).
+function esDomingo3_(fecha) {
+  const d=new Date(texto3_(fecha)+'T12:00:00Z');
+  return !isNaN(d.getTime()) && d.getUTCDay()===0;
+}
+
+function clasificar3_(c, fecha) {
   let motivo='';
   if (c.origen!=='SOBRECUPO') {
-    if (c.aumento) {
+    if (esDomingo3_(fecha)) {
+      motivo='Cita en domingo';
+    } else if (c.aumento) {
       motivo='Aumento 10%';
     } else if (c.creacion && c.creacion>=UGM3.INICIO_EXTRAORDINARIOS) {
       motivo='Cita creada el '+c.creacion.slice(8,10)+'/'+c.creacion.slice(5,7);
@@ -3049,7 +3058,7 @@ function consultasDelDia3_(fecha,agenda,solicitudes,asistencia,reporteria) {
 
   return [...mapa.values()]
     .map(c => {
-      clasificar3_(c);
+      clasificar3_(c, fecha);
       const a=marcas[c.clave];
       c.asistencia=a ? texto3_(a.Asistencia) : '';
       c.marcadoPor=a ? texto3_(a.MarcadoPor) : '';
