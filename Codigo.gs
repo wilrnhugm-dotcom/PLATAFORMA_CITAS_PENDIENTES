@@ -92,6 +92,10 @@ const UGM3 = {
   EXTRA_URGENCIA: 1,
   MIN_MOTIVO_URGENCIA: 15,
 
+  // Citas creadas en el HIS desde esta fecha son
+  // extraordinarias (también el sábado).
+  INICIO_EXTRAORDINARIOS: '2026-10-01',
+
   // Especialidades del programa extraordinario de los
   // SÁBADOS. Los DOMINGOS todo es extraordinario.
   ESPECIALIDADES_SABADO: [
@@ -2883,7 +2887,10 @@ function listaSabado3_() {
 
 // Extraordinario (venga de Reportería o de la agenda del HIS):
 // - DOMINGO: todas las citas.
-// - SÁBADO: la especialidad está en la lista del sábado.
+// - SÁBADO: basta con UNA de estas:
+//   · la especialidad está en la lista del sábado,
+//   · la cita se creó en el HIS desde el 1 de octubre,
+//   · viene solo en la base de Reportería (sin cita en el HIS).
 // Todo lo demás es ordinario. Los sobrecupos de técnicos se
 // muestran aparte.
 function clasificar3_(c, fecha) {
@@ -2891,10 +2898,14 @@ function clasificar3_(c, fecha) {
   if (c.origen!=='SOBRECUPO') {
     if (esDomingo3_(fecha)) {
       motivo='Cita en domingo';
-    } else if (esSabado3_(fecha)) {
+    } else {
       const set=new Set(listaSabado3_().map(claveEsp3_));
-      if (set.has(claveEsp3_(c.especialidad))) {
+      if (esSabado3_(fecha) && set.has(claveEsp3_(c.especialidad))) {
         motivo='Especialidad del programa del sábado';
+      } else if (c.creacion && c.creacion>=UGM3.INICIO_EXTRAORDINARIOS) {
+        motivo='Cita creada el '+c.creacion.slice(8,10)+'/'+c.creacion.slice(5,7);
+      } else if (c.origen==='REPORTERIA') {
+        motivo='Solo en la base de Reportería';
       }
     }
   }
