@@ -767,7 +767,7 @@ function pintarOrigenes() {
   ?n.AGENDA+' base HIS + '+n.ADICIONAL+' extraordinarios'+
    (n.SOBRECUPO?' + '+n.SOBRECUPO+' sobrecupo'+(n.SOBRECUPO>1?'s':''):'')+
    ' = '+base.length+' pacientes'+(T.tab?' de '+T.tab:' del día')+
-   '. Extraordinarios: '+pct+' % (base de Reportería, domingo y especialidades del programa del sábado).'
+   '. Extraordinarios: '+pct+' % (domingo: todos; sábado: especialidades del programa).'
   :'';
 }
 

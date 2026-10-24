@@ -2881,9 +2881,8 @@ function listaSabado3_() {
   return UGM3.ESPECIALIDADES_SABADO;
 }
 
-// Extraordinario:
+// Extraordinario (venga de Reportería o de la agenda del HIS):
 // - DOMINGO: todas las citas.
-// - Viene en la base de REPORTERÍA (con o sin cita en el HIS).
 // - SÁBADO: la especialidad está en la lista del sábado.
 // Todo lo demás es ordinario. Los sobrecupos de técnicos se
 // muestran aparte.
@@ -2892,8 +2891,6 @@ function clasificar3_(c, fecha) {
   if (c.origen!=='SOBRECUPO') {
     if (esDomingo3_(fecha)) {
       motivo='Cita en domingo';
-    } else if (c.reporteria) {
-      motivo='Base de Reportería';
     } else if (esSabado3_(fecha)) {
       const set=new Set(listaSabado3_().map(claveEsp3_));
       if (set.has(claveEsp3_(c.especialidad))) {
@@ -2921,9 +2918,9 @@ function consultasDelDia3_(fecha,agenda,solicitudes,asistencia,reporteria) {
     if (estado==='CANCELADA') {
       if (texto3_(r.IDExterno)) canceladas.codigos[texto3_(r.IDExterno)]=true;
       const d=dui3_(r.Documento);
-      if (d) canceladas.pacientes[d+'|'+norm3_(r.Especialidad)]=true;
+      if (d) canceladas.pacientes[d+'|'+claveEsp3_(r.Especialidad)]=true;
       canceladas.pacientes['N:'+busqueda3_(r.Paciente)+'|'+
-        norm3_(r.Especialidad)]=true;
+        claveEsp3_(r.Especialidad)]=true;
       return;
     }
 
@@ -2963,20 +2960,22 @@ function consultasDelDia3_(fecha,agenda,solicitudes,asistencia,reporteria) {
   mapa.forEach(c => {
     if (c.referencia) porCodigo[c.referencia]=c;
     const d=dui3_(c.documento);
-    if (d) porDui[d+'|'+norm3_(c.especialidad)]=c;
-    porNombre[busqueda3_(c.paciente)+'|'+norm3_(c.especialidad)]=c;
+    if (d) porDui[d+'|'+claveEsp3_(c.especialidad)]=c;
+    porNombre[busqueda3_(c.paciente)+'|'+claveEsp3_(c.especialidad)]=c;
   });
 
   (reporteria || []).forEach(p => {
     if (excluida3_(p.especialidad)) return;
-    const esp=norm3_(p.especialidad);
-    const dui=p.documento || dui3_(p.original);
+    const esp=claveEsp3_(p.especialidad);
+    const dui=dui3_(p.documento) || dui3_(p.original);
     const cod=texto3_(p.correlativo);
 
-    // 1) mismo número de cita (CORRELATIVO = Codigo de la
-    //    agenda); 2) mismo DUI; 3) mismo nombre. Siempre en
-    //    la misma especialidad, salvo el número de cita.
-    const existente=(cod && porCodigo[cod]) ||
+    // Duplicado = MISMO paciente y MISMA especialidad. Se busca
+    // por: 1) mismo número de cita (CORRELATIVO = Código de la
+    // agenda), 2) mismo DUI, 3) mismo nombre. Si la especialidad
+    // es distinta, son dos citas distintas y se muestran las dos.
+    const porCod=cod && porCodigo[cod];
+    const existente=(porCod && claveEsp3_(porCod.especialidad)===esp && porCod) ||
       (dui && porDui[dui+'|'+esp]) ||
       porNombre[busqueda3_(p.nombre)+'|'+esp];
 
@@ -2987,10 +2986,10 @@ function consultasDelDia3_(fecha,agenda,solicitudes,asistencia,reporteria) {
       return;
     }
 
-    // Paciente en las dos bases: manda REPORTERÍA (es la base de
-    // extraordinarios). La agenda del HIS solo completa lo que a
-    // Reportería le falte (DUI, expediente, número de cita).
-    // La clave no cambia, para conservar las asistencias marcadas.
+    // Mismo paciente y misma especialidad en las dos bases: queda
+    // UN registro con los datos de REPORTERÍA; la agenda del HIS
+    // solo completa lo que le falte (DUI, expediente, número de
+    // cita). La clave no cambia, para conservar las asistencias.
     if (existente) {
       existente.reporteria=true;
       existente.aumento=existente.aumento || p.aumento;
@@ -3027,6 +3026,7 @@ function consultasDelDia3_(fecha,agenda,solicitudes,asistencia,reporteria) {
     };
 
     mapa.set(clave,nueva);
+    if (cod) porCodigo[cod]=nueva;
     if (dui) porDui[dui+'|'+esp]=nueva;
     porNombre[busqueda3_(p.nombre)+'|'+esp]=nueva;
   });
@@ -3045,7 +3045,7 @@ function consultasDelDia3_(fecha,agenda,solicitudes,asistencia,reporteria) {
     // El mismo paciente puede venir con el DUI escrito
     // distinto en la agenda: se busca también por DUI.
     const igual=mapa.get(clave) ||
-      porDui[dui3_(r.Documento)+'|'+norm3_(r.Especialidad)];
+      porDui[dui3_(r.Documento)+'|'+claveEsp3_(r.Especialidad)];
 
     if (igual) {
       igual.sobrecupo=texto3_(r.Estado);
